@@ -1,0 +1,76 @@
+name: iOS
+
+# O núcleo (protocolo) testa-se em Linux; a app compila no macOS e sai como IPA sem assinatura (assina-se depois).
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core-tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Testes do RemoteCore
+        working-directory: ios/RemoteCore
+        run: |
+          swift --version
+          mkdir -p /tmp/run
+          for f in Tests/RemoteCoreTests/*.swift; do sed '/@testable import RemoteCore/d' "$f" > /tmp/run/$(basename "$f"); done
+          cat > /tmp/run/main.swift <<'M'
+          import Foundation
+          @main struct Runner {
+              static func main() {
+                  var failed = 0
+                  for (name, test) in CoreTests.all {
+                      do { try test(); print("ok   \(name)") } catch { failed += 1; print("FAIL \(name): \(error)") }
+                  }
+                  exit(failed == 0 ? 0 : 1)
+              }
+          }
+          M
+          swiftc -parse-as-library -module-name RemoteCore Sources/RemoteCore/*.swift /tmp/run/*.swift -o /tmp/run/tests
+          /tmp/run/tests
+
+  ipa:
+    needs: core-tests
+    runs-on: macos-26
+    defaults:
+      run:
+        working-directory: ios
+    steps:
+      - uses: actions/checkout@v4
+      - run: xcodebuild -version
+      - name: XcodeGen
+        run: |
+          curl -fsSL -o /tmp/xcodegen.zip https://github.com/yonaskolb/XcodeGen/releases/download/2.46.0/xcodegen.zip
+          unzip -q /tmp/xcodegen.zip -d /tmp/xcodegen
+          /tmp/xcodegen/xcodegen/bin/xcodegen generate
+      - name: Compilar
+        run: |
+          set -o pipefail
+          mkdir -p build
+          xcodebuild -project GoatRemote.xcodeproj -scheme GoatRemote -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build/dd \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tee build/xcodebuild.log | grep -E "error:|warning: .*GoatRemote/|BUILD (SUCCEEDED|FAILED)" || true
+          grep -q "BUILD SUCCEEDED" build/xcodebuild.log
+      - name: Erros de compilação
+        if: failure()
+        run: grep -E "error:" -A3 build/xcodebuild.log | head -150 || tail -100 build/xcodebuild.log
+      - name: IPA
+        run: |
+          mkdir -p build/ipa/Payload
+          cp -R build/dd/Build/Products/Release-iphoneos/GoatRemote.app build/ipa/Payload/
+          cd build/ipa && zip -qry ../GoatRemote.ipa Payload
+          ls -la ../GoatRemote.ipa
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GoatRemote-ipa
+          path: ios/build/GoatRemote.ipa
+          retention-days: 30

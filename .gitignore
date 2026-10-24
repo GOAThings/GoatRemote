@@ -1,0 +1,12 @@
+.DS_Store
+/ios/build/
+/ios/GoatRemote.xcodeproj/
+/ios/GoatRemote/Info.plist
+/ios/UITests/Info.plist
+/build/
+*.ipa
+xcuserdata/
+DerivedData/
+.build/
+.swiftpm/
+atv-state/

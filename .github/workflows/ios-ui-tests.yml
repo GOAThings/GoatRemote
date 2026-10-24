@@ -1,0 +1,65 @@
+name: iOS UI tests
+
+# A app no simulador do iPhone contra a TV falsa (tools/AtvTool.java), com screenshots de cada passo.
+# Só corre quando se pede: o macOS conta 10× nos minutos de um repo privado.
+on:
+  workflow_dispatch:
+
+jobs:
+  simulator:
+    runs-on: macos-26
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: TV falsa
+        run: |
+          mkdir -p build
+          nohup java tools/AtvTool.java server build/tv > build/fake-tv.log 2>&1 &
+          # Anuncia-a como uma Android TV (o que a app procura).
+          nohup dns-sd -R "Fake TV" _androidtvremote2._tcp local 6466 > build/dns-sd.log 2>&1 &
+          for i in $(seq 30); do curl -fs http://127.0.0.1:7000/state && break; sleep 1; done
+          echo; cat build/fake-tv.log
+      - name: XcodeGen
+        working-directory: ios
+        run: |
+          curl -fsSL -o /tmp/xcodegen.zip https://github.com/yonaskolb/XcodeGen/releases/download/2.46.0/xcodegen.zip
+          unzip -q /tmp/xcodegen.zip -d /tmp/xcodegen
+          /tmp/xcodegen/xcodegen/bin/xcodegen generate
+      - name: Simulador
+        run: |
+          xcrun simctl list devices available | grep -i iphone | head -20
+          SIM=$(xcrun simctl list devices available | grep -E 'iPhone 1[5-9]( Pro)? \(' | tail -1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
+          echo "SIM=$SIM" >> "$GITHUB_ENV"
+          xcrun simctl boot "$SIM" && xcrun simctl bootstatus "$SIM" -b
+      - name: Testes
+        working-directory: ios
+        run: |
+          set -o pipefail
+          xcodebuild -project GoatRemote.xcodeproj -scheme GoatRemote -configuration Debug \
+            -destination "platform=iOS Simulator,id=$SIM" -derivedDataPath build/dd \
+            -resultBundlePath build/UITests.xcresult \
+            CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= \
+            test 2>&1 | tee build/xcodebuild.log | grep -E "error:|Test Case|XCTAssert|failed|TEST (SUCCEEDED|FAILED)|BUILD FAILED" || true
+          grep -qE "TEST (SUCCEEDED|FAILED)" build/xcodebuild.log
+      - name: Erros
+        if: failure()
+        working-directory: ios
+        run: grep -E "error:" -A3 build/xcodebuild.log | head -150 || tail -150 build/xcodebuild.log
+      - name: Screenshots
+        if: always()
+        run: |
+          mkdir -p build/shots
+          xcrun xcresulttool export attachments --path ios/build/UITests.xcresult --output-path build/shots || true
+          cp build/fake-tv.log build/dns-sd.log build/shots/ 2>/dev/null || true
+          tail -300 ios/build/xcodebuild.log > build/shots/xcodebuild-tail.log 2>/dev/null || true
+          xcrun simctl spawn "$SIM" log show --last 15m --style compact --predicate 'process == "GoatRemote"' 2>/dev/null | tail -200 > build/shots/app.log || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots
+          path: build/shots
+          retention-days: 14
