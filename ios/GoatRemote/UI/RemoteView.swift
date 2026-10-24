@@ -221,6 +221,8 @@ struct Touchpad: View {
                         moved = false
                     }
             )
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(L("Touchpad", "Touchpad"))
             .accessibilityIdentifier("touchpad")
     }
 }
