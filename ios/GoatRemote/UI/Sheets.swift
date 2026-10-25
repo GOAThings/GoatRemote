@@ -301,7 +301,6 @@ struct TVsSheet: View {
                     Button { adding = true } label: { Label(L("Add a TV", "Juntar uma TV"), systemImage: "plus") }
                     if model.current != nil {
                         Button {
-                            dismiss()
                             model.repairCurrent()
                         } label: { Label(L("Pair this TV again", "Emparelhar esta TV outra vez"), systemImage: "link") }
                     }

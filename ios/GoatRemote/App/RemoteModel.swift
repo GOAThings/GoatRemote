@@ -31,6 +31,9 @@ final class RemoteModel {
     var pairing: PairingModel?
     /// A TV abriu uma caixa de texto: mostra-se o teclado.
     var showKeyboard = false
+    /// Pede ao comando que feche as folhas abertas (as TVs, as apps, …): o emparelhamento abre por cima de tudo, e
+    /// com outra folha aberta o iOS só o mostrava depois de a fechar, já com o código na TV cancelado.
+    var closeSheets = 0
     /// Muda quando o volume da TV muda (o indicador aparece um bocado).
     private(set) var volumeChanged = 0
 
@@ -243,11 +246,21 @@ final class RemoteModel {
     /// Emparelhar uma TV encontrada na rede ou escrita à mão (IP).
     func startPairing(name: String, id: String, host: String?, endpoint: NWEndpoint?, kind: TVKind = .android, port: UInt16? = nil) {
         pairing?.cancel()
+        pairing = nil
         let model = PairingModel(name: name, id: id, host: host, endpoint: endpoint, kind: kind, port: port) { [weak self] tv in
             self?.paired(tv)
         }
-        pairing = model
-        model.start()
+        // Sem TVs, o ecrã de juntar é o principal e não há folhas por cima.
+        guard !tvs.isEmpty else {
+            pairing = model
+            return model.start()
+        }
+        closeSheets += 1
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 650_000_000)
+            self?.pairing = model
+            model.start()
+        }
     }
 
     /// Emparelhar outra vez a TV escolhida (a TV esqueceu este iPhone).

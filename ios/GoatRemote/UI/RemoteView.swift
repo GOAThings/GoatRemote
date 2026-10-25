@@ -57,6 +57,12 @@ struct RemoteView: View {
             }
         }
         .onChange(of: model.volumeChanged) { _, _ in showVolume() }
+        .onChange(of: model.closeSheets) { _, _ in
+            showApps = false
+            showMore = false
+            showTVs = false
+            model.showKeyboard = false
+        }
         .onChange(of: model.showKeyboard) { _, show in
             // A TV pediu o teclado com outra folha aberta: fecha-se essa e abre-se o teclado a seguir.
             guard show, showApps || showMore || showTVs else { return }
