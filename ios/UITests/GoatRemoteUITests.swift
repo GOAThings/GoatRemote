@@ -64,7 +64,6 @@ final class GoatRemoteUITests: XCTestCase {
         let volumeUp = app.buttons["key:volumeUp"]
         XCTAssertTrue(volumeUp.waitForExistence(timeout: 5))
         volumeUp.tap()
-        app.switches["opt:dpad"].switches.firstMatch.tap()
         pause(0.5)
         shot("more")
         app.buttons["key:search"].tap()
@@ -74,6 +73,16 @@ final class GoatRemoteUITests: XCTestCase {
         pause(0.5)
         shot("keyboard")
         app.buttons["send-text"].tap()
+        pause(0.8)
+
+        // Ligar as setas nas bordas (em Mais) e fechar a folha.
+        app.buttons["more"].tap()
+        let dpadSwitch = app.switches["opt:dpad"]
+        XCTAssertTrue(dpadSwitch.waitForExistence(timeout: 5))
+        dpadSwitch.switches.firstMatch.tap()
+        pause(0.4)
+        shot("options")
+        app.swipeDown(velocity: .fast)
         pause(0.8)
 
         // Setas nas bordas: tocar em cima e à direita.
