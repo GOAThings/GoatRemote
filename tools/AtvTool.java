@@ -613,6 +613,9 @@ public class AtvTool {
          * /volume/up|down|mute (o volume sem teclas, que a TV conta ao comando como faria com a tecla).
          */
         void launcherApps() throws IOException {
+            // Desenhados já (desenhar na hora é lento no Mac do CI e o telemóvel desistia à espera).
+            Map<String, byte[]> icons = new HashMap<>();
+            for (int i = 0; i < APPS.length; i++) icons.put(APPS[i][0], drawIcon(APPS[i][1], APPS[i][2], i < 2));
             ServerSocket http = new ServerSocket(6470);
             Thread.ofPlatform().daemon().start(() -> {
                 while (true) {
@@ -632,10 +635,7 @@ public class AtvTool {
                             body = j.append(']').toString().getBytes(StandardCharsets.UTF_8);
                             type = "application/json";
                         } else if (path.startsWith("/icon/")) {
-                            String pkg = path.substring(6);
-                            String[] app = Arrays.stream(APPS).filter(a -> a[0].equals(pkg)).findFirst().orElse(APPS[0]);
-                            boolean banner = Arrays.asList(APPS).indexOf(app) < 2;
-                            body = drawIcon(app[1], app[2], banner);
+                            body = icons.getOrDefault(path.substring(6), icons.get(APPS[0][0]));
                             type = "image/png";
                         } else if (path.startsWith("/volume/") && line.startsWith("POST ")) {
                             OutputStream remote = remoteOut;

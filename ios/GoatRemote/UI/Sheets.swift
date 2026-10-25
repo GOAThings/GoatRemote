@@ -371,7 +371,7 @@ struct RemoteImage<Content: View>: View {
                     return
                 }
                 var request = URLRequest(url: url)
-                request.timeoutInterval = 6
+                request.timeoutInterval = 10
                 do {
                     let (data, response) = try await URLSession.shared.data(for: request)
                     let status = (response as? HTTPURLResponse)?.statusCode ?? 0
