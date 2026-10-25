@@ -499,7 +499,7 @@ public class AtvTool {
                 M m = M.parse(read(in));
                 if (m.has(10)) {
                     note("pairing_request " + m.msg(10).str(2));
-                    send(out, pmsg(200, 11, new W().string(1, "Fake TV")));
+                    send(out, pmsg(200, 11, new W().string(1, "Living Room TV")));
                 } else if (m.has(20)) {
                     send(out, pmsg(200, 20, new W().msg(1, hexEncoding()).varint(3, 1)));
                 } else if (m.has(30)) {
@@ -533,7 +533,7 @@ public class AtvTool {
             InputStream in = s.getInputStream();
             OutputStream out = s.getOutputStream();
             remoteOut = out;
-            send(out, new W().msg(1, new W().varint(1, 622).msg(2, deviceInfo("Fake TV", "GOAT", "fake"))).done());
+            send(out, new W().msg(1, new W().varint(1, 622).msg(2, deviceInfo("Android TV", "GOAT", "fake"))).done());
             note("ligado ao comando");
             ScheduledExecutorService ping = Executors.newSingleThreadScheduledExecutor();
             ping.scheduleAtFixedRate(() -> {

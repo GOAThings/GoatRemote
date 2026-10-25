@@ -20,7 +20,7 @@ jobs:
           mkdir -p build
           nohup java tools/AtvTool.java server build/tv > build/fake-tv.log 2>&1 &
           # Anuncia-a como uma Android TV (o que a app procura).
-          nohup dns-sd -R "Fake TV" _androidtvremote2._tcp local 6466 > build/dns-sd.log 2>&1 &
+          nohup dns-sd -R "Living Room TV" _androidtvremote2._tcp local 6466 > build/dns-sd.log 2>&1 &
           for i in $(seq 30); do curl -fs http://127.0.0.1:7000/state && break; sleep 1; done
           echo; cat build/fake-tv.log
       - name: XcodeGen

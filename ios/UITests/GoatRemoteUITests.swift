@@ -1,6 +1,6 @@
 import XCTest
 
-/// Emparelha com a TV falsa (tools/AtvTool.java, anunciada como "Fake TV") e usa o comando, com um screenshot a cada
+/// Emparelha com a TV falsa (tools/AtvTool.java, anunciada como "Living Room TV") e usa o comando, com um screenshot a cada
 /// passo. No fim confere no registo da TV falsa (http://127.0.0.1:7000/log) que as teclas, o texto e a app chegaram.
 final class GoatRemoteUITests: XCTestCase {
     private let app = XCUIApplication()
@@ -22,7 +22,7 @@ final class GoatRemoteUITests: XCTestCase {
         app.launch()
 
         // Encontrar e emparelhar.
-        let tv = app.buttons["found:Fake TV"]
+        let tv = app.buttons["found:Living Room TV"]
         XCTAssertTrue(tv.waitForExistence(timeout: 30), "A TV falsa não apareceu na lista")
         shot("discover")
         tv.tap()
