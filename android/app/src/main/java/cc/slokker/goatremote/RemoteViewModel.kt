@@ -72,10 +72,11 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
         data class Unreachable(val why: String) : Status
     }
 
-    private val context: Context get() = getApplication()
+    internal val appContext: Context get() = getApplication()
+    private val context: Context get() = appContext
     private val store = TvStore(app)
     private val prefs = app.getSharedPreferences("options", Context.MODE_PRIVATE)
-    private val identities = IdentityStore(File(app.filesDir, "identity"))
+    internal val identities = IdentityStore(File(app.filesDir, "identity"))
     val finder = TvFinder(app)
 
     var tvs by mutableStateOf(store.all)
@@ -313,7 +314,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
     fun startPairing(name: String, id: String, host: String?, kind: TvKind = TvKind.ANDROID, port: Int? = null) {
         pairing?.cancel()
         pairing = null
-        val model = PairingModel(name, id, host, kind, port)
+        val model = PairingModel(this, name, id, host, kind, port)
         if (tvs.isNotEmpty()) closeSheets++
         pairing = model
         model.start()
@@ -325,7 +326,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
         startPairing(tv.name, tv.id, tv.host, tv.kind, tv.port)
     }
 
-    private fun paired(tv: SavedTv) {
+    internal fun paired(tv: SavedTv) {
         store.save(tv)
         store.currentId = tv.id
         tvs = store.all
@@ -442,115 +443,115 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
         finder.stop()
     }
 
-    private fun describe(e: Throwable): String = e.message?.takeIf { it.isNotBlank() } ?: e.javaClass.simpleName
-
-    /** Um emparelhamento: liga à TV, a TV mostra o código e espera-se que a pessoa o escreva. */
-    inner class PairingModel(val name: String, private val tvId: String, private var host: String?, val kind: TvKind, private var port: Int?) {
-        var phase by mutableStateOf<Phase>(Phase.Connecting)
-            private set
-
-        /** O código que a TV mostra: 6 caracteres hexadecimais (Android TV) ou um PIN de 4 algarismos (Apple TV). */
-        val codeLength: Int get() = if (kind == TvKind.APPLE) 4 else Pairing.CODE_LENGTH
-
-        private var code: CompletableDeferred<String>? = null
-        private var job: Job? = null
-        private var socket: TvSocket? = null
-
-        fun start() {
-            job = viewModelScope.launch { if (kind == TvKind.APPLE) runApple() else runAndroid() }
-        }
-
-        private suspend fun runAndroid() {
-            try {
-                val host = host ?: throw UnreachableException(L("Couldn't find the TV on the network", "Não deu para encontrar a TV na rede"))
-                val identity = withContext(Dispatchers.IO) { identities.get() }
-                val socket = TvSocket.open(host, Pairing.PORT, identity)
-                this.socket = socket
-                val server = socket.serverCertificate?.let(RsaKey::of)
-                    ?: throw UnreachableException(L("The TV's certificate is unreadable", "O certificado da TV não se lê"))
-                val client = RsaKey.of(identity.certificate)!!
-                Pairing.run(
-                    clientName = deviceName,
-                    client = client,
-                    server = server,
-                    send = { socket.send(it) },
-                    receive = { withContext(Dispatchers.IO) { socket.receive() } },
-                    askCode = { retry -> askCode(retry) },
-                )
-                socket.close()
-                phase = Phase.Done
-                paired(SavedTv(tvId, name, host))
-                delay(700)
-                if (pairing === this) pairing = null
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                socket?.close()
-            } catch (e: Exception) {
-                socket?.close()
-                phase = Phase.Failed(explain(e))
-            }
-        }
-
-        /** Apple TV: SRP com o PIN, e as credenciais ficam guardadas. */
-        private suspend fun runApple() {
-            try {
-                val host = host
-                val port = port
-                if (host == null || port == null) {
-                    throw UnreachableException(L("Couldn't find the TV on the network", "Não deu para encontrar a TV na rede"))
-                }
-                val creds = AppleTvPairing.pair(host, port, deviceName) { askCode(false) }
-                CompanionCredentials.save(context, tvId, creds)
-                phase = Phase.Done
-                paired(SavedTv(tvId, name, host, TvKind.APPLE, port))
-                delay(700)
-                if (pairing === this) pairing = null
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                return
-            } catch (e: Exception) {
-                phase = Phase.Failed(explain(e))
-            }
-        }
-
-        private suspend fun askCode(retry: Boolean): String {
-            val deferred = CompletableDeferred<String>()
-            code = deferred
-            phase = Phase.WaitingCode(retry)
-            return deferred.await()
-        }
-
-        /** O código que a pessoa escreveu. */
-        fun submit(value: String) {
-            val deferred = code ?: return
-            code = null
-            phase = Phase.Checking
-            deferred.complete(value)
-        }
-
-        /** Recomeça (a TV volta a mostrar um código novo). */
-        fun retry() {
-            cancel()
-            phase = Phase.Connecting
-            start()
-        }
-
-        fun cancel() {
-            code?.cancel()
-            code = null
-            job?.cancel()
-            socket?.close()
-        }
-
-        private fun explain(e: Exception): String = when (e) {
-            is Pairing.Rejected -> L("The TV refused (${e.status}). Try again.", "A TV recusou (${e.status}). Tenta outra vez.")
-            is NotPairedException, is java.io.EOFException ->
-                L("The TV closed the connection. Try again.", "A TV fechou a ligação. Tenta outra vez.")
-            is AppleTvPairing.WrongPin -> L("Wrong PIN. Try again: the TV will show a new one.", "PIN errado. Tenta outra vez: a TV mostra um novo.")
-            is CompanionConnection.TvError -> L("The TV refused: ${e.message}", "A TV recusou: ${e.message}")
-            else -> describe(e)
-        }
-    }
+    internal fun describe(e: Throwable): String = e.message?.takeIf { it.isNotBlank() } ?: e.javaClass.simpleName
 
     companion object {
         const val LAUNCHER_PORT = 6470
+    }
+}
+
+/** Um emparelhamento: liga à TV, a TV mostra o código e espera-se que a pessoa o escreva. */
+class PairingModel(private val vm: RemoteViewModel, val name: String, private val tvId: String, private var host: String?, val kind: TvKind, private var port: Int?) {
+    var phase by mutableStateOf<Phase>(Phase.Connecting)
+        private set
+
+    /** O código que a TV mostra: 6 caracteres hexadecimais (Android TV) ou um PIN de 4 algarismos (Apple TV). */
+    val codeLength: Int get() = if (kind == TvKind.APPLE) 4 else Pairing.CODE_LENGTH
+
+    private var code: CompletableDeferred<String>? = null
+    private var job: Job? = null
+    private var socket: TvSocket? = null
+
+    fun start() {
+        job = vm.viewModelScope.launch { if (kind == TvKind.APPLE) runApple() else runAndroid() }
+    }
+
+    private suspend fun runAndroid() {
+        try {
+            val host = host ?: throw UnreachableException(L("Couldn't find the TV on the network", "Não deu para encontrar a TV na rede"))
+            val identity = withContext(Dispatchers.IO) { vm.identities.get() }
+            val socket = TvSocket.open(host, Pairing.PORT, identity)
+            this.socket = socket
+            val server = socket.serverCertificate?.let(RsaKey::of)
+                ?: throw UnreachableException(L("The TV's certificate is unreadable", "O certificado da TV não se lê"))
+            val client = RsaKey.of(identity.certificate)!!
+            Pairing.run(
+                clientName = vm.deviceName,
+                client = client,
+                server = server,
+                send = { socket.send(it) },
+                receive = { withContext(Dispatchers.IO) { socket.receive() } },
+                askCode = { retry -> askCode(retry) },
+            )
+            socket.close()
+            phase = Phase.Done
+            vm.paired(SavedTv(tvId, name, host))
+            delay(700)
+            if (vm.pairing === this) vm.pairing = null
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            socket?.close()
+        } catch (e: Exception) {
+            socket?.close()
+            phase = Phase.Failed(explain(e))
+        }
+    }
+
+    /** Apple TV: SRP com o PIN, e as credenciais ficam guardadas. */
+    private suspend fun runApple() {
+        try {
+            val host = host
+            val port = port
+            if (host == null || port == null) {
+                throw UnreachableException(L("Couldn't find the TV on the network", "Não deu para encontrar a TV na rede"))
+            }
+            val creds = AppleTvPairing.pair(host, port, vm.deviceName) { askCode(false) }
+            CompanionCredentials.save(vm.appContext, tvId, creds)
+            phase = Phase.Done
+            vm.paired(SavedTv(tvId, name, host, TvKind.APPLE, port))
+            delay(700)
+            if (vm.pairing === this) vm.pairing = null
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            return
+        } catch (e: Exception) {
+            phase = Phase.Failed(explain(e))
+        }
+    }
+
+    private suspend fun askCode(retry: Boolean): String {
+        val deferred = CompletableDeferred<String>()
+        code = deferred
+        phase = Phase.WaitingCode(retry)
+        return deferred.await()
+    }
+
+    /** O código que a pessoa escreveu. */
+    fun submit(value: String) {
+        val deferred = code ?: return
+        code = null
+        phase = Phase.Checking
+        deferred.complete(value)
+    }
+
+    /** Recomeça (a TV volta a mostrar um código novo). */
+    fun retry() {
+        cancel()
+        phase = Phase.Connecting
+        start()
+    }
+
+    fun cancel() {
+        code?.cancel()
+        code = null
+        job?.cancel()
+        socket?.close()
+    }
+
+    private fun explain(e: Exception): String = when (e) {
+        is Pairing.Rejected -> L("The TV refused (${e.status}). Try again.", "A TV recusou (${e.status}). Tenta outra vez.")
+        is NotPairedException, is java.io.EOFException ->
+            L("The TV closed the connection. Try again.", "A TV fechou a ligação. Tenta outra vez.")
+        is AppleTvPairing.WrongPin -> L("Wrong PIN. Try again: the TV will show a new one.", "PIN errado. Tenta outra vez: a TV mostra um novo.")
+        is CompanionConnection.TvError -> L("The TV refused: ${e.message}", "A TV recusou: ${e.message}")
+        else -> vm.describe(e)
     }
 }

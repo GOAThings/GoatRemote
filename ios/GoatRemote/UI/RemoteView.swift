@@ -86,23 +86,29 @@ struct RemoteView: View {
             GlassKey(symbol: model.state.muted == true ? "speaker.slash.fill" : "speaker.slash", size: 58,
                      tint: model.state.muted == true ? Theme.accent : Theme.dim, id: "key:mute") { model.press(.mute) }
             Button { showTVs = true } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: model.current?.kind == .apple ? "appletv.fill" : "tv.fill")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 28, height: 22)
-                        .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Theme.gradient))
+                HStack(spacing: 11) {
+                    // A TV num círculo de vidro, com o estado da ligação num ponto ao canto.
+                    Image(systemName: model.current?.kind == .apple ? "appletv" : "tv")
+                        .font(.system(size: 15, weight: .regular))
+                        .foregroundStyle(.white.opacity(0.9))
+                        .frame(width: 34, height: 34)
+                        .background(Circle().fill(Color.white.opacity(0.08)))
+                        .overlay(Circle().strokeBorder(Color.white.opacity(0.14), lineWidth: 0.5))
+                        .overlay(alignment: .bottomTrailing) {
+                            Circle().fill(statusColor)
+                                .frame(width: 9, height: 9)
+                                .overlay(Circle().strokeBorder(Theme.surfaceTop, lineWidth: 2))
+                                .offset(x: 1, y: 1)
+                        }
                     VStack(alignment: .leading, spacing: 1) {
                         Text(model.current?.name ?? "GoatRemote")
                             .font(.system(size: 16, weight: .semibold, design: .rounded))
                             .foregroundStyle(.white)
                             .lineLimit(1)
-                        HStack(spacing: 5) {
-                            Circle().fill(statusColor).frame(width: 6, height: 6)
-                            Text(subtitle).lineLimit(1)
-                        }
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(Theme.dim)
+                        Text(subtitle)
+                            .lineLimit(1)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(Theme.dim)
                     }
                     Spacer(minLength: 4)
                     Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.dim)

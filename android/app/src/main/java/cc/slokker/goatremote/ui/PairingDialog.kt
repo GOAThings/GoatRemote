@@ -46,13 +46,14 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import cc.slokker.goatremote.L
+import cc.slokker.goatremote.PairingModel
 import cc.slokker.goatremote.Phase
 import cc.slokker.goatremote.RemoteViewModel
 import cc.slokker.goatremote.data.TvKind
 
 /** O emparelhamento: a TV mostra um código (6 caracteres na Android TV, 4 algarismos na Apple TV) e escreve-se aqui. */
 @Composable
-fun PairingDialog(vm: RemoteViewModel, pairing: RemoteViewModel.PairingModel) {
+fun PairingDialog(vm: RemoteViewModel, pairing: PairingModel) {
     fun cancel() {
         pairing.cancel()
         vm.pairing = null
@@ -114,7 +115,7 @@ private fun Busy(text: String) {
 }
 
 @Composable
-private fun CodeField(pairing: RemoteViewModel.PairingModel, phase: Any) {
+private fun CodeField(pairing: PairingModel, phase: Any) {
     var code by remember(phase) { mutableStateOf("") }
     val focus = remember { FocusRequester() }
     val apple = pairing.kind == TvKind.APPLE

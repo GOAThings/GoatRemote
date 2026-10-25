@@ -28,6 +28,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.LiveTv
+import androidx.compose.material.icons.outlined.Tv
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Apps
@@ -186,23 +188,27 @@ private fun TopBar(vm: RemoteViewModel, onTvs: () -> Unit) {
                 .testTag("tv-menu"),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(
-                Modifier.size(width = 28.dp, height = 22.dp).clip(RoundedCornerShape(6.dp)).background(Theme.gradient),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(if (vm.current?.kind == TvKind.APPLE) Icons.Rounded.LiveTv else Icons.Rounded.Tv, null, tint = Color.White,
-                    modifier = Modifier.size(14.dp))
+            // A TV num círculo de vidro, com o estado da ligação num ponto ao canto.
+            Box(Modifier.size(36.dp)) {
+                Box(
+                    Modifier.size(34.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.08f))
+                        .border(0.5.dp, Color.White.copy(alpha = 0.14f), CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(if (vm.current?.kind == TvKind.APPLE) Icons.Outlined.LiveTv else Icons.Outlined.Tv, null,
+                        tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(18.dp))
+                }
+                Box(
+                    Modifier.align(Alignment.BottomEnd).size(11.dp).clip(CircleShape).background(Theme.surfaceTop).padding(2.dp)
+                        .clip(CircleShape).background(statusColor(vm)),
+                )
             }
-            Spacer(Modifier.width(10.dp))
+            Spacer(Modifier.width(11.dp))
             Column(Modifier.weight(1f)) {
                 Text(vm.current?.name ?: "GoatRemote", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(6.dp).clip(CircleShape).background(statusColor(vm)))
-                    Spacer(Modifier.width(5.dp))
-                    Text(subtitle(vm), color = Theme.dim, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1,
-                        overflow = TextOverflow.Ellipsis)
-                }
+                Text(subtitle(vm), color = Theme.dim, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1,
+                    overflow = TextOverflow.Ellipsis)
             }
             Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Theme.dim, modifier = Modifier.size(20.dp))
         }
