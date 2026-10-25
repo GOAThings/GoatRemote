@@ -1,5 +1,6 @@
 package cc.slokker.goatremote
 
+import android.accessibilityservice.AccessibilityService
 import android.graphics.Bitmap
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.ExperimentalTestApi
@@ -16,7 +17,6 @@ import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeRight
 import androidx.compose.ui.test.swipeUp
-import androidx.test.espresso.Espresso
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import java.io.File
@@ -100,7 +100,8 @@ class RemoteUiTest {
         rule.onNodeWithTag("opt:dpad").performClick()
         pause(0.4)
         shot("options")
-        Espresso.pressBack()
+        // O "voltar" do sistema (o do Espresso espera pelo foco da janela, que uma janela do sistema pode roubar).
+        InstrumentationRegistry.getInstrumentation().uiAutomation.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
         pause(0.8)
 
         // Setas nas bordas: tocar em cima e à direita.

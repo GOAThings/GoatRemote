@@ -68,6 +68,8 @@ jobs:
           disable-animations: true
           working-directory: android
           script: |
+            adb shell settings put global hide_error_dialogs 1
+            adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS
             ./gradlew connectedDebugAndroidTest -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true || touch ../build/failed
             adb pull /sdcard/Android/data/cc.slokker.goatremote.debug/files/shots ../build/ || true
             adb logcat -d -t 2000 > ../build/shots/logcat.txt || true
