@@ -1,7 +1,7 @@
 name: iOS UI tests
 
 # A app no simulador do iPhone contra a TV falsa (tools/AtvTool.java), com screenshots de cada passo.
-# Só corre quando se pede: o macOS conta 10× nos minutos de um repo privado.
+# Só corre quando se pede (demora uns minutos).
 on:
   workflow_dispatch:
 

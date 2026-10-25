@@ -1,8 +1,8 @@
 import AppIntents
 import RemoteCore
 
-/// Teclas para os Atalhos e a Siri ("Ei Siri, desliga a TV"). Correm na própria app (sem extensão, que o
-/// Signulous não assina): ligam à TV escolhida, mandam a tecla e desligam.
+/// Teclas para os Atalhos e a Siri ("Ei Siri, desliga a TV"). Correm na própria app, sem extensão (nem todos os
+/// serviços de assinatura assinam extensões): ligam à TV escolhida, mandam a tecla e desligam.
 enum TVButton: String, AppEnum {
     case power, playPause, mute, volumeUp, volumeDown, home, back
 

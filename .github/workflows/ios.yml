@@ -39,9 +39,6 @@ jobs:
 
   ipa:
     needs: core-tests
-    # O macOS conta 10× nos minutos de um repo privado: só quando se pede (workflow_dispatch) ou numa versão (tag),
-    # não a cada push.
-    if: github.event_name != 'push' || startsWith(github.ref, 'refs/tags/')
     runs-on: macos-26
     defaults:
       run:
