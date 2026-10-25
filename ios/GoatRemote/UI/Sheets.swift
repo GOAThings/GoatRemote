@@ -185,9 +185,13 @@ struct MoreSheet: View {
                         key(.guide, "list.bullet.rectangle", L("Guide", "Guia"))
                         key(.info, "info.circle", "Info")
                         key(.captions, "captions.bubble", L("Subtitles", "Legendas"))
+                        key(.audioTrack, "waveform", L("Audio", "Áudio"))
+                        key(.lastChannel, "arrow.uturn.backward.circle", L("Last ch", "Último can"))
                         key(.input, "rectangle.connected.to.line.below", L("Input", "Entrada"))
                         key(.settings, "gearshape", L("Settings", "Definições"))
                         key(.stop, "stop.fill", "Stop")
+                        key(.previous, "backward.end.fill", L("Previous", "Anterior"))
+                        key(.next, "forward.end.fill", L("Next", "Seguinte"))
                     }
                     Text(L("Numbers", "Números")).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.dim)
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 5), spacing: 10) {

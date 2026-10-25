@@ -187,7 +187,8 @@ public class AtvTool {
             "DPAD_CENTER", 23, "VOLUME_UP", 24, "VOLUME_DOWN", 25, "POWER", 26, "MENU", 82, "SEARCH", 84,
             "MEDIA_PLAY_PAUSE", 85, "MEDIA_NEXT", 87, "MEDIA_PREVIOUS", 88, "MEDIA_REWIND", 89,
             "MEDIA_FAST_FORWARD", 90, "MUTE", 164, "INFO", 165, "CHANNEL_UP", 166, "CHANNEL_DOWN", 167, "GUIDE", 172,
-            "CAPTIONS", 175, "SETTINGS", 176, "TV_INPUT", 178, "DEL", 67};
+            "CAPTIONS", 175, "SETTINGS", 176, "TV_INPUT", 178, "DEL", 67, "MEDIA_AUDIO_TRACK", 222,
+            "LAST_CHANNEL", 229, "MEDIA_STOP", 86, "ENTER", 66};
         for (int i = 0; i < k.length; i += 2) KEYS.put((String) k[i], (Integer) k[i + 1]);
     }
 

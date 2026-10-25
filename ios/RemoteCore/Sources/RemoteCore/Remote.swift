@@ -11,6 +11,7 @@ public enum Key: Int, CaseIterable, Sendable {
     case playPause = 85, stop = 86, next = 87, previous = 88, rewind = 89, fastForward = 90
     case mute = 164, info = 165, channelUp = 166, channelDown = 167, guide = 172
     case captions = 175, settings = 176, input = 178
+    case audioTrack = 222, lastChannel = 229
 }
 
 /// Carregar e largar, ou carregar e manter (início e fim do toque longo).
