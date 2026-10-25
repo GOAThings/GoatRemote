@@ -229,8 +229,8 @@ struct VolumeHUD: View {
         if model.state.volumeControl {
             level
         } else {
-            Label(L("This Apple TV can't control the volume (no HDMI-CEC)",
-                    "Esta Apple TV não controla o volume (sem HDMI-CEC)"), systemImage: "speaker.slash.fill")
+            Label(L("The Apple TV can't change this TV's volume. Use its remote",
+                    "A Apple TV não muda o volume desta TV. Usa o comando dela"), systemImage: "speaker.slash.fill")
                 .font(.footnote)
                 .foregroundStyle(.white)
                 .multilineTextAlignment(.center)
