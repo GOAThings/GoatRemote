@@ -286,7 +286,7 @@ final class RemoteModel {
     }
 
     func type(_ text: String) {
-        guard let link, status == .connected, !text.isEmpty else { return }
+        guard let link, status == .connected else { return }
         link.text(text)
     }
 

@@ -85,23 +85,23 @@ final class CompanionConnection: @unchecked Sendable {
     // MARK: Tramas
 
     func send(_ frame: Frame, _ message: OPACK) async throws {
-        var body = message.encoded
-        lock.lock()
-        var header: [UInt8]
-        if let key = outKey, !body.isEmpty {
-            header = [frame.rawValue] + Self.length(body.count + 16)
-            let nonce = try ChaChaPoly.Nonce(data: Self.nonce(outCounter))
-            outCounter += 1
-            lock.unlock()
-            let box = try ChaChaPoly.seal(body, using: key, nonce: nonce, authenticating: header)
-            body = Array(box.ciphertext) + Array(box.tag)
-        } else {
-            header = [frame.rawValue] + Self.length(body.count)
-            lock.unlock()
-        }
-        let data = Data(header + body)
         try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
-            connection.send(content: data, completion: .contentProcessed { error in
+            // Cifrar e pôr na fila juntos: a TV conta as tramas, por isso têm de sair pela ordem do contador.
+            lock.lock()
+            defer { lock.unlock() }
+            var body = message.encoded
+            var header = [frame.rawValue] + Self.length(body.count)
+            if let key = outKey, !body.isEmpty {
+                header = [frame.rawValue] + Self.length(body.count + 16)
+                do {
+                    let box = try ChaChaPoly.seal(body, using: key, nonce: ChaChaPoly.Nonce(data: Self.nonce(outCounter)), authenticating: header)
+                    body = Array(box.ciphertext) + Array(box.tag)
+                } catch {
+                    return cont.resume(throwing: error)
+                }
+                outCounter += 1
+            }
+            connection.send(content: Data(header + body), completion: .contentProcessed { error in
                 if let error { cont.resume(throwing: Failure.unreachable(error.localizedDescription)) } else { cont.resume() }
             })
         }

@@ -23,6 +23,7 @@ enum CoreTests {
         ("srp", srp),
         ("opack", opack),
         ("tlv8", tlv8),
+        ("rti", rti),
     ]
 
     static func proto() throws {
@@ -200,5 +201,50 @@ enum CoreTests {
         let m1 = try OPACK(decoding: hex("e2435f706476000100060101455f7077547909"))
         try expect(TLV8.decode(m1["_pd"]?.data ?? [])[6], [1])
         try expect(m1["_pwTy"]?.int, 1)
+    }
+
+    /// O teclado da Apple TV: os bplist do pyatv lêem-se, e os nossos têm o mesmo significado.
+    static func rti() throws {
+        let fake = hex("62706c6973743030d2010203085424746f7058246f626a65637473d2040506075b73657373696f6e555549445d646f63" +
+                       "756d656e74537461746580018002a5090a0b0e1155246e756c6c4f101030313233343536373839616263646566d10c0d" +
+                       "55646f6353748003d10f105f1012636f6e746578744265666f7265496e70757480045f101c46616b6520436f6d70616e" +
+                       "696f6e204b6579626f6172642054657874080d121b202c3a3c3e444a5d6066686b808200000000000001010000000000" +
+                       "000012000000000000000000000000000000a1")
+        guard let state = RTI.state(fake) else { throw Failed(description: "RTI.state nil") }
+        try expect(state.session, Array("0123456789abcdef".utf8))
+        try expect(state.text, "Fake Companion Keyboard Text")
+        // O que mandamos: lê-se de volta com o mesmo significado que o do pyatv.
+        let session = Array("0123456789abcdef".utf8)
+        let mine = try BPlist.decode(RTI.insert("olá hello", session: session))
+        guard case .array(let objects)? = mine["$objects"] else { throw Failed(description: "sem $objects") }
+        try expect(mine["$archiver"], .string("RTIKeyedArchiver"))
+        try expect(mine["$version"], .int(100_000))
+        try expect(mine["$top"]?["textOperations"], .uid(1))
+        try expect(objects[1]["keyboardOutput"], .uid(2))
+        try expect(objects[1]["targetSessionUUID"], .uid(5))
+        try expect(objects[2]["insertionText"], .uid(4))
+        try expect(objects[4], .string("olá hello"))
+        try expect(objects[5]["NS.uuidbytes"], .data(session))
+        try expect(objects[7]["$classname"], .string("RTITextOperations"))
+        let clear = try BPlist.decode(RTI.clear(session: session))
+        guard case .array(let cleared)? = clear["$objects"] else { throw Failed(description: "sem $objects") }
+        try expect(cleared[1]["textToAssert"], .uid(4))
+        try expect(cleared[4], .string(""))
+        // E o do pyatv (insert "hello"):
+        let theirs = try BPlist.decode(hex(
+            "62706c6973743030d4010203040506070a582476657273696f6e592461726368697665725424746f7058246f626a6563" +
+            "747312000186a05f10105254494b657965644172636869766572d108095e746578744f7065726174696f6e738001a80b" +
+            "0c1317181e222555246e756c6cd30d0e0f1011125e6b6579626f6172644f75747075745624636c6173735f1011746172" +
+            "67657453657373696f6e55554944800280078005d2140e15165d696e73657274696f6e54657874800380045568656c6c" +
+            "6fd2191a1b1c5a24636c6173736e616d655824636c61737365735f101054494b6579626f6172644f7574707574a21b1d" +
+            "584e534f626a656374d21f0e20215c4e532e7575696462797465734f1010303132333435363738396162636465668006" +
+            "d2191a2324564e5355554944a2231dd2191a26275f1011525449546578744f7065726174696f6e73a2261d0008001100" +
+            "1a0024002900320037004a004d005c005e0067006d00740083008a009e00a000a200a400a900b700b900bb00c100c600" +
+            "d100da00ed00f000f900fe010b011e01200125012c012f01340148000000000000020100000000000000280000000000" +
+            "000000000000000000014b"))
+        guard case .array(let pyObjects)? = theirs["$objects"] else { throw Failed(description: "pyatv sem $objects") }
+        try expect(pyObjects[2]["insertionText"], .uid(3))
+        try expect(pyObjects[3], .string("hello"))
+        try expect(pyObjects[5]["NS.uuidbytes"], .data(session))
     }
 }

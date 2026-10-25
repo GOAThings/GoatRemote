@@ -93,6 +93,9 @@ final class AppleTVLink: TVControl, @unchecked Sendable {
     private let lock = NSLock()
     private var _state = TVState()
     private var pending: [UInt64: CheckedContinuation<OPACK, Error>] = [:]
+    /// A sessão de texto aberta na TV (do _tiStart ou do _tiStarted), para onde vai o que se escreve.
+    private var textSession: [UInt8]?
+    private var typing: Task<Void, Never>?
 
     init(tv: SavedTV) {
         self.tv = tv
@@ -180,8 +183,8 @@ final class AppleTVLink: TVControl, @unchecked Sendable {
         _ = try await request("_touchStart", ["_height": .double(1000), "_tFl": .int(0), "_width": .double(1000)])
         _ = try await request("_sessionStart", ["_srvT": .string("com.apple.tvremoteservices"), "_sid": .int(UInt64(UInt32.random(in: 1...UInt32.max)))])
         _ = try? await request("TVRCSessionStart", ["ProtocolVersionKey": .string("1.2")])
-        if let ti = try? await request("_tiStart", [:]), ti["_tiD"] != nil {
-            update { $0.keyboardRequests += 1 }
+        if let ti = try? await request("_tiStart", [:]), let tiD = ti["_tiD"]?.data {
+            textStarted(tiD)
         }
         for name in ["_iMC", "SystemStatus", "TVSystemStatus"] {
             try? await event("_interest", ["_regEvents": .array([.string(name)])])
@@ -272,7 +275,11 @@ final class AppleTVLink: TVControl, @unchecked Sendable {
         case "SystemStatus", "TVSystemStatus":
             if let s = content["state"]?.int { update { $0.isOn = s != 1 } }
         case "_tiStarted":
-            if content["_tiD"] != nil { update { $0.keyboardRequests += 1 } }
+            if let tiD = content["_tiD"]?.data { textStarted(tiD) }
+        case "_tiStopped":
+            lock.lock()
+            textSession = nil
+            lock.unlock()
         case "_iMC":
             // Com controlo de volume (0x100), pergunta-se o volume.
             if let flags = content["_mcF"]?.int, flags & 0x100 != 0 {
@@ -287,6 +294,18 @@ final class AppleTVLink: TVControl, @unchecked Sendable {
         }
     }
 
+    /// A TV abriu um campo de texto: guarda a sessão e o texto que já lá está, e abre o teclado no telefone.
+    private func textStarted(_ tiD: [UInt8]) {
+        guard let ti = RTI.state(tiD) else { return }
+        lock.lock()
+        textSession = ti.session
+        lock.unlock()
+        update {
+            $0.textValue = ti.text
+            $0.keyboardRequests += 1
+        }
+    }
+
     // MARK: Comandos
 
     /// As teclas da Apple TV (códigos HID do _hidC).
@@ -297,7 +316,7 @@ final class AppleTVLink: TVControl, @unchecked Sendable {
         case .left: return 3
         case .right: return 4
         case .back: return 5
-        case .center, .enter: return 6
+        case .center: return 6
         case .home: return 7
         case .volumeUp: return 8
         case .volumeDown: return 9
@@ -341,8 +360,21 @@ final class AppleTVLink: TVControl, @unchecked Sendable {
         }
     }
 
+    /// Substitui o texto do campo aberto na TV: apaga e escreve tudo outra vez.
     func text(_ text: String) {
-        // O teclado da Apple TV (RTI) vem a seguir.
+        lock.lock()
+        let session = textSession
+        lock.unlock()
+        guard let session else { return }
+        // Uma tecla de cada vez, pela ordem em que se escreveu.
+        let previous = typing
+        typing = Task { [weak self] in
+            await previous?.value
+            try? await self?.event("_tiC", ["_tiV": .int(1), "_tiD": .data(RTI.clear(session: session))])
+            if !text.isEmpty {
+                try? await self?.event("_tiC", ["_tiV": .int(1), "_tiD": .data(RTI.insert(text, session: session))])
+            }
+        }
     }
 
     func openApp(_ id: String) {
