@@ -16,7 +16,7 @@ remote. All the TVs at home show up in one list, so switching between them is on
   soundbar or receiver; when it can't, the app says so.
 - **Keyboard**: opens on its own when the TV shows a text field, with what's already typed there; Enter on the
   phone is Enter on the TV (also on Apple TV).
-- **Apps**: with [GoatLauncher](https://github.com/GOAThings/GoatLauncher-Releases) on the TV, all its apps show
+- **Apps**: with [GoatLauncher](https://github.com/GOAThings/GoatLauncher) on the TV, all its apps show
   up with their banners; without it, the apps you've opened on that TV. On Apple TV, the TV's own app list, with
   App Store icons.
 - **Several TVs**, and on the iPhone, Siri and Shortcuts ("press a TV button").
