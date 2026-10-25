@@ -67,7 +67,6 @@ The IPA is unsigned: sign it with your own certificate and sideload it (iOS 17 o
   TV.
 
 GitHub Actions runs the protocol tests and both apps against the fake TV (iPhone simulator, Android emulator).
-`scripts/release.sh <version> <notes>` publishes a release with both apps (it needs the signing key).
 
 ## License
 

@@ -10,3 +10,6 @@ DerivedData/
 .build/
 .swiftpm/
 atv-state/
+
+# O script de publicação fica só no PC (como no GoatTV).
+/scripts/release.sh
