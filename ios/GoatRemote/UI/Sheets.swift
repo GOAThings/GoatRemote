@@ -44,7 +44,8 @@ struct KeyboardSheet: View {
     }
 }
 
-/// Abrir apps: as que se viu abertas nesta TV e as conhecidas, em mosaicos.
+/// Abrir apps. Com o GoatLauncher na TV: as instaladas, com os banners dela. Sem ele, só as que já se viu abertas
+/// nesta TV (nunca uma lista inventada de apps que a TV pode não ter).
 struct AppsSheet: View {
     @Environment(RemoteModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -53,52 +54,114 @@ struct AppsSheet: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    let recents = model.recentApps.filter { AppCatalog.app($0) == nil }
-                    if !recents.isEmpty {
-                        Text(L("Recently opened", "Abertas há pouco")).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.dim)
-                        LazyVGrid(columns: columns, spacing: 12) {
-                            ForEach(recents, id: \.self) { package in
-                                tile(name: AppCatalog.name(package), symbol: "app.fill", color: Theme.surfaceHigh, link: "market://launch?id=\(package)")
-                            }
-                        }
+                VStack(alignment: .leading, spacing: 14) {
+                    if model.installedApps.isEmpty {
+                        seenOnly
+                    } else {
+                        installed
                     }
-                    LazyVGrid(columns: columns, spacing: 12) {
-                        ForEach(AppCatalog.apps) { app in
-                            tile(name: app.name, symbol: app.symbol, color: Color(hex: app.color), link: app.link)
-                        }
-                    }
-                    Text(L("If the TV doesn't have the app, it opens its store.", "Se a TV não tiver a app, abre a loja."))
-                        .font(.footnote).foregroundStyle(Theme.dim)
                 }
                 .padding(18)
             }
             .navigationTitle(L("Apps", "Apps"))
             .navigationBarTitleDisplayMode(.inline)
         }
+        .onAppear { model.refreshApps() }
     }
 
-    private func tile(name: String, symbol: String, color: Color, link: String) -> some View {
+    /// As apps da TV, as abertas há pouco primeiro.
+    @ViewBuilder
+    private var installed: some View {
+        let byPackage = Dictionary(model.installedApps.map { ($0.package, $0) }, uniquingKeysWith: { a, _ in a })
+        let recent = model.recentApps.compactMap { byPackage[$0] }.prefix(4)
+        if !recent.isEmpty {
+            section(L("Recently opened", "Abertas há pouco"))
+            LazyVGrid(columns: columns, spacing: 12) {
+                ForEach(Array(recent)) { app in tile(app) }
+            }
+            section(L("All apps", "Todas as apps")).padding(.top, 6)
+        }
+        LazyVGrid(columns: columns, spacing: 12) {
+            ForEach(model.installedApps) { app in tile(app) }
+        }
+    }
+
+    /// Sem GoatLauncher: as apps vistas nesta TV e como ter a lista toda.
+    @ViewBuilder
+    private var seenOnly: some View {
+        if !model.recentApps.isEmpty {
+            section(L("Opened on this TV", "Abertas nesta TV"))
+            LazyVGrid(columns: columns, spacing: 12) {
+                ForEach(model.recentApps, id: \.self) { package in
+                    let known = AppCatalog.app(package)
+                    tile(TVApp(package: package, label: AppCatalog.name(package), banner: false,
+                               color: known.map { String(format: "#%06X", $0.color) }), symbol: known?.symbol ?? "app.fill", remoteImage: false)
+                }
+            }
+        }
+        VStack(alignment: .leading, spacing: 8) {
+            Label(L("All the TV's apps here", "Todas as apps da TV aqui"), systemImage: "square.grid.2x2")
+                .font(.system(size: 16, weight: .semibold, design: .rounded))
+            Text(model.recentApps.isEmpty
+                 ? L("Android TVs don't share their app list with the remote. Apps show up here as you open them on the TV, or all of them, with their banners, if the TV has GoatLauncher.",
+                     "As Android TV não dão a lista de apps ao comando. As apps vão aparecendo aqui à medida que as abres na TV, ou todas, com os banners, se a TV tiver o GoatLauncher.")
+                 : L("With GoatLauncher on the TV, all its apps show up here, with their banners.",
+                     "Com o GoatLauncher na TV, aparecem aqui todas as apps dela, com os banners."))
+                .font(.footnote)
+                .foregroundStyle(Theme.dim)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .liquidGlass(RoundedRectangle(cornerRadius: 18, style: .continuous), interactive: false)
+        .padding(.top, 4)
+    }
+
+    private func section(_ title: String) -> some View {
+        Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.dim)
+    }
+
+    private func tile(_ app: TVApp, symbol: String = "app.fill", remoteImage: Bool = true) -> some View {
         Button {
-            model.open(link)
+            model.open(app.link)
             dismiss()
         } label: {
-            HStack(spacing: 10) {
-                Image(systemName: symbol).font(.system(size: 22, weight: .semibold))
-                Text(name).font(.system(size: 16, weight: .semibold)).lineLimit(1)
-                Spacer(minLength: 0)
+            ZStack {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(LinearGradient(colors: [app.tint, app.tint.opacity(0.6)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                if remoteImage, let url = model.iconURL(app.package) {
+                    AsyncImage(url: url) { phase in
+                        if let image = phase.image {
+                            if app.banner {
+                                image.resizable().scaledToFill()
+                            } else {
+                                VStack(spacing: 6) {
+                                    image.resizable().scaledToFit().frame(width: 46, height: 46)
+                                    Text(app.label).font(.caption.weight(.semibold)).foregroundStyle(.white).lineLimit(1)
+                                }
+                            }
+                        } else {
+                            fallback(app, symbol: symbol)
+                        }
+                    }
+                } else {
+                    fallback(app, symbol: symbol)
+                }
             }
-            .foregroundStyle(.white)
-            .padding(.horizontal, 16)
-            .frame(height: 76)
-            .background(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(LinearGradient(colors: [color, color.opacity(0.65)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                    .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.rim, lineWidth: 1))
-            )
+            .aspectRatio(16 / 9, contentMode: .fit)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.rim, lineWidth: 1))
         }
         .buttonStyle(.plain)
-        .accessibilityIdentifier("app:\(name)")
+        .accessibilityIdentifier("app:\(app.label)")
+    }
+
+    private func fallback(_ app: TVApp, symbol: String) -> some View {
+        VStack(spacing: 6) {
+            Image(systemName: symbol).font(.system(size: 24, weight: .semibold))
+            Text(app.label).font(.caption.weight(.semibold)).lineLimit(1)
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 8)
     }
 }
 

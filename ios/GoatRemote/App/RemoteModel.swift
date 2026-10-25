@@ -1,5 +1,6 @@
 import Foundation
 import Network
+import SwiftUI
 import Observation
 import RemoteCore
 import UIKit
@@ -23,6 +24,8 @@ final class RemoteModel {
     private(set) var state = TVState()
     /// As apps que se viu abertas nesta TV (as mais recentes primeiro), para as abrir com um toque.
     private(set) var recentApps: [String] = []
+    /// As apps instaladas na TV, se ela tiver o GoatLauncher (que as dá na rede de casa); vazio sem ele.
+    private(set) var installedApps: [TVApp] = []
 
     /// O emparelhamento em curso (a folha mostra-o).
     var pairing: PairingModel?
@@ -84,6 +87,7 @@ final class RemoteModel {
                 guard self.link === link else { return }
                 self.status = .connected
                 self.update(link.state)
+                self.refreshApps()
             } catch RemoteLink.Failure.notPaired {
                 guard self.link === link else { return }
                 self.link = nil
@@ -135,6 +139,30 @@ final class RemoteModel {
         }
     }
 
+    // MARK: Apps da TV (GoatLauncher)
+
+    /// Pede a lista de apps ao GoatLauncher da TV (porta 6470). Sem ele, fica vazia e usam-se as apps vistas.
+    func refreshApps() {
+        guard let tv = current, let url = URL(string: "http://\(tv.host):\(Self.launcherPort)/apps") else { return }
+        Task {
+            var request = URLRequest(url: url)
+            request.timeoutInterval = 4
+            guard let (data, response) = try? await URLSession.shared.data(for: request),
+                  (response as? HTTPURLResponse)?.statusCode == 200,
+                  let apps = try? JSONDecoder().decode([TVApp].self, from: data),
+                  current?.id == tv.id else { return }
+            installedApps = apps
+        }
+    }
+
+    /// O banner (ou ícone) de uma app, dado pelo GoatLauncher.
+    func iconURL(_ package: String) -> URL? {
+        guard let tv = current else { return nil }
+        return URL(string: "http://\(tv.host):\(Self.launcherPort)/icon/\(package)")
+    }
+
+    static let launcherPort = 6470
+
     // MARK: TVs
 
     func select(_ tv: SavedTV) {
@@ -145,6 +173,7 @@ final class RemoteModel {
         TVStore.currentID = tv.id
         state = TVState()
         recentApps = Self.loadRecents(tv.id)
+        installedApps = []
         connect()
     }
 
@@ -157,6 +186,7 @@ final class RemoteModel {
             current = TVStore.current
             state = TVState()
             recentApps = Self.loadRecents(current?.id)
+            installedApps = []
             status = current == nil ? .noTV : .connecting
             connect()
         }
@@ -187,6 +217,7 @@ final class RemoteModel {
         current = tv
         state = TVState()
         recentApps = Self.loadRecents(tv.id)
+        installedApps = []
         status = .connecting
         connect()
     }
@@ -330,5 +361,22 @@ final class PairingModel: Identifiable {
         default:
             return RemoteModel.describe(error)
         }
+    }
+}
+
+/// Uma app instalada na TV, como o GoatLauncher a dá.
+struct TVApp: Decodable, Identifiable, Hashable {
+    let package: String
+    let label: String
+    /// Tem banner de TV (16:9); senão é um ícone sobre a [color].
+    let banner: Bool
+    let color: String?
+
+    var id: String { package }
+    var link: String { "market://launch?id=\(package)" }
+
+    var tint: Color {
+        guard let color, color.hasPrefix("#"), let value = UInt32(color.dropFirst(), radix: 16) else { return Theme.surfaceHigh }
+        return Color(hex: value)
     }
 }

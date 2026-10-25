@@ -14,7 +14,8 @@ import javax.net.ssl.*;
 /**
  * O protocolo do comando das Android TV (o da app Google TV, "Android TV Remote v2") dos dois lados, num só ficheiro:
  *
- *   java AtvTool.java server [pasta]          uma TV falsa: emparelhamento em :6467, comando em :6466 e, em
+ *   java AtvTool.java server [pasta]          uma TV falsa: emparelhamento em :6467, comando em :6466, as apps
+ *                                             como o GoatLauncher em :6470 (/apps, /icon/<pacote>) e, em
  *                                             127.0.0.1:7000, /code (o código no "ecrã"), /log e /state (para os testes)
  *   java AtvTool.java pair <ip> [pasta]       emparelha com uma TV a sério; o código lê-se de <pasta>/code.txt
  *   java AtvTool.java key <ip> KEY... [pasta] teclas (DPAD_UP, HOME, 23, …; "long:KEY" mantém premida)
@@ -459,6 +460,7 @@ public class AtvTool {
             pairing.setNeedClientAuth(true);
             remote.setNeedClientAuth(true);
             control();
+            launcherApps();
             System.out.println("TV falsa: emparelhamento :" + PAIRING_PORT + ", comando :" + REMOTE_PORT + ", controlo 127.0.0.1:" + CONTROL_PORT);
             Thread.ofPlatform().start(() -> accept(pairing, this::pairing));
             accept(remote, this::remote);
@@ -588,6 +590,74 @@ public class AtvTool {
         void sendApp(OutputStream out) throws IOException {
             send(out, new W().msg(20, new W().msg(1, new W().string(12, app))).done());
             send(out, new W().msg(21, new W().varint(1, ++imeCounter).varint(2, ++fieldCounter)).done());
+        }
+
+        // As apps "instaladas", como o GoatLauncher as dá: pacote, nome e cor (com banner as duas primeiras).
+        static final String[][] APPS = {
+            {"com.google.android.youtube.tv", "YouTube", "#C4122F"},
+            {"cc.slokker.itv", "GoatTV", "#1E3A8A"},
+            {"org.xbmc.kodi", "Kodi", "#17B2E7"},
+            {"com.teamsmart.videomanager.tv", "SmartTube", "#B91C1C"},
+            {"com.android.tv.settings", "Settings", "#4B5563"},
+        };
+
+        /** :6470, como o GoatLauncher: GET /apps (JSON) e GET /icon/<pacote> (PNG desenhado aqui). */
+        void launcherApps() throws IOException {
+            ServerSocket http = new ServerSocket(6470);
+            Thread.ofPlatform().daemon().start(() -> {
+                while (true) {
+                    try (Socket c = http.accept()) {
+                        BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), StandardCharsets.UTF_8));
+                        String line = r.readLine();
+                        String path = line == null ? "/" : line.split(" ")[1];
+                        byte[] body;
+                        String type;
+                        if (path.equals("/apps")) {
+                            StringBuilder j = new StringBuilder("[");
+                            for (int i = 0; i < APPS.length; i++) {
+                                if (i > 0) j.append(',');
+                                j.append("{\"package\":\"").append(APPS[i][0]).append("\",\"label\":\"").append(APPS[i][1])
+                                    .append("\",\"banner\":").append(i < 2).append(",\"color\":\"").append(APPS[i][2]).append("\"}");
+                            }
+                            body = j.append(']').toString().getBytes(StandardCharsets.UTF_8);
+                            type = "application/json";
+                        } else if (path.startsWith("/icon/")) {
+                            String pkg = path.substring(6);
+                            String[] app = Arrays.stream(APPS).filter(a -> a[0].equals(pkg)).findFirst().orElse(APPS[0]);
+                            boolean banner = Arrays.asList(APPS).indexOf(app) < 2;
+                            body = drawIcon(app[1], app[2], banner);
+                            type = "image/png";
+                        } else {
+                            body = "GoatLauncher".getBytes(StandardCharsets.UTF_8);
+                            type = "text/plain";
+                        }
+                        note("launcher " + path);
+                        OutputStream o = c.getOutputStream();
+                        o.write(("HTTP/1.1 200 OK\r\nContent-Type: " + type + "\r\nContent-Length: " + body.length + "\r\nConnection: close\r\n\r\n").getBytes(StandardCharsets.US_ASCII));
+                        o.write(body);
+                    } catch (Exception ignored) {}
+                }
+            });
+        }
+
+        /** Um banner 480×270 (ou ícone 192×192) com o nome da app sobre a cor dela. */
+        static byte[] drawIcon(String name, String color, boolean banner) throws IOException {
+            int w = banner ? 480 : 192, h = banner ? 270 : 192;
+            java.awt.image.BufferedImage img = new java.awt.image.BufferedImage(w, h, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+            java.awt.Graphics2D g = img.createGraphics();
+            g.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+            g.setRenderingHint(java.awt.RenderingHints.KEY_TEXT_ANTIALIASING, java.awt.RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+            java.awt.Color base = java.awt.Color.decode(color);
+            g.setPaint(new java.awt.GradientPaint(0, 0, base.brighter(), w, h, base.darker()));
+            if (banner) g.fillRect(0, 0, w, h); else g.fillRoundRect(0, 0, w, h, 48, 48);
+            g.setColor(java.awt.Color.WHITE);
+            g.setFont(new java.awt.Font(java.awt.Font.SANS_SERIF, java.awt.Font.BOLD, banner ? 56 : 30));
+            java.awt.FontMetrics m = g.getFontMetrics();
+            g.drawString(name, (w - m.stringWidth(name)) / 2, (h + m.getAscent() - m.getDescent()) / 2);
+            g.dispose();
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            javax.imageio.ImageIO.write(img, "png", out);
+            return out.toByteArray();
         }
 
         /** 127.0.0.1:7000: /code, /log e /state, em texto simples, para os testes lerem. */

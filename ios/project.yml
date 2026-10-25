@@ -34,6 +34,9 @@ targets:
         # Procurar as TVs e falar com elas na rede de casa.
         NSLocalNetworkUsageDescription: "GoatRemote finds and controls the TVs on your home network."
         NSBonjourServices: [_androidtvremote2._tcp]
+        # A lista de apps vem do GoatLauncher na TV, por http na rede de casa.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: cc.slokker.goatremote
