@@ -81,7 +81,7 @@ struct RemoteView: View {
                      tint: model.state.muted == true ? Theme.accent : Theme.dim, id: "key:mute") { model.press(.mute) }
             Button { showTVs = true } label: {
                 HStack(spacing: 10) {
-                    Image(systemName: "tv.fill")
+                    Image(systemName: model.current?.kind == .apple ? "appletv.fill" : "tv.fill")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(.white)
                         .frame(width: 28, height: 22)

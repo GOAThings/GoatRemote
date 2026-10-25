@@ -262,6 +262,7 @@ struct MoreSheet: View {
 struct TVsSheet: View {
     @Environment(RemoteModel.self) private var model
     @Environment(\.dismiss) private var dismiss
+    @StateObject private var finder = TVFinder()
     @State private var adding = false
 
     var body: some View {
@@ -274,7 +275,7 @@ struct TVsSheet: View {
                             dismiss()
                         } label: {
                             HStack(spacing: 12) {
-                                Image(systemName: "tv").foregroundStyle(Theme.accent)
+                                Image(systemName: tv.kind.symbol).foregroundStyle(Theme.accent).frame(width: 28)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(tv.name).foregroundStyle(.white)
                                     Text(subtitle(tv)).font(.caption).foregroundStyle(Theme.dim)
@@ -290,6 +291,12 @@ struct TVsSheet: View {
                 } footer: {
                     Text(L("Swipe left on a TV to forget it.", "Desliza uma TV para a esquerda para a esquecer."))
                 }
+                let unpaired = finder.found.filter { found in !model.tvs.contains { $0.id == found.id } }
+                if !unpaired.isEmpty {
+                    Section(L("On this network", "Nesta rede")) {
+                        ForEach(unpaired) { found in FoundTVRow(found: found) }
+                    }
+                }
                 Section {
                     Button { adding = true } label: { Label(L("Add a TV", "Juntar uma TV"), systemImage: "plus") }
                     if model.current != nil {
@@ -304,6 +311,8 @@ struct TVsSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .sheet(isPresented: $adding) { AddTVView(onDone: { adding = false }) }
         }
+        .onAppear { finder.start() }
+        .onDisappear { finder.stop() }
     }
 
     private func subtitle(_ tv: SavedTV) -> String {
@@ -316,5 +325,33 @@ struct TVsSheet: View {
         default: break
         }
         return parts.joined(separator: " · ")
+    }
+}
+
+/// Uma TV encontrada na rede e ainda por emparelhar: tocar emparelha.
+struct FoundTVRow: View {
+    @Environment(RemoteModel.self) private var model
+    let found: FoundTV
+
+    var body: some View {
+        Button {
+            model.startPairing(found)
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: found.kind.symbol).foregroundStyle(Theme.accent).frame(width: 28)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(found.name).foregroundStyle(.white)
+                    Text(found.kind == .apple ? "Apple TV" : "Android TV · Google TV").font(.caption).foregroundStyle(Theme.dim)
+                }
+                Spacer()
+                if found.kind == .apple && !RemoteModel.appleTVReady {
+                    Text(L("Soon", "Em breve")).font(.caption).foregroundStyle(Theme.dim)
+                } else {
+                    Text(L("Pair", "Emparelhar")).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.accent)
+                }
+            }
+        }
+        .disabled(found.kind == .apple && !RemoteModel.appleTVReady)
+        .accessibilityIdentifier("found:\(found.name)")
     }
 }

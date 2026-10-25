@@ -23,25 +23,22 @@ struct AddTVView: View {
                         }
                     }
                     ForEach(finder.found) { tv in
-                        Button {
-                            model.startPairing(name: tv.name, id: tv.name, host: nil, endpoint: tv.endpoint)
-                        } label: {
-                            HStack {
-                                Image(systemName: "tv").foregroundStyle(Theme.accent)
+                        if model.tvs.contains(where: { $0.id == tv.id }) {
+                            HStack(spacing: 12) {
+                                Image(systemName: tv.kind.symbol).foregroundStyle(Theme.accent).frame(width: 28)
                                 Text(tv.name).foregroundStyle(.white)
                                 Spacer()
-                                if model.tvs.contains(where: { $0.id == tv.name }) {
-                                    Text(L("Paired", "Emparelhada")).font(.caption).foregroundStyle(Theme.dim)
-                                }
+                                Text(L("Paired", "Emparelhada")).font(.caption).foregroundStyle(Theme.dim)
                             }
+                        } else {
+                            FoundTVRow(found: tv)
                         }
-                        .accessibilityIdentifier("found:\(tv.name)")
                     }
                 } header: {
                     Text(L("On this network", "Nesta rede"))
                 } footer: {
-                    Text(L("Android TV and Google TV (SHIELD, Sony, Philips, TCL, Chromecast…). The TV and the iPhone must be on the same Wi-Fi.",
-                           "Android TV e Google TV (SHIELD, Sony, Philips, TCL, Chromecast…). A TV e o iPhone têm de estar na mesma rede Wi-Fi."))
+                    Text(L("Android TV, Google TV (SHIELD, Sony, Philips, TCL, Chromecast…) and Apple TV. The TV and the iPhone must be on the same Wi-Fi.",
+                           "Android TV, Google TV (SHIELD, Sony, Philips, TCL, Chromecast…) e Apple TV. A TV e o iPhone têm de estar na mesma rede Wi-Fi."))
                 }
                 Section(L("Or by IP address", "Ou pelo endereço IP")) {
                     HStack {

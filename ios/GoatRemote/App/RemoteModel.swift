@@ -192,6 +192,15 @@ final class RemoteModel {
         }
     }
 
+    /// A Apple TV (protocolo Companion) ainda não está pronta: aparece na lista mas não emparelha.
+    static let appleTVReady = false
+
+    /// Emparelhar uma TV encontrada na rede.
+    func startPairing(_ found: FoundTV) {
+        guard found.kind == .android else { return }
+        startPairing(name: found.name, id: found.id, host: nil, endpoint: found.endpoint)
+    }
+
     /// Emparelhar uma TV encontrada na rede ou escrita à mão (IP).
     func startPairing(name: String, id: String, host: String?, endpoint: NWEndpoint?) {
         pairing?.cancel()
