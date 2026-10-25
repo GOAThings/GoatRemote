@@ -551,7 +551,8 @@ public class AtvTool {
                     } else if (m.has(90)) {
                         String link = m.msg(90).str(1);
                         note("abrir " + link);
-                        app = link.replaceAll("^[a-z]+://", "").split("[/?]")[0];
+                        app = link.contains("launch?id=") ? link.substring(link.indexOf("launch?id=") + 10)
+                            : link.replaceAll("^[a-z]+://", "").split("[/?]")[0];
                         sendApp(out);
                     } else if (m.has(9)) {
                         // resposta ao ping

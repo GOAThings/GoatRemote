@@ -157,11 +157,10 @@ struct SurfaceInfo: View {
                 Image(systemName: symbol).font(.system(size: 46, weight: .light))
                 Text(title).font(.system(size: 19, weight: .semibold, design: .rounded))
                 Spacer()
-                Text(model.dpadTaps
-                     ? L("Tap the edges for arrows · tap the middle for OK", "Toca nas bordas para as setas · no meio para OK")
-                     : L("Swipe to move · tap to select · hold for more", "Desliza para andar · toca para escolher · mantém para mais"))
+                // Com as setas nas bordas, as próprias setas já dizem o que fazer.
+                Text(L("Swipe to move · tap to select · hold for more", "Desliza para andar · toca para escolher · mantém para mais"))
                     .font(.caption2)
-                    .opacity(0.8)
+                    .opacity(model.dpadTaps ? 0 : 0.8)
                     .padding(.bottom, 16)
             }
             .foregroundStyle(Color.white.opacity(0.13))
