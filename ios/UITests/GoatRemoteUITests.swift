@@ -39,31 +39,48 @@ final class GoatRemoteUITests: XCTestCase {
         XCTAssertTrue(status.waitForExistence(timeout: 20), "Não ligou ao comando")
         pause(1)
         shot("remote")
-        for id in ["key:up", "key:down", "key:left", "key:right", "key:center", "key:volumeUp", "key:mute", "key:back", "key:home", "key:playPause"] {
+
+        // A superfície: tocar, deslizar nos quatro sentidos, manter.
+        let pad = app.descendants(matching: .any)["touchpad"]
+        pad.tap()
+        pause(0.4)
+        pad.swipeUp()
+        pad.swipeDown()
+        pad.swipeLeft()
+        pad.swipeRight()
+        pad.press(forDuration: 1.2)
+        pause(0.4)
+
+        // Os botões.
+        for id in ["key:playPause", "key:back", "key:home", "key:mute"] {
             app.buttons[id].tap()
             pause(0.35)
         }
-        app.buttons["key:center"].press(forDuration: 1.2)
-        pause(0.5)
-        shot("after-keys")
+        pause(0.3)
+        shot("volume")
 
-        app.buttons["mode"].tap()
-        let pad = app.descendants(matching: .any)["touchpad"]
-        XCTAssertTrue(pad.waitForExistence(timeout: 5))
-        pad.swipeUp()
-        pad.tap()
+        // Mais: volume, setas nas bordas e pesquisa (a TV pede o teclado sozinha).
+        app.buttons["more"].tap()
+        let volumeUp = app.buttons["key:volumeUp"]
+        XCTAssertTrue(volumeUp.waitForExistence(timeout: 5))
+        volumeUp.tap()
+        app.switches["opt:dpad"].switches.firstMatch.tap()
         pause(0.5)
-        shot("touchpad")
-        app.buttons["mode"].tap()
-
-        app.buttons["keyboard"].tap()
+        shot("more")
+        app.buttons["key:search"].tap()
         let keyboard = app.textFields["keyboard-field"]
-        XCTAssertTrue(keyboard.waitForExistence(timeout: 5))
+        XCTAssertTrue(keyboard.waitForExistence(timeout: 8), "O teclado não apareceu quando a TV o pediu")
         keyboard.typeText("hello")
         pause(0.5)
         shot("keyboard")
-        app.buttons["Send"].tap()
-        pause(0.5)
+        app.buttons["send-text"].tap()
+        pause(0.8)
+
+        // Setas nas bordas: tocar em cima e à direita.
+        pad.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.05)).tap()
+        pad.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+        pause(0.4)
+        shot("dpad")
 
         app.buttons["apps"].tap()
         let youtube = app.buttons["app:YouTube"]
@@ -79,8 +96,10 @@ final class GoatRemoteUITests: XCTestCase {
         attachment.name = "fake-tv-log"
         attachment.lifetime = .keepAlways
         add(attachment)
-        for expected in ["emparelhado", "tecla DPAD_UP", "tecla DPAD_CENTER (início)", "tecla DPAD_CENTER (fim)", "tecla VOLUME_UP",
-                         "tecla MEDIA_PLAY_PAUSE", "texto hello", "tecla 66", "abrir market://launch?id=com.google.android.youtube.tv"] {
+        for expected in ["emparelhado", "tecla DPAD_CENTER", "tecla DPAD_UP", "tecla DPAD_DOWN", "tecla DPAD_LEFT", "tecla DPAD_RIGHT",
+                         "tecla DPAD_CENTER (início)", "tecla DPAD_CENTER (fim)", "tecla MEDIA_PLAY_PAUSE", "tecla BACK", "tecla HOME",
+                         "tecla MUTE", "tecla VOLUME_UP", "tecla SEARCH", "texto hello", "tecla 66",
+                         "abrir market://launch?id=com.google.android.youtube.tv"] {
             XCTAssertTrue(log.contains(expected), "Falta no registo da TV: \(expected)")
         }
     }

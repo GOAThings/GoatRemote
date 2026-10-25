@@ -27,6 +27,11 @@ public struct TVState: Equatable, Sendable {
     public var currentApp: String?
     public var model: String?
     public var vendor: String?
+    /// Sobe cada vez que a TV abre uma caixa de texto (o iPhone mostra o teclado).
+    public var keyboardRequests = 0
+    /// O que a caixa de texto já tem e o nome dela (ex.: "Pesquisar").
+    public var textValue = ""
+    public var textLabel: String?
 
     public init() {}
 }
@@ -36,7 +41,8 @@ public struct TVState: Equatable, Sendable {
 /// RemoteMessage: remote_configure 1 {code1 1, device_info 2 {model 1, vendor 2, unknown1 3, unknown2 4,
 /// package_name 5, app_version 6}}, remote_set_active 2 {active 1}, remote_error 3, remote_ping_request 8 {val1 1},
 /// remote_ping_response 9 {val1 1}, remote_key_inject 10 {key_code 1, direction 2}, remote_ime_key_inject 20
-/// {app_info 1 {app_package 12}}, remote_ime_batch_edit 21 {ime_counter 1, field_counter 2, edit_info 3 {insert 1,
+/// {app_info 1 {app_package 12}}, remote_ime_show_request 22 {remote_text_field_status 2 {value 2, label 6}},
+/// remote_ime_batch_edit 21 {ime_counter 1, field_counter 2, edit_info 3 {insert 1,
 /// text_field_status 2 {start 1, end 2, value 3}}}, remote_start 40 {started 1}, remote_set_volume_level 50
 /// {player_model 3, volume_max 6, volume_level 7, volume_muted 8}, remote_app_link_launch_request 90 {app_link 1}.
 public struct RemoteProtocol: Sendable {
@@ -93,6 +99,11 @@ public struct RemoteProtocol: Sendable {
             let edit = m.message(21)
             imeCounter = edit.int(1)
             fieldCounter = edit.int(2)
+        } else if m.has(22) {
+            let field = m.message(22).message(2)
+            state.textValue = field.string(2)
+            state.textLabel = field.string(6).isEmpty ? nil : field.string(6)
+            state.keyboardRequests += 1
         } else if m.has(3) {
             throw ProtocolError.unexpected("a TV mandou um erro")
         }

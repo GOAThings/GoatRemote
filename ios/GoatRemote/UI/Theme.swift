@@ -1,14 +1,19 @@
 import SwiftUI
 
+/// O visual do comando da Apple TV: fundo preto, peças em cinzento-vidro com um realce subtil em cima.
 enum Theme {
-    static let background = Color(hex: 0x0A0D16)
-    static let surface = Color(hex: 0x161B28)
-    static let surfaceHigh = Color(hex: 0x222A3B)
+    static let background = Color.black
+    static let surface = Color(hex: 0x1C1C1E)
+    static let surfacePressed = Color(hex: 0x2C2C2E)
+    static let surfaceHigh = Color(hex: 0x2C2C2E)
     static let accent = Color(hex: 0x38BDF8)
     static let accent2 = Color(hex: 0x8B5CF6)
     static let power = Color(hex: 0xEF4444)
     static let dim = Color.white.opacity(0.55)
+    static let faint = Color.white.opacity(0.18)
     static let gradient = LinearGradient(colors: [accent, accent2], startPoint: .topLeading, endPoint: .bottomTrailing)
+    /// O realce da borda: mais claro em cima, quase nada em baixo (dá o ar de vidro).
+    static let rim = LinearGradient(colors: [Color.white.opacity(0.22), Color.white.opacity(0.04)], startPoint: .top, endPoint: .bottom)
 }
 
 extension Color {
@@ -17,11 +22,24 @@ extension Color {
     }
 }
 
+/// Fundo de vidro numa forma qualquer.
+struct GlassBackground<S: InsettableShape>: View {
+    let shape: S
+    var pressed = false
+
+    var body: some View {
+        shape
+            .fill(pressed ? Theme.surfacePressed : Theme.surface)
+            .overlay(shape.strokeBorder(Theme.rim, lineWidth: 1))
+            .shadow(color: .black.opacity(0.6), radius: 8, y: 4)
+    }
+}
+
 /// Um botão do comando: toque curto, ou carregar e manter (manda o início e o fim do toque longo à TV).
 struct PressArea<Label: View>: View {
     let onTap: () -> Void
     var onHold: ((Bool) -> Void)?
-    @ViewBuilder let label: (_ pressed: Bool) -> Label
+    let label: (_ pressed: Bool) -> Label
 
     @State private var pressed = false
     @State private var holding = false
@@ -60,12 +78,11 @@ struct PressArea<Label: View>: View {
     }
 }
 
-/// Botão redondo com um símbolo.
-struct RoundKey: View {
+/// Botão redondo de vidro com um símbolo.
+struct GlassKey: View {
     let symbol: String
-    var size: CGFloat = 58
+    var size: CGFloat = 60
     var tint: Color = .white
-    var background: Color = Theme.surface
     let id: String
     let onTap: () -> Void
     var onHold: ((Bool) -> Void)?
@@ -73,11 +90,11 @@ struct RoundKey: View {
     var body: some View {
         PressArea(onTap: onTap, onHold: onHold) { pressed in
             Image(systemName: symbol)
-                .font(.system(size: size * 0.36, weight: .semibold))
+                .font(.system(size: size * 0.34, weight: .regular))
                 .foregroundStyle(tint)
                 .frame(width: size, height: size)
-                .background(Circle().fill(pressed ? Theme.surfaceHigh : background))
-                .scaleEffect(pressed ? 0.92 : 1)
+                .background(GlassBackground(shape: Circle(), pressed: pressed))
+                .scaleEffect(pressed ? 0.94 : 1)
         }
         .accessibilityElement()
         .accessibilityAddTraits(.isButton)

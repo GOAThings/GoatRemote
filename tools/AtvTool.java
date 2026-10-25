@@ -571,6 +571,11 @@ public class AtvTool {
                 case "MUTE" -> { muted = !muted; sendVolume(out); }
                 case "POWER" -> { on = !on; send(out, new W().msg(40, new W().varint(1, on ? 1 : 0)).done()); }
                 case "HOME" -> { app = "com.google.android.tvlauncher"; sendApp(out); }
+                // Abre uma caixa de pesquisa (como a TV quando se foca um campo de texto).
+                case "SEARCH" -> {
+                    send(out, new W().msg(21, new W().varint(1, ++imeCounter).varint(2, ++fieldCounter)).done());
+                    send(out, new W().msg(22, new W().msg(2, new W().string(2, "").string(6, "Search"))).done());
+                }
                 default -> {}
             }
         }

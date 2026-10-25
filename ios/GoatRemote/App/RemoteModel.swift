@@ -26,9 +26,26 @@ final class RemoteModel {
 
     /// O emparelhamento em curso (a folha mostra-o).
     var pairing: PairingModel?
+    /// A TV abriu uma caixa de texto: mostra-se o teclado.
+    var showKeyboard = false
+    /// Muda quando o volume da TV muda (o indicador aparece um bocado).
+    private(set) var volumeChanged = 0
+
+    // Opções (Mais → Opções).
+    var haptics: Bool = UserDefaults.standard.object(forKey: "haptics") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(haptics, forKey: "haptics") }
+    }
+    /// Os botões de volume do iPhone mexem no volume da TV (com a app aberta).
+    var volumeButtons: Bool = UserDefaults.standard.object(forKey: "volumeButtons") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(volumeButtons, forKey: "volumeButtons") }
+    }
+    /// Touchpad: só deslizar e tocar (como o da Apple TV), ou também tocar nas bordas para as setas.
+    var dpadTaps: Bool = UserDefaults.standard.bool(forKey: "dpadTaps") {
+        didSet { UserDefaults.standard.set(dpadTaps, forKey: "dpadTaps") }
+    }
 
     @ObservationIgnored private var link: RemoteLink?
-    @ObservationIgnored private let haptics = UIImpactFeedbackGenerator(style: .light)
+    @ObservationIgnored private let lightHaptics = UIImpactFeedbackGenerator(style: .light)
     @ObservationIgnored private let heavyHaptics = UIImpactFeedbackGenerator(style: .medium)
 
     init() {
@@ -92,7 +109,10 @@ final class RemoteModel {
     }
 
     private func update(_ new: TVState) {
+        let old = state
         state = new
+        if new.keyboardRequests > old.keyboardRequests { showKeyboard = true }
+        if old.volume != nil, new.volume != old.volume || new.muted != old.muted { volumeChanged += 1 }
         if let app = new.currentApp, !AppCatalog.isLauncher(app) {
             recentApps.removeAll { $0 == app }
             recentApps.insert(app, at: 0)
@@ -174,14 +194,14 @@ final class RemoteModel {
     // MARK: Comando
 
     func press(_ key: Key) {
-        haptics.impactOccurred()
+        if haptics { lightHaptics.impactOccurred() }
         guard let link, status == .connected else { return reconnectIfNeeded() }
         link.key(key)
     }
 
     /// Carregar e manter: início e fim.
     func hold(_ key: Key, down: Bool) {
-        if down { heavyHaptics.impactOccurred() }
+        if down, haptics { heavyHaptics.impactOccurred() }
         guard let link, status == .connected else { return reconnectIfNeeded() }
         link.key(key, down ? .startLong : .endLong)
     }
@@ -192,7 +212,7 @@ final class RemoteModel {
     }
 
     func open(_ link: String) {
-        haptics.impactOccurred()
+        if haptics { lightHaptics.impactOccurred() }
         guard let remote = self.link, status == .connected else { return reconnectIfNeeded() }
         remote.openApp(link)
     }
