@@ -110,8 +110,11 @@ public class AtvTool {
         ByteArrayOutputStream b = new ByteArrayOutputStream();
         putVarint(b, msg.length);
         b.writeBytes(msg);
-        out.write(b.toByteArray());
-        out.flush();
+        // Inteira de uma vez: o volume do "GoatLauncher" escreve de outra thread.
+        synchronized (out) {
+            out.write(b.toByteArray());
+            out.flush();
+        }
     }
 
     static byte[] read(InputStream in) throws IOException {
@@ -446,6 +449,8 @@ public class AtvTool {
         volatile boolean on = true;
         volatile int volume = 20;
         volatile boolean muted = false;
+        /** A ligação do comando aberta agora (para o volume pedido pelo "GoatLauncher" chegar ao telemóvel). */
+        volatile OutputStream remoteOut;
         volatile String app = "com.google.android.youtube.tv";
         int imeCounter = 1, fieldCounter = 1;
 
@@ -527,6 +532,7 @@ public class AtvTool {
             }
             InputStream in = s.getInputStream();
             OutputStream out = s.getOutputStream();
+            remoteOut = out;
             send(out, new W().msg(1, new W().varint(1, 622).msg(2, deviceInfo("Fake TV", "GOAT", "fake"))).done());
             note("ligado ao comando");
             ScheduledExecutorService ping = Executors.newSingleThreadScheduledExecutor();
@@ -602,7 +608,10 @@ public class AtvTool {
             {"com.android.tv.settings", "Settings", "#4B5563"},
         };
 
-        /** :6470, como o GoatLauncher: GET /apps (JSON) e GET /icon/<pacote> (PNG desenhado aqui). */
+        /**
+         * :6470, como o GoatLauncher: GET /apps (JSON), GET /icon/<pacote> (PNG desenhado aqui) e POST
+         * /volume/up|down|mute (o volume sem teclas, que a TV conta ao comando como faria com a tecla).
+         */
         void launcherApps() throws IOException {
             ServerSocket http = new ServerSocket(6470);
             Thread.ofPlatform().daemon().start(() -> {
@@ -628,6 +637,16 @@ public class AtvTool {
                             boolean banner = Arrays.asList(APPS).indexOf(app) < 2;
                             body = drawIcon(app[1], app[2], banner);
                             type = "image/png";
+                        } else if (path.startsWith("/volume/") && line.startsWith("POST ")) {
+                            OutputStream remote = remoteOut;
+                            String key = switch (path.substring(8)) {
+                                case "up" -> "VOLUME_UP";
+                                case "down" -> "VOLUME_DOWN";
+                                default -> "MUTE";
+                            };
+                            if (remote != null) react(remote, key);
+                            body = "ok".getBytes(StandardCharsets.UTF_8);
+                            type = "text/plain";
                         } else {
                             body = "GoatLauncher".getBytes(StandardCharsets.UTF_8);
                             type = "text/plain";

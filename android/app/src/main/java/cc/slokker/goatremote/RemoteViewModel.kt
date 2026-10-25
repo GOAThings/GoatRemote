@@ -287,6 +287,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun resetFor(tv: SavedTv?) {
+        launcherVolume = null
         state = TvState()
         recentApps = loadRecents(tv?.id)
         installedApps = emptyList()
@@ -342,8 +343,49 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
         if (haptics) vibrate(false)
         val link = link
         if (link == null || status != Status.Connected) return reconnectIfNeeded()
-        if (noVolume(key)) return
+        if (noVolume(key) || volumeViaLauncher(key)) return
         link.key(key)
+    }
+
+    /** O GoatLauncher da TV sabe mudar o volume (null: ainda não se sabe; false: é uma versão sem isso). */
+    private var launcherVolume: Boolean? = null
+
+    /**
+     * Com o GoatLauncher na TV, o volume vai por ele (POST /volume/…) em vez de tecla: as teclas de volume do
+     * protocolo rebentam o Android 11 da SHIELD quando o GoatLauncher vê as teclas (botões a abrir apps). Um
+     * GoatLauncher antigo responde 404 e volta-se às teclas.
+     */
+    private fun volumeViaLauncher(key: Key): Boolean {
+        val tv = current ?: return false
+        val what = when (key) {
+            Key.VOLUME_UP -> "up"
+            Key.VOLUME_DOWN -> "down"
+            Key.MUTE -> "mute"
+            else -> return false
+        }
+        if (tv.kind != TvKind.ANDROID || installedApps.isEmpty() || launcherVolume == false) return false
+        viewModelScope.launch {
+            val status = withContext(Dispatchers.IO) {
+                runCatching {
+                    val c = URL("http://${tv.host}:$LAUNCHER_PORT/volume/$what").openConnection() as HttpURLConnection
+                    c.requestMethod = "POST"
+                    c.connectTimeout = 2000
+                    c.readTimeout = 2000
+                    try {
+                        c.responseCode
+                    } finally {
+                        c.disconnect()
+                    }
+                }.getOrDefault(0)
+            }
+            if (status == 200) {
+                launcherVolume = true
+            } else if (current?.id == tv.id) {
+                if (status == 404) launcherVolume = false
+                link?.key(key)
+            }
+        }
+        return true
     }
 
     /** Volume numa TV que não o controla: em vez de não fazer nada, o indicador explica porquê. */
@@ -359,6 +401,13 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
         val link = link
         if (link == null || status != Status.Connected) return reconnectIfNeeded()
         if (down && noVolume(key)) return
+        if (key in listOf(Key.VOLUME_UP, Key.VOLUME_DOWN, Key.MUTE) && current?.kind == TvKind.ANDROID && installedApps.isNotEmpty() &&
+            launcherVolume != false
+        ) {
+            // Pelo GoatLauncher não há "manter": cada toque é um passo.
+            if (down) volumeViaLauncher(key)
+            return
+        }
         link.key(key, if (down) KeyDirection.START_LONG else KeyDirection.END_LONG)
     }
 

@@ -131,7 +131,7 @@ class RemoteUiTest {
         val expected = listOf(
             "emparelhado", "tecla DPAD_CENTER", "tecla DPAD_UP", "tecla DPAD_DOWN", "tecla DPAD_LEFT", "tecla DPAD_RIGHT",
             "tecla DPAD_CENTER (início)", "tecla DPAD_CENTER (fim)", "tecla MEDIA_PLAY_PAUSE", "tecla BACK", "tecla HOME",
-            "tecla MUTE", "tecla VOLUME_UP", "tecla SEARCH", "texto hello", "tecla ENTER",
+            "launcher /volume/mute", "launcher /volume/up", "tecla SEARCH", "texto hello", "tecla ENTER",
             "abrir market://launch?id=com.google.android.youtube.tv", "launcher /apps", "launcher /icon/cc.slokker.itv",
         )
         val missing = expected.filterNot { log.contains(it) }

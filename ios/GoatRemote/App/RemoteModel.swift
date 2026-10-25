@@ -216,6 +216,7 @@ final class RemoteModel {
         state = TVState()
         recentApps = Self.loadRecents(tv.id)
         installedApps = []
+        launcherVolume = nil
         connect()
     }
 
@@ -230,6 +231,7 @@ final class RemoteModel {
             state = TVState()
             recentApps = Self.loadRecents(current?.id)
             installedApps = []
+            launcherVolume = nil
             status = current == nil ? .noTV : .connecting
             connect()
         }
@@ -279,6 +281,7 @@ final class RemoteModel {
         state = TVState()
         recentApps = Self.loadRecents(tv.id)
         installedApps = []
+        launcherVolume = nil
         status = .connecting
         connect()
     }
@@ -288,8 +291,39 @@ final class RemoteModel {
     func press(_ key: Key) {
         if haptics { lightHaptics.impactOccurred() }
         guard let link, status == .connected else { return reconnectIfNeeded() }
-        if noVolume(key) { return }
+        if noVolume(key) || volumeViaLauncher(key) { return }
         link.key(key)
+    }
+
+    /// O GoatLauncher da TV sabe mudar o volume (nil: ainda não se sabe; false: é uma versão sem isso).
+    @ObservationIgnored private var launcherVolume: Bool?
+
+    /// Com o GoatLauncher na TV, o volume vai por ele (POST /volume/…) em vez de tecla: as teclas de volume do
+    /// protocolo rebentam o Android 11 da SHIELD quando o GoatLauncher vê as teclas (botões a abrir apps). Um
+    /// GoatLauncher antigo responde 404 e volta-se às teclas.
+    private func volumeViaLauncher(_ key: Key) -> Bool {
+        let what: String
+        switch key {
+        case .volumeUp: what = "up"
+        case .volumeDown: what = "down"
+        case .mute: what = "mute"
+        default: return false
+        }
+        guard let tv = current, tv.kind == .android, !installedApps.isEmpty, launcherVolume != false,
+              let url = URL(string: "http://\(tv.host):\(Self.launcherPort)/volume/\(what)") else { return false }
+        Task {
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.timeoutInterval = 2
+            let status = ((try? await URLSession.shared.data(for: request))?.1 as? HTTPURLResponse)?.statusCode ?? 0
+            if status == 200 {
+                launcherVolume = true
+            } else if current?.id == tv.id {
+                if status == 404 { launcherVolume = false }
+                link?.key(key)
+            }
+        }
+        return true
     }
 
     /// Volume numa TV que não o controla: em vez de não fazer nada, o indicador explica porquê.
@@ -304,6 +338,11 @@ final class RemoteModel {
         if down, haptics { heavyHaptics.impactOccurred() }
         guard let link, status == .connected else { return reconnectIfNeeded() }
         if down, noVolume(key) { return }
+        if [.volumeUp, .volumeDown, .mute].contains(key), current?.kind == .android, !installedApps.isEmpty, launcherVolume != false {
+            // Pelo GoatLauncher não há "manter": cada toque é um passo.
+            if down { _ = volumeViaLauncher(key) }
+            return
+        }
         link.key(key, down ? .startLong : .endLong)
     }
 
