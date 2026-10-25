@@ -129,7 +129,11 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---- Ligação ----
 
-    fun connect() {
+    /**
+     * Liga à TV escolhida. Uma falha que não seja "não emparelhado" tenta mais uma vez daí a pouco: a SHIELD, por
+     * exemplo, recusa a primeira ligação logo a seguir a emparelhar.
+     */
+    fun connect(retry: Boolean = true) {
         val tv = current ?: run { status = Status.NoTv; return }
         if (link != null && (status == Status.Connected || status == Status.Connecting)) return
         link?.close()
@@ -162,7 +166,12 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
                 if (this@RemoteViewModel.link !== link) return@launch
                 this@RemoteViewModel.link = null
                 link.close()
-                status = Status.Unreachable(describe(e))
+                if (retry) {
+                    delay(1500)
+                    if (this@RemoteViewModel.link == null && current?.id == tv.id) connect(retry = false)
+                } else {
+                    status = Status.Unreachable(describe(e))
+                }
             }
         }
     }
