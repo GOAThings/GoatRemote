@@ -47,7 +47,9 @@ final class RemoteModel {
         didSet { UserDefaults.standard.set(dpadTaps, forKey: "dpadTaps") }
     }
 
-    @ObservationIgnored private var link: RemoteLink?
+    @ObservationIgnored private var link: TVControl?
+    /// Ícones das apps da Apple TV (da App Store, por bundle id).
+    private var appleArtwork: [String: URL] = [:]
     @ObservationIgnored private let lightHaptics = UIImpactFeedbackGenerator(style: .light)
     @ObservationIgnored private let heavyHaptics = UIImpactFeedbackGenerator(style: .medium)
 
@@ -73,8 +75,9 @@ final class RemoteModel {
         if link != nil, status == .connected || status == .connecting { return }
         link?.close()
         status = .connecting
-        let link = RemoteLink(tv: tv)
+        let link = Self.makeLink(tv)
         link.onState = { [weak self] state in self?.update(state) }
+        (link as? AppleTVLink)?.onApps = { [weak self] apps in self?.appleApps(apps, for: tv) }
         link.onClose = { [weak self, weak link] in
             guard let self, let link, self.link === link else { return }
             self.link = nil
@@ -88,7 +91,7 @@ final class RemoteModel {
                 self.status = .connected
                 self.update(link.state)
                 self.refreshApps()
-            } catch RemoteLink.Failure.notPaired {
+            } catch let error where Self.isNotPaired(error) {
                 guard self.link === link else { return }
                 self.link = nil
                 self.status = .notPaired
@@ -139,10 +142,45 @@ final class RemoteModel {
         }
     }
 
-    // MARK: Apps da TV (GoatLauncher)
+    /// A ligação certa para o tipo de TV.
+    static func makeLink(_ tv: SavedTV) -> TVControl {
+        tv.kind == .apple ? AppleTVLink(tv: tv) : RemoteLink(tv: tv)
+    }
+
+    static func isNotPaired(_ error: Error) -> Bool {
+        if case RemoteLink.Failure.notPaired = error { return true }
+        if case AppleTVLink.Failure.notPaired = error { return true }
+        return false
+    }
+
+    // MARK: Apps da TV (GoatLauncher; na Apple TV, a própria TV)
+
+    /// A lista que a Apple TV dá (sem ícones): os ícones vêm da App Store, pelo bundle id.
+    private func appleApps(_ apps: [String: String], for tv: SavedTV) {
+        guard current?.id == tv.id else { return }
+        installedApps = apps.map { TVApp(package: $0.key, label: $0.value.replacingOccurrences(of: "\u{00A0}", with: " "), banner: false, color: nil) }
+            .sorted { $0.label.localizedCaseInsensitiveCompare($1.label) == .orderedAscending }
+        for app in installedApps where appleArtwork[app.package] == nil && !app.package.hasPrefix("com.apple.") {
+            Task {
+                guard let url = URL(string: "https://itunes.apple.com/lookup?bundleId=\(app.package)"),
+                      let (data, _) = try? await URLSession.shared.data(from: url),
+                      let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                      let first = (json["results"] as? [[String: Any]])?.first,
+                      let art = (first["artworkUrl512"] ?? first["artworkUrl100"]) as? String,
+                      let artURL = URL(string: art) else { return }
+                appleArtwork[app.package] = artURL
+            }
+        }
+    }
+
+    /// Abre uma app da lista (Android: pelo pacote; Apple TV: pelo bundle id).
+    func launch(_ app: TVApp) {
+        open(current?.kind == .apple ? app.package : app.link)
+    }
 
     /// Pede a lista de apps ao GoatLauncher da TV (porta 6470). Sem ele, fica vazia e usam-se as apps vistas.
     func refreshApps() {
+        guard current?.kind != .apple else { return }
         guard let tv = current, let url = URL(string: "http://\(tv.host):\(Self.launcherPort)/apps") else { return }
         Task {
             var request = URLRequest(url: url)
@@ -155,9 +193,10 @@ final class RemoteModel {
         }
     }
 
-    /// O banner (ou ícone) de uma app, dado pelo GoatLauncher.
+    /// O banner (ou ícone) de uma app, dado pelo GoatLauncher (ou, na Apple TV, o da App Store).
     func iconURL(_ package: String) -> URL? {
         guard let tv = current else { return nil }
+        if tv.kind == .apple { return appleArtwork[package] }
         return URL(string: "http://\(tv.host):\(Self.launcherPort)/icon/\(package)")
     }
 
@@ -178,6 +217,7 @@ final class RemoteModel {
     }
 
     func forget(_ tv: SavedTV) {
+        if tv.kind == .apple { CompanionCredentials.delete(tv.id) }
         TVStore.remove(tv.id)
         tvs = TVStore.all
         if current?.id == tv.id {
@@ -192,19 +232,18 @@ final class RemoteModel {
         }
     }
 
-    /// A Apple TV (protocolo Companion) ainda não está pronta: aparece na lista mas não emparelha.
-    static let appleTVReady = false
+    /// A Apple TV (protocolo Companion) já emparelha.
+    static let appleTVReady = true
 
     /// Emparelhar uma TV encontrada na rede.
     func startPairing(_ found: FoundTV) {
-        guard found.kind == .android else { return }
-        startPairing(name: found.name, id: found.id, host: nil, endpoint: found.endpoint)
+        startPairing(name: found.name, id: found.id, host: nil, endpoint: found.endpoint, kind: found.kind)
     }
 
     /// Emparelhar uma TV encontrada na rede ou escrita à mão (IP).
-    func startPairing(name: String, id: String, host: String?, endpoint: NWEndpoint?) {
+    func startPairing(name: String, id: String, host: String?, endpoint: NWEndpoint?, kind: TVKind = .android, port: UInt16? = nil) {
         pairing?.cancel()
-        let model = PairingModel(name: name, id: id, host: host, endpoint: endpoint) { [weak self] tv in
+        let model = PairingModel(name: name, id: id, host: host, endpoint: endpoint, kind: kind, port: port) { [weak self] tv in
             self?.paired(tv)
         }
         pairing = model
@@ -214,7 +253,7 @@ final class RemoteModel {
     /// Emparelhar outra vez a TV escolhida (a TV esqueceu este iPhone).
     func repairCurrent() {
         guard let tv = current else { return }
-        startPairing(name: tv.name, id: tv.id, host: tv.host, endpoint: nil)
+        startPairing(name: tv.name, id: tv.id, host: tv.host, endpoint: nil, kind: tv.kind, port: tv.port)
     }
 
     private func paired(_ tv: SavedTV) {
@@ -276,18 +315,26 @@ final class PairingModel: Identifiable {
 
     let id = UUID()
     let name: String
+    let kind: TVKind
     private(set) var phase: Phase = .connecting
+
+    /// O código que a TV mostra: 6 caracteres hexadecimais (Android TV) ou um PIN de 4 algarismos (Apple TV).
+    var codeLength: Int { kind == .apple ? 4 : Pairing.codeLength }
 
     @ObservationIgnored private let tvID: String
     @ObservationIgnored private var host: String?
+    @ObservationIgnored private var port: UInt16?
     @ObservationIgnored private let endpoint: NWEndpoint?
     @ObservationIgnored private let onPaired: (SavedTV) -> Void
     @ObservationIgnored private var codeContinuation: CheckedContinuation<String, Error>?
     @ObservationIgnored private var task: Task<Void, Never>?
     @ObservationIgnored private var connection: TVConnection?
 
-    init(name: String, id: String, host: String?, endpoint: NWEndpoint?, onPaired: @escaping (SavedTV) -> Void) {
+    init(name: String, id: String, host: String?, endpoint: NWEndpoint?, kind: TVKind = .android, port: UInt16? = nil,
+         onPaired: @escaping (SavedTV) -> Void) {
         self.name = name
+        self.kind = kind
+        self.port = port
         self.tvID = id
         self.host = host
         self.endpoint = endpoint
@@ -299,6 +346,7 @@ final class PairingModel: Identifiable {
     }
 
     private func run() async {
+        if kind == .apple { return await runApple() }
         var opened: TVConnection?
         do {
             if host == nil, let endpoint { host = await TVFinder.resolve(endpoint) }
@@ -334,6 +382,30 @@ final class PairingModel: Identifiable {
         }
     }
 
+    /// Apple TV: SRP com o PIN, e as credenciais ficam no Keychain.
+    private func runApple() async {
+        do {
+            if host == nil || port == nil, let endpoint, let resolved = await TVFinder.resolveHostPort(endpoint) {
+                host = resolved.host
+                port = resolved.port
+            }
+            guard let host, let port else {
+                throw RemoteLink.Failure.unreachable(L("Couldn't find the TV on the network", "Não deu para encontrar a TV na rede"))
+            }
+            let creds = try await AppleTVPairing.pair(host: host, port: port, name: UIDevice.current.name) { [weak self] in
+                guard let self else { throw CancellationError() }
+                return try await self.askCode(retry: false)
+            }
+            creds.save(tvID)
+            phase = .done
+            onPaired(SavedTV(id: tvID, name: name, host: host, kind: .apple, port: port))
+        } catch is CancellationError {
+            return
+        } catch {
+            if !Task.isCancelled { phase = .failed(Self.explain(error)) }
+        }
+    }
+
     private func askCode(retry: Bool) async throws -> String {
         phase = .waitingCode(retry: retry)
         return try await withCheckedThrowingContinuation { codeContinuation = $0 }
@@ -365,8 +437,14 @@ final class PairingModel: Identifiable {
         switch error {
         case Pairing.Failure.rejected(let status):
             return L("The TV refused (\(status)). Try again.", "A TV recusou (\(status)). Tenta outra vez.")
-        case TVConnection.Failure.closed:
+        case TVConnection.Failure.closed, CompanionConnection.Failure.closed:
             return L("The TV closed the connection. Try again.", "A TV fechou a ligação. Tenta outra vez.")
+        case AppleTVPairing.Failure.wrongPIN:
+            return L("Wrong PIN. Try again: the TV will show a new one.", "PIN errado. Tenta outra vez: a TV mostra um novo.")
+        case AppleTVPairing.Failure.tv(let why):
+            return L("The TV refused: \(why)", "A TV recusou: \(why)")
+        case CompanionConnection.Failure.unreachable(let why):
+            return why
         default:
             return RemoteModel.describe(error)
         }

@@ -190,9 +190,10 @@ final class RemoteLink: @unchecked Sendable {
     }
 
     /// Para os Atalhos: liga, manda e desliga.
-    static func once(_ action: (RemoteLink) -> Void) async throws {
+    @MainActor
+    static func once(_ action: (TVControl) -> Void) async throws {
         guard let tv = TVStore.current else { throw Failure.unreachable("sem TV") }
-        let link = RemoteLink(tv: tv)
+        let link = RemoteModel.makeLink(tv)
         try await link.connect()
         action(link)
         try? await Task.sleep(nanoseconds: 400_000_000)

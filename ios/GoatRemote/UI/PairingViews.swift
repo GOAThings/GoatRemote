@@ -89,7 +89,9 @@ struct PairingSheet: View {
             case .waitingCode(let retry):
                 Text(retry
                      ? L("That code doesn't match. Check the one on the TV.", "Esse código não bate certo. Vê o que está na TV.")
-                     : L("Type the code shown on the TV.", "Escreve o código que aparece na TV."))
+                     : pairing.kind == .apple
+                        ? L("Type the PIN shown on the TV.", "Escreve o PIN que aparece na TV.")
+                        : L("Type the code shown on the TV.", "Escreve o código que aparece na TV."))
                     .foregroundStyle(retry ? Theme.power : Theme.dim)
                     .multilineTextAlignment(.center)
                 codeField
@@ -129,20 +131,21 @@ struct PairingSheet: View {
     }
 
     private var codeField: some View {
-        TextField("A1B2C3", text: $code)
+        TextField(pairing.kind == .apple ? "1234" : "A1B2C3", text: $code)
             .font(.system(size: 34, weight: .semibold, design: .monospaced))
             .multilineTextAlignment(.center)
             .textInputAutocapitalization(.characters)
             .autocorrectionDisabled()
-            .keyboardType(.asciiCapable)
+            .keyboardType(pairing.kind == .apple ? .numberPad : .asciiCapable)
             .focused($focused)
             .padding(.vertical, 10)
             .background(RoundedRectangle(cornerRadius: 14).fill(Theme.surface))
             .onAppear { focused = true }
             .onChange(of: code) { _, new in
-                let clean = String(new.uppercased().filter { $0.isHexDigit }.prefix(Pairing.codeLength))
+                let allowed: (Character) -> Bool = pairing.kind == .apple ? { $0.isNumber } : { $0.isHexDigit }
+                let clean = String(new.uppercased().filter(allowed).prefix(pairing.codeLength))
                 if clean != new { code = clean }
-                if clean.count == Pairing.codeLength { pairing.submit(clean) }
+                if clean.count == pairing.codeLength { pairing.submit(clean) }
             }
             .accessibilityIdentifier("code-field")
     }

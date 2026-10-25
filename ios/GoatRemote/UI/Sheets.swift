@@ -122,7 +122,7 @@ struct AppsSheet: View {
 
     private func tile(_ app: TVApp, symbol: String = "app.fill", remoteImage: Bool = true) -> some View {
         Button {
-            model.open(app.link)
+            model.launch(app)
             dismiss()
         } label: {
             ZStack {

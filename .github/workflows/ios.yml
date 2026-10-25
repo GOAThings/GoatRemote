@@ -34,7 +34,7 @@ jobs:
               }
           }
           M
-          swiftc -parse-as-library -module-name RemoteCore Sources/RemoteCore/*.swift /tmp/run/*.swift -o /tmp/run/tests
+          swiftc -parse-as-library -module-name RemoteCore $(find Sources/RemoteCore -name "*.swift") /tmp/run/*.swift -o /tmp/run/tests
           /tmp/run/tests
 
   ipa:

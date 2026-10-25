@@ -125,7 +125,8 @@ struct RemoteView: View {
         case .connected:
             if model.state.isOn == false { return L("TV is off", "A TV está desligada") }
             if let app = model.state.currentApp, !AppCatalog.isLauncher(app) { return AppCatalog.name(app) }
-            return L("Home screen", "Ecrã inicial")
+            // A Apple TV não diz que app está aberta.
+            return model.current?.kind == .apple ? "Apple TV" : L("Home screen", "Ecrã inicial")
         case .connecting: return L("Connecting…", "A ligar…")
         case .notPaired: return L("Not paired", "Não emparelhada")
         case .unreachable: return L("Can't reach it", "Sem ligação")
@@ -191,13 +192,13 @@ struct SurfaceInfo: View {
     private var symbol: String {
         if model.state.isOn == false { return "moon.zzz" }
         if let app = model.state.currentApp, !AppCatalog.isLauncher(app) { return AppCatalog.app(app)?.symbol ?? "play.tv" }
-        return "house"
+        return model.current?.kind == .apple ? "appletv" : "house"
     }
 
     private var title: String {
         if model.state.isOn == false { return L("TV is off", "A TV está desligada") }
         if let app = model.state.currentApp, !AppCatalog.isLauncher(app) { return AppCatalog.name(app) }
-        return L("Home screen", "Ecrã inicial")
+        return model.current?.kind == .apple ? "Apple TV" : L("Home screen", "Ecrã inicial")
     }
 
     private func notice(symbol: String, title: String, detail: String, button: String, action: @escaping () -> Void) -> some View {
