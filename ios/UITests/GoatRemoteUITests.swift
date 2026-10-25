@@ -93,9 +93,9 @@ final class GoatRemoteUITests: XCTestCase {
 
         app.buttons["apps"].tap()
         // A lista vem do "GoatLauncher" da TV falsa (porta 6470): também tem apps que o comando nunca viu abertas.
-        let youtube = app.buttons["app:YouTube"]
+        let youtube = app.buttons["app:YouTube"].firstMatch
         XCTAssertTrue(youtube.waitForExistence(timeout: 8))
-        XCTAssertTrue(app.buttons["app:Kodi"].waitForExistence(timeout: 5), "A lista do GoatLauncher não apareceu")
+        XCTAssertTrue(app.buttons["app:Kodi"].firstMatch.waitForExistence(timeout: 5), "A lista do GoatLauncher não apareceu")
         pause(1.5) // os banners
         shot("apps")
         youtube.tap()
