@@ -58,6 +58,7 @@ jobs:
           cp build/fake-tv.log build/dns-sd.log build/shots/ 2>/dev/null || true
           tail -300 ios/build/xcodebuild.log > build/shots/xcodebuild-tail.log 2>/dev/null || true
           xcrun simctl spawn "$SIM" log show --last 15m --style compact --predicate 'process == "GoatRemote"' 2>/dev/null | tail -200 > build/shots/app.log || true
+          xcrun simctl spawn "$SIM" log show --last 15m --style compact --predicate 'subsystem == "cc.slokker.goatremote"' 2>/dev/null > build/shots/app-goatremote.log || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:

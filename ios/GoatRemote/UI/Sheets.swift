@@ -1,3 +1,4 @@
+import OSLog
 import RemoteCore
 import SwiftUI
 
@@ -371,16 +372,25 @@ struct RemoteImage<Content: View>: View {
                 }
                 var request = URLRequest(url: url)
                 request.timeoutInterval = 6
-                guard let (data, response) = try? await URLSession.shared.data(for: request),
-                      (response as? HTTPURLResponse)?.statusCode == 200,
-                      let loaded = UIImage(data: data) else { return }
-                Self.cache.setObject(loaded, forKey: url as NSURL)
-                image = loaded
+                do {
+                    let (data, response) = try await URLSession.shared.data(for: request)
+                    let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+                    guard status == 200, let loaded = UIImage(data: data) else {
+                        imageLog.error("\(url.absoluteString, privacy: .public): \(status) \(data.count) bytes")
+                        return
+                    }
+                    Self.cache.setObject(loaded, forKey: url as NSURL)
+                    image = loaded
+                } catch {
+                    imageLog.error("\(url.absoluteString, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                }
             }
     }
 
     private static var cache: NSCache<NSURL, UIImage> { ImageCache.shared }
 }
+
+private let imageLog = Logger(subsystem: "cc.slokker.goatremote", category: "images")
 
 private enum ImageCache {
     nonisolated(unsafe) static let shared: NSCache<NSURL, UIImage> = {
