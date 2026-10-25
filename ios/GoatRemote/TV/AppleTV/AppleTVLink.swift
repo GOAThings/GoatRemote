@@ -329,6 +329,7 @@ final class AppleTVLink: TVControl, @unchecked Sendable {
     }
 
     func key(_ key: Key, _ direction: KeyDirection) {
+        if key == .enter { return submit() }
         Task { [weak self] in
             guard let self else { return }
             switch key {
@@ -362,17 +363,27 @@ final class AppleTVLink: TVControl, @unchecked Sendable {
 
     /// Substitui o texto do campo aberto na TV: apaga e escreve tudo outra vez.
     func text(_ text: String) {
+        typeOnTV { session in
+            [RTI.clear(session: session)] + (text.isEmpty ? [] : [RTI.insert(text, session: session)])
+        }
+    }
+
+    /// O Enter do teclado: uma mudança de linha no campo é o "return" do tvOS (pesquisar, entrar, seguinte).
+    private func submit() {
+        typeOnTV { session in [RTI.insert("\n", session: session)] }
+    }
+
+    /// Manda operações de texto para o campo aberto, uma de cada vez e pela ordem em que se escreveu.
+    private func typeOnTV(_ operations: @escaping @Sendable ([UInt8]) -> [[UInt8]]) {
         lock.lock()
         let session = textSession
         lock.unlock()
         guard let session else { return }
-        // Uma tecla de cada vez, pela ordem em que se escreveu.
         let previous = typing
         typing = Task { [weak self] in
             await previous?.value
-            try? await self?.event("_tiC", ["_tiV": .int(1), "_tiD": .data(RTI.clear(session: session))])
-            if !text.isEmpty {
-                try? await self?.event("_tiC", ["_tiV": .int(1), "_tiD": .data(RTI.insert(text, session: session))])
+            for payload in operations(session) {
+                try? await self?.event("_tiC", ["_tiV": .int(1), "_tiD": .data(payload)])
             }
         }
     }
