@@ -8,6 +8,7 @@ import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
@@ -116,9 +117,11 @@ class RemoteUiTest {
         rule.onNodeWithTag("apps").performClick()
         rule.waitUntilAtLeastOneExists(hasTestTag("app:YouTube"), 8_000)
         rule.waitUntilAtLeastOneExists(hasTestTag("app:Kodi"), 5_000)
-        pause(1.5) // os banners
+        // Os banners (dentro do botão de cada app, por isso na árvore não fundida).
+        rule.waitUntil(8_000) { rule.onAllNodesWithTag("image", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
+        pause(0.5)
         shot("apps")
-        rule.onNodeWithTag("app:YouTube").performClick()
+        rule.onAllNodesWithTag("app:YouTube")[0].performClick()
         pause(1.5)
         shot("after-app")
 

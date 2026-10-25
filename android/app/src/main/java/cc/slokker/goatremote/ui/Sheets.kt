@@ -249,9 +249,9 @@ private fun AppTile(vm: RemoteViewModel, app: TvApp, remoteImage: Boolean, onDis
         contentAlignment = Alignment.Center,
     ) {
         when {
-            image != null && app.banner -> Image(image, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            image != null && app.banner -> Image(image, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().testTag("image"))
             image != null -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Image(image, null, modifier = Modifier.size(46.dp).clip(RoundedCornerShape(10.dp)))
+                Image(image, null, modifier = Modifier.size(46.dp).clip(RoundedCornerShape(10.dp)).testTag("image"))
                 Spacer(Modifier.height(6.dp))
                 Text(app.label, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(horizontal = 8.dp))

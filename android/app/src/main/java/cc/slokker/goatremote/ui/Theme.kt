@@ -1,6 +1,7 @@
 package cc.slokker.goatremote.ui
 
 import android.graphics.BitmapFactory
+import android.util.Log
 import android.util.LruCache
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -173,7 +174,7 @@ object Images {
                 } finally {
                     c.disconnect()
                 }
-            }.getOrNull()
+            }.onFailure { Log.w("GoatRemote", "imagem $url", it) }.getOrNull()
         }?.also { cache.put(url, it) }
     }
 }
