@@ -3,6 +3,15 @@
 A remote for Android TV, Google TV and Apple TV, on the iPhone and on Android phones, in the style of Apple's TV
 remote. All the TVs at home show up in one list, so switching between them is one tap.
 
+## Screenshots
+
+| | | |
+|---|---|---|
+| ![Remote](docs/screenshots/remote.jpg) | ![Apps](docs/screenshots/apps.jpg) | ![More](docs/screenshots/more.jpg) |
+| ![Keyboard](docs/screenshots/keyboard.jpg) | ![Add a TV](docs/screenshots/add-tv.jpg) | ![Pairing](docs/screenshots/pairing.jpg) |
+
+iPhone screenshots against the fake TV used in the tests. The Android app looks the same.
+
 ## Features
 
 - **Finds the TVs** on your home network (Android TV, Google TV and Apple TV) and pairs with the code shown on
@@ -31,10 +40,17 @@ the volume through GoatLauncher instead, the same way the physical remote does.
 
 ## Install
 
-GitHub Actions builds both apps on every change (Actions → latest run → Artifacts):
+### Android
 
-- **Android**: `GoatRemote.apk` (Android 8 or newer).
-- **iPhone**: `GoatRemote.ipa`, unsigned: sign it with your own certificate and sideload it (iOS 17 or newer).
+Latest version: https://github.com/GOAThings/GoatRemote/releases/latest/download/GoatRemote.apk
+
+Android 8 or newer.
+
+### iPhone
+
+Latest version: https://github.com/GOAThings/GoatRemote/releases/latest/download/GoatRemote.ipa
+
+The IPA is unsigned: sign it with your own certificate and sideload it (iOS 17 or newer).
 
 ## Build
 
@@ -51,6 +67,7 @@ GitHub Actions builds both apps on every change (Actions → latest run → Arti
   TV.
 
 GitHub Actions runs the protocol tests and both apps against the fake TV (iPhone simulator, Android emulator).
+`scripts/release.sh <version> <notes>` publishes a release with both apps (it needs the signing key).
 
 ## License
 
