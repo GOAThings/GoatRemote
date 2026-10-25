@@ -96,7 +96,9 @@ final class GoatRemoteUITests: XCTestCase {
         let youtube = app.buttons["app:YouTube"].firstMatch
         XCTAssertTrue(youtube.waitForExistence(timeout: 8))
         XCTAssertTrue(app.buttons["app:Kodi"].firstMatch.waitForExistence(timeout: 5), "A lista do GoatLauncher não apareceu")
-        pause(1.5) // os banners
+        // Os banners: a TV falsa desenha-os na hora (o primeiro demora uns segundos).
+        _ = app.images["banner"].firstMatch.waitForExistence(timeout: 10)
+        pause(1)
         shot("apps")
         youtube.tap()
         pause(1.5)

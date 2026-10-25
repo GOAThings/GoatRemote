@@ -132,10 +132,10 @@ struct AppsSheet: View {
                     RemoteImage(url: url) { image in
                         if let image {
                             if app.banner {
-                                image.resizable().scaledToFill()
+                                image.resizable().scaledToFill().accessibilityIdentifier("banner")
                             } else {
                                 VStack(spacing: 6) {
-                                    image.resizable().scaledToFit().frame(width: 46, height: 46)
+                                    image.resizable().scaledToFit().frame(width: 46, height: 46).accessibilityIdentifier("banner")
                                     Text(app.label).font(.caption.weight(.semibold)).foregroundStyle(.white).lineLimit(1)
                                 }
                             }
