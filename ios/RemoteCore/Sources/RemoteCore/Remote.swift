@@ -25,6 +25,9 @@ public struct TVState: Equatable, Sendable {
     public var volume: Int?
     public var maxVolume: Int?
     public var muted: Bool?
+    /// Se dá para mudar o volume (a Apple TV só consegue com HDMI-CEC ou colunas dela; por infravermelhos é o
+    /// comando físico que fala com a TV).
+    public var volumeControl = true
     public var currentApp: String?
     public var model: String?
     public var vendor: String?

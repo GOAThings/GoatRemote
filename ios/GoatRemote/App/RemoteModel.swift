@@ -288,13 +288,22 @@ final class RemoteModel {
     func press(_ key: Key) {
         if haptics { lightHaptics.impactOccurred() }
         guard let link, status == .connected else { return reconnectIfNeeded() }
+        if noVolume(key) { return }
         link.key(key)
+    }
+
+    /// Volume numa TV que não o controla: em vez de não fazer nada, o indicador explica porquê.
+    private func noVolume(_ key: Key) -> Bool {
+        guard [.volumeUp, .volumeDown, .mute].contains(key), !state.volumeControl else { return false }
+        volumeChanged += 1
+        return true
     }
 
     /// Carregar e manter: início e fim.
     func hold(_ key: Key, down: Bool) {
         if down, haptics { heavyHaptics.impactOccurred() }
         guard let link, status == .connected else { return reconnectIfNeeded() }
+        if down, noVolume(key) { return }
         link.key(key, down ? .startLong : .endLong)
     }
 

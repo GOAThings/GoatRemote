@@ -226,6 +226,24 @@ struct VolumeHUD: View {
     @Environment(RemoteModel.self) private var model
 
     var body: some View {
+        if model.state.volumeControl {
+            level
+        } else {
+            Label(L("This Apple TV can't control the volume (no HDMI-CEC)",
+                    "Esta Apple TV não controla o volume (sem HDMI-CEC)"), systemImage: "speaker.slash.fill")
+                .font(.footnote)
+                .foregroundStyle(.white)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 7)
+                .liquidGlass(Capsule(), interactive: false)
+                .padding(.horizontal, 16)
+                .accessibilityIdentifier("volume-hud")
+        }
+    }
+
+    @ViewBuilder
+    private var level: some View {
         let max = Double(model.state.maxVolume ?? 100)
         let level = max > 0 ? Double(model.state.volume ?? 0) / max : 0
         let muted = model.state.muted == true

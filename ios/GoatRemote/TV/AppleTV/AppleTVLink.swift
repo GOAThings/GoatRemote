@@ -186,6 +186,8 @@ final class AppleTVLink: TVControl, @unchecked Sendable {
         if let ti = try? await request("_tiStart", [:]), let tiD = ti["_tiD"]?.data {
             textStarted(tiD)
         }
+        // Até a TV dizer o contrário (no _iMC), não há volume.
+        update { $0.volumeControl = false }
         for name in ["_iMC", "SystemStatus", "TVSystemStatus"] {
             try? await event("_interest", ["_regEvents": .array([.string(name)])])
         }
@@ -282,7 +284,9 @@ final class AppleTVLink: TVControl, @unchecked Sendable {
             lock.unlock()
         case "_iMC":
             // Com controlo de volume (0x100), pergunta-se o volume.
-            if let flags = content["_mcF"]?.int, flags & 0x100 != 0 {
+            let volume = (content["_mcF"]?.int ?? 0) & 0x100 != 0
+            update { $0.volumeControl = volume }
+            if volume {
                 Task { [weak self] in
                     if let volume = try? await self?.request("_mcc", ["_mcc": .int(5)])["_vol"], case .double(let v) = volume {
                         self?.update { $0.volume = Int((v * 100).rounded()); $0.maxVolume = 100; $0.muted = false }
