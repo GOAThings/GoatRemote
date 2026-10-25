@@ -105,6 +105,7 @@ struct RemoteView: View {
                             .font(.system(size: 16, weight: .semibold, design: .rounded))
                             .foregroundStyle(.white)
                             .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                         Text(subtitle)
                             .lineLimit(1)
                             .font(.system(size: 12, weight: .medium))

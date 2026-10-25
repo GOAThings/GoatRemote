@@ -129,8 +129,8 @@ struct AppsSheet: View {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .fill(LinearGradient(colors: [app.tint, app.tint.opacity(0.6)], startPoint: .topLeading, endPoint: .bottomTrailing))
                 if remoteImage, let url = model.iconURL(app.package) {
-                    AsyncImage(url: url) { phase in
-                        if let image = phase.image {
+                    RemoteImage(url: url) { image in
+                        if let image {
                             if app.banner {
                                 image.resizable().scaledToFill()
                             } else {
@@ -353,4 +353,39 @@ struct FoundTVRow: View {
         .disabled(found.kind == .apple && !RemoteModel.appleTVReady)
         .accessibilityIdentifier("found:\(found.name)")
     }
+}
+
+/// Uma imagem da rede (banners do GoatLauncher, ícones da App Store), guardada em memória. O AsyncImage cancelava
+/// os pedidos dentro da grelha das apps e ficava sem imagem.
+struct RemoteImage<Content: View>: View {
+    let url: URL
+    @ViewBuilder let content: (Image?) -> Content
+    @State private var image: UIImage?
+
+    var body: some View {
+        content(image.map { Image(uiImage: $0) })
+            .task(id: url) {
+                if let cached = Self.cache.object(forKey: url as NSURL) {
+                    image = cached
+                    return
+                }
+                var request = URLRequest(url: url)
+                request.timeoutInterval = 6
+                guard let (data, response) = try? await URLSession.shared.data(for: request),
+                      (response as? HTTPURLResponse)?.statusCode == 200,
+                      let loaded = UIImage(data: data) else { return }
+                Self.cache.setObject(loaded, forKey: url as NSURL)
+                image = loaded
+            }
+    }
+
+    private static var cache: NSCache<NSURL, UIImage> { ImageCache.shared }
+}
+
+private enum ImageCache {
+    nonisolated(unsafe) static let shared: NSCache<NSURL, UIImage> = {
+        let cache = NSCache<NSURL, UIImage>()
+        cache.countLimit = 64
+        return cache
+    }()
 }
