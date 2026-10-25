@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- O ícone do iPhone (já com fundo) dentro da zona segura do ícone adaptativo. -->
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/goat_icon"
+    android:inset="16.7%" />
