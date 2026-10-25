@@ -38,6 +38,18 @@ struct GlassBackground<S: InsettableShape>: View {
     }
 }
 
+extension View {
+    /// Liquid Glass do iOS 26 (com o brilho que segue o dedo e o salto ao carregar); antes disso, o vidro escuro.
+    @ViewBuilder
+    func liquidGlass<S: InsettableShape>(_ shape: S, interactive: Bool = true, pressed: Bool = false) -> some View {
+        if #available(iOS 26.0, *) {
+            self.glassEffect(interactive ? .regular.interactive() : .regular, in: shape)
+        } else {
+            self.background(GlassBackground(shape: shape, pressed: pressed))
+        }
+    }
+}
+
 /// Um botão do comando: toque curto, ou carregar e manter (manda o início e o fim do toque longo à TV).
 struct PressArea<Label: View>: View {
     let onTap: () -> Void
@@ -96,7 +108,7 @@ struct GlassKey: View {
                 .font(.system(size: size * 0.34, weight: .medium))
                 .foregroundStyle(tint)
                 .frame(width: size, height: size)
-                .background(GlassBackground(shape: Circle(), pressed: pressed))
+                .liquidGlass(Circle(), pressed: pressed)
                 .scaleEffect(pressed ? 0.92 : 1)
         }
         .accessibilityElement()

@@ -103,7 +103,7 @@ struct RemoteView: View {
                 }
                 .padding(.horizontal, 18)
                 .frame(maxWidth: .infinity, minHeight: 58)
-                .background(GlassBackground(shape: Capsule()))
+                .liquidGlass(Capsule())
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("tv-menu")
@@ -236,7 +236,7 @@ struct VolumeHUD: View {
         .foregroundStyle(.white)
         .padding(.horizontal, 14)
         .frame(height: 30)
-        .background(GlassBackground(shape: Capsule()))
+        .liquidGlass(Capsule(), interactive: false)
         .accessibilityIdentifier("volume-hud")
     }
 }
@@ -261,7 +261,7 @@ struct TouchSurface: View {
     var body: some View {
         GeometryReader { geo in
             ZStack {
-                GlassBackground(shape: RoundedRectangle(cornerRadius: 40, style: .continuous))
+                Color.clear.liquidGlass(RoundedRectangle(cornerRadius: 40, style: .continuous))
                 if model.dpadTaps { dpadHints(geo.size) }
                 ForEach(ripples) { ripple in
                     RippleView(strong: ripple.strong).position(ripple.point)

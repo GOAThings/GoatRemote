@@ -16,7 +16,7 @@ struct KeyboardSheet: View {
                 .autocorrectionDisabled()
                 .focused($focused)
                 .padding(14)
-                .background(GlassBackground(shape: RoundedRectangle(cornerRadius: 14, style: .continuous)))
+                .liquidGlass(RoundedRectangle(cornerRadius: 14, style: .continuous), interactive: false)
                 .submitLabel(.send)
                 .onSubmit(send)
                 .onChange(of: text) { _, new in model.type(new) }
@@ -133,7 +133,7 @@ struct MoreSheet: View {
                             Button { model.press(Key(rawValue: Key.num0.rawValue + digit)!) } label: {
                                 Text("\(digit)").font(.title3.weight(.semibold)).foregroundStyle(.white)
                                     .frame(maxWidth: .infinity, minHeight: 50)
-                                    .background(GlassBackground(shape: RoundedRectangle(cornerRadius: 14, style: .continuous)))
+                                    .liquidGlass(RoundedRectangle(cornerRadius: 14, style: .continuous))
                             }
                             .buttonStyle(.plain)
                             .accessibilityIdentifier("num:\(digit)")
@@ -164,7 +164,7 @@ struct MoreSheet: View {
                         .accessibilityIdentifier("opt:dpad")
                     }
                     .padding(.horizontal, 16)
-                    .background(GlassBackground(shape: RoundedRectangle(cornerRadius: 16, style: .continuous)))
+                    .liquidGlass(RoundedRectangle(cornerRadius: 16, style: .continuous), interactive: false)
                     .tint(Theme.accent)
                 }
                 .padding(18)
@@ -182,7 +182,7 @@ struct MoreSheet: View {
             }
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity, minHeight: 68)
-            .background(GlassBackground(shape: RoundedRectangle(cornerRadius: 16, style: .continuous), pressed: pressed))
+            .liquidGlass(RoundedRectangle(cornerRadius: 16, style: .continuous), pressed: pressed)
         }
         .accessibilityElement()
         .accessibilityAddTraits(.isButton)
