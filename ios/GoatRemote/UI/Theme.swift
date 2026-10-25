@@ -4,6 +4,8 @@ import SwiftUI
 enum Theme {
     static let background = Color.black
     static let surface = Color(hex: 0x1C1C1E)
+    static let surfaceTop = Color(hex: 0x26262A)
+    static let surfaceBottom = Color(hex: 0x18181B)
     static let surfacePressed = Color(hex: 0x2C2C2E)
     static let surfaceHigh = Color(hex: 0x2C2C2E)
     static let accent = Color(hex: 0x38BDF8)
@@ -29,9 +31,10 @@ struct GlassBackground<S: InsettableShape>: View {
 
     var body: some View {
         shape
-            .fill(pressed ? Theme.surfacePressed : Theme.surface)
+            .fill(LinearGradient(colors: pressed ? [Theme.surfacePressed, Theme.surfaceTop] : [Theme.surfaceTop, Theme.surfaceBottom],
+                                 startPoint: .top, endPoint: .bottom))
             .overlay(shape.strokeBorder(Theme.rim, lineWidth: 1))
-            .shadow(color: .black.opacity(0.6), radius: 8, y: 4)
+            .shadow(color: .black.opacity(0.7), radius: 10, y: 5)
     }
 }
 
@@ -74,7 +77,7 @@ struct PressArea<Label: View>: View {
                         pressed = false
                     }
             )
-            .animation(.easeOut(duration: 0.12), value: pressed)
+            .animation(.spring(response: 0.22, dampingFraction: 0.6), value: pressed)
     }
 }
 
@@ -90,11 +93,11 @@ struct GlassKey: View {
     var body: some View {
         PressArea(onTap: onTap, onHold: onHold) { pressed in
             Image(systemName: symbol)
-                .font(.system(size: size * 0.34, weight: .regular))
+                .font(.system(size: size * 0.34, weight: .medium))
                 .foregroundStyle(tint)
                 .frame(width: size, height: size)
                 .background(GlassBackground(shape: Circle(), pressed: pressed))
-                .scaleEffect(pressed ? 0.94 : 1)
+                .scaleEffect(pressed ? 0.92 : 1)
         }
         .accessibilityElement()
         .accessibilityAddTraits(.isButton)

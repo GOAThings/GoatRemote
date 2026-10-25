@@ -26,6 +26,11 @@ struct ContentView: View {
         @Bindable var model = model
         ZStack {
             Theme.background.ignoresSafeArea()
+            // Um brilho muito leve em cima, para dar fundo ao vidro.
+            RadialGradient(colors: [Theme.accent2.opacity(0.13), Theme.accent.opacity(0.04), .clear],
+                           center: .top, startRadius: 10, endRadius: 520)
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
             if model.tvs.isEmpty {
                 AddTVView()
             } else {

@@ -15,23 +15,25 @@ struct RemoteView: View {
         @Bindable var model = model
         VStack(spacing: 0) {
             topBar
-                .padding(.bottom, 10)
-            statusLine
-                .frame(height: 26)
-                .overlay { if volumeVisible { VolumeHUD().transition(.opacity.combined(with: .scale(scale: 0.9))) } }
-                .padding(.bottom, 12)
+                .padding(.bottom, 16)
             TouchSurface()
+                .overlay { SurfaceInfo() }
+                .overlay(alignment: .top) {
+                    if volumeVisible {
+                        VolumeHUD().padding(.top, 16).transition(.move(edge: .top).combined(with: .opacity))
+                    }
+                }
                 .padding(.bottom, 18)
             HStack {
-                GlassKey(symbol: "keyboard", size: 46, tint: Theme.dim, id: "keyboard") { model.showKeyboard = true }
+                GlassKey(symbol: "keyboard", size: 48, tint: .white.opacity(0.8), id: "keyboard") { model.showKeyboard = true }
                 Spacer()
-                GlassKey(symbol: "square.grid.2x2", size: 46, tint: Theme.dim, id: "apps") { showApps = true }
+                GlassKey(symbol: "square.grid.2x2", size: 48, tint: .white.opacity(0.8), id: "apps") { showApps = true }
                 Spacer()
-                GlassKey(symbol: "backward.fill", size: 46, tint: Theme.dim, id: "key:rewind") { model.press(.rewind) } onHold: { model.hold(.rewind, down: $0) }
+                GlassKey(symbol: "backward.fill", size: 48, tint: .white.opacity(0.8), id: "key:rewind") { model.press(.rewind) } onHold: { model.hold(.rewind, down: $0) }
                 Spacer()
-                GlassKey(symbol: "forward.fill", size: 46, tint: Theme.dim, id: "key:fastForward") { model.press(.fastForward) } onHold: { model.hold(.fastForward, down: $0) }
+                GlassKey(symbol: "forward.fill", size: 48, tint: .white.opacity(0.8), id: "key:fastForward") { model.press(.fastForward) } onHold: { model.hold(.fastForward, down: $0) }
                 Spacer()
-                GlassKey(symbol: "ellipsis", size: 46, tint: Theme.dim, id: "more") { showMore = true }
+                GlassKey(symbol: "ellipsis", size: 48, tint: .white.opacity(0.8), id: "more") { showMore = true }
             }
             .padding(.horizontal, 8)
             .padding(.bottom, 22)
@@ -84,10 +86,19 @@ struct RemoteView: View {
                         .foregroundStyle(.white)
                         .frame(width: 28, height: 22)
                         .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Theme.gradient))
-                    Text(model.current?.name ?? "GoatRemote")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(model.current?.name ?? "GoatRemote")
+                            .font(.system(size: 16, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+                        HStack(spacing: 5) {
+                            Circle().fill(statusColor).frame(width: 6, height: 6)
+                            Text(subtitle).lineLimit(1)
+                        }
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Theme.dim)
+                    }
+                    Spacer(minLength: 4)
                     Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.dim)
                 }
                 .padding(.horizontal, 18)
@@ -100,43 +111,25 @@ struct RemoteView: View {
         }
     }
 
-    @ViewBuilder
-    private var statusLine: some View {
+    private var statusColor: Color {
+        switch model.status {
+        case .connected: return model.state.isOn == false ? Theme.dim : .green
+        case .connecting: return .orange
+        case .noTV: return Theme.dim
+        default: return Theme.power
+        }
+    }
+
+    private var subtitle: String {
         switch model.status {
         case .connected:
-            Group {
-                if model.state.isOn == false {
-                    Label(L("TV is off", "A TV está desligada"), systemImage: "moon.fill")
-                } else if let app = model.state.currentApp, !AppCatalog.isLauncher(app) {
-                    Label(AppCatalog.name(app), systemImage: AppCatalog.app(app)?.symbol ?? "app.fill")
-                } else {
-                    Label(L("Home screen", "Ecrã inicial"), systemImage: "house")
-                }
-            }
-            .font(.footnote.weight(.medium))
-            .foregroundStyle(Theme.dim)
-            .accessibilityIdentifier("status")
-        case .connecting:
-            HStack(spacing: 8) {
-                ProgressView().controlSize(.small).tint(Theme.dim)
-                Text(L("Connecting…", "A ligar…"))
-            }
-            .font(.footnote)
-            .foregroundStyle(Theme.dim)
-        case .notPaired:
-            Button { model.repairCurrent() } label: {
-                Label(L("This TV doesn't know this iPhone: pair again", "A TV não conhece este iPhone: emparelhar"), systemImage: "link")
-                    .font(.footnote.weight(.semibold))
-            }
-            .tint(Theme.accent)
-        case .unreachable:
-            Button { model.reconnect() } label: {
-                Label(L("Can't reach the TV: try again", "Não chego à TV: tentar outra vez"), systemImage: "wifi.exclamationmark")
-                    .font(.footnote.weight(.semibold))
-            }
-            .tint(Theme.accent)
-        case .noTV:
-            EmptyView()
+            if model.state.isOn == false { return L("TV is off", "A TV está desligada") }
+            if let app = model.state.currentApp, !AppCatalog.isLauncher(app) { return AppCatalog.name(app) }
+            return L("Home screen", "Ecrã inicial")
+        case .connecting: return L("Connecting…", "A ligar…")
+        case .notPaired: return L("Not paired", "Não emparelhada")
+        case .unreachable: return L("Can't reach it", "Sem ligação")
+        case .noTV: return ""
         }
     }
 
@@ -149,6 +142,76 @@ struct RemoteView: View {
             guard token == volumeToken else { return }
             withAnimation(.easeIn(duration: 0.3)) { volumeVisible = false }
         }
+    }
+}
+
+/// Dentro da superfície: a app aberta em marca-d'água, ou o que se passa com a ligação (com o que fazer).
+struct SurfaceInfo: View {
+    @Environment(RemoteModel.self) private var model
+
+    var body: some View {
+        switch model.status {
+        case .connected:
+            VStack(spacing: 10) {
+                Spacer()
+                Image(systemName: symbol).font(.system(size: 46, weight: .light))
+                Text(title).font(.system(size: 19, weight: .semibold, design: .rounded))
+                Spacer()
+                Text(model.dpadTaps
+                     ? L("Tap the edges for arrows · tap the middle for OK", "Toca nas bordas para as setas · no meio para OK")
+                     : L("Swipe to move · tap to select · hold for more", "Desliza para andar · toca para escolher · mantém para mais"))
+                    .font(.caption2)
+                    .opacity(0.8)
+                    .padding(.bottom, 16)
+            }
+            .foregroundStyle(Color.white.opacity(0.13))
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, 20)
+            .allowsHitTesting(false)
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("status")
+        case .connecting:
+            VStack(spacing: 12) {
+                ProgressView().tint(Theme.dim)
+                Text(L("Connecting to the TV…", "A ligar à TV…")).font(.footnote).foregroundStyle(Theme.dim)
+            }
+            .allowsHitTesting(false)
+        case .notPaired:
+            notice(symbol: "link", title: L("This TV doesn't know this iPhone", "Esta TV não conhece este iPhone"),
+                   detail: L("Pair again: the TV will show a code.", "Emparelha outra vez: a TV mostra um código."),
+                   button: L("Pair", "Emparelhar")) { model.repairCurrent() }
+        case .unreachable(let why):
+            notice(symbol: "wifi.exclamationmark", title: L("Can't reach the TV", "Não chego à TV"),
+                   detail: L("Is it on and on the same Wi-Fi? ", "Está ligada e na mesma rede Wi-Fi? ") + why,
+                   button: L("Try again", "Tentar outra vez")) { model.reconnect() }
+        case .noTV:
+            EmptyView()
+        }
+    }
+
+    private var symbol: String {
+        if model.state.isOn == false { return "moon.zzz" }
+        if let app = model.state.currentApp, !AppCatalog.isLauncher(app) { return AppCatalog.app(app)?.symbol ?? "play.tv" }
+        return "house"
+    }
+
+    private var title: String {
+        if model.state.isOn == false { return L("TV is off", "A TV está desligada") }
+        if let app = model.state.currentApp, !AppCatalog.isLauncher(app) { return AppCatalog.name(app) }
+        return L("Home screen", "Ecrã inicial")
+    }
+
+    private func notice(symbol: String, title: String, detail: String, button: String, action: @escaping () -> Void) -> some View {
+        VStack(spacing: 12) {
+            Image(systemName: symbol).font(.system(size: 34, weight: .light)).foregroundStyle(Theme.gradient)
+            Text(title).font(.system(size: 17, weight: .semibold, design: .rounded))
+            Text(detail).font(.footnote).foregroundStyle(Theme.dim).multilineTextAlignment(.center).lineLimit(4)
+            Button(button, action: action)
+                .buttonStyle(.borderedProminent)
+                .tint(Theme.accent)
+                .padding(.top, 4)
+        }
+        .padding(28)
     }
 }
 
