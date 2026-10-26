@@ -11,5 +11,5 @@ DerivedData/
 .swiftpm/
 atv-state/
 
-# O script de publicação fica só no PC (como no GoatTV).
+# Local release script, not part of the source.
 /scripts/release.sh
