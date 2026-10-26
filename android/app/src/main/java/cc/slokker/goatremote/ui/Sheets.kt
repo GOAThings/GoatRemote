@@ -10,6 +10,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import cc.slokker.goatremote.DebugLog
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -339,37 +341,84 @@ fun MoreSheet(vm: RemoteViewModel, onDismiss: () -> Unit) {
     }
 }
 
-/** O registo de diagnóstico (DebugLog): ver, copiar, partilhar ou limpar. Não sai do telemóvel a não ser que se partilhe. */
+/** O registo de diagnóstico (DebugLog): enviar para o site, ver, copiar, partilhar ou limpar. */
 @Composable
 private fun DiagnosticsSheet(onDismiss: () -> Unit) {
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
+    val scope = rememberCoroutineScope()
     var text by remember { mutableStateOf(DebugLog.text) }
+    var message by remember { mutableStateOf("") }
+    var contact by remember { mutableStateOf("") }
+    var sending by remember { mutableStateOf(false) }
+    var result by remember { mutableStateOf<String?>(null) }
+    val fieldColors = OutlinedTextFieldDefaults.colors(
+        focusedBorderColor = Theme.accent, unfocusedBorderColor = Theme.faint, cursorColor = Theme.accent,
+        focusedTextColor = Color.White, unfocusedTextColor = Color.White,
+    )
     GoatSheet(onDismiss, skipPartial = true) {
         SheetTitle(L("Diagnostics", "Diagnóstico"))
-        Column(Modifier.padding(horizontal = 18.dp).padding(bottom = 24.dp)) {
-            Text(L("Never includes PINs, codes or keys. Nothing is sent unless you share it.",
-                "Nunca tem PINs, códigos nem chaves. Nada é enviado a não ser que o partilhes."), color = Theme.dim, fontSize = 13.sp)
-            Spacer(Modifier.height(12.dp))
-            val scroll = rememberScrollState()
-            LaunchedEffect(text) { scroll.scrollTo(scroll.maxValue) }
-            SelectionContainer(Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = 420.dp).verticalScroll(scroll)) {
-                Text(text, fontFamily = FontFamily.Monospace, fontSize = 11.sp, lineHeight = 15.sp, modifier = Modifier.testTag("diagnostics:text"))
+        Column(Modifier.padding(horizontal = 18.dp).padding(bottom = 24.dp).verticalScroll(rememberScrollState())) {
+            OutlinedTextField(
+                message, { message = it.take(2000) },
+                placeholder = { Text(L("What happened?", "O que aconteceu?"), color = Theme.dim) },
+                minLines = 2, maxLines = 5, colors = fieldColors,
+                modifier = Modifier.fillMaxWidth().testTag("diagnostics:message"),
+            )
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(
+                contact, { contact = it.take(200) },
+                placeholder = { Text(L("How can we reach you? (optional)", "Como te contactamos? (opcional)"), color = Theme.dim) },
+                singleLine = true, colors = fieldColors,
+                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(10.dp))
+            Button(
+                onClick = {
+                    sending = true
+                    scope.launch {
+                        result = try {
+                            val id = DebugLog.send(message, contact)
+                            message = ""
+                            L("Sent. Report $id.", "Enviado. Relatório $id.")
+                        } catch (e: DebugLog.TooManyReports) {
+                            L("Too many reports from this network. Try again later, or use Share.",
+                                "Demasiados relatórios desta rede. Tenta mais tarde, ou usa Partilhar.")
+                        } catch (e: DebugLog.ReportFailed) {
+                            L("Couldn't send (HTTP ${e.status}). Use Share instead.", "Não deu para enviar (HTTP ${e.status}). Usa Partilhar.")
+                        } catch (e: kotlinx.coroutines.CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            L("Couldn't send: ${e.message}", "Não deu para enviar: ${e.message}")
+                        }
+                        text = DebugLog.text
+                        sending = false
+                    }
+                },
+                enabled = !sending,
+                colors = ButtonDefaults.buttonColors(containerColor = Theme.accent, contentColor = Color.White),
+                modifier = Modifier.fillMaxWidth().height(48.dp).testTag("diagnostics:send"),
+            ) {
+                if (sending) CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
+                else Text(L("Send report", "Enviar relatório"), fontWeight = FontWeight.SemiBold)
             }
-            Spacer(Modifier.height(16.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Button(
-                    onClick = {
-                        val send = Intent(Intent.ACTION_SEND).setType("text/plain")
-                            .putExtra(Intent.EXTRA_SUBJECT, "GoatRemote diagnostics")
-                            .putExtra(Intent.EXTRA_TEXT, text)
-                        context.startActivity(Intent.createChooser(send, null))
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Theme.accent, contentColor = Color.White),
-                    modifier = Modifier.weight(1f).testTag("diagnostics:share"),
-                ) { Text(L("Share", "Partilhar")) }
+            result?.let { Text(it, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp).testTag("diagnostics:result")) }
+            Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                TextButton({
+                    val send = Intent(Intent.ACTION_SEND).setType("text/plain")
+                        .putExtra(Intent.EXTRA_SUBJECT, "GoatRemote diagnostics")
+                        .putExtra(Intent.EXTRA_TEXT, text)
+                    context.startActivity(Intent.createChooser(send, null))
+                }, Modifier.testTag("diagnostics:share")) { Text(L("Share", "Partilhar"), color = Color.White) }
                 TextButton({ clipboard.setText(AnnotatedString(text)) }) { Text(L("Copy", "Copiar"), color = Color.White) }
                 TextButton({ DebugLog.clear(); text = DebugLog.text }) { Text(L("Clear", "Limpar"), color = Theme.dim) }
+            }
+            Text(L("Never includes PINs, codes or keys. Nothing is sent until you send or share it.",
+                "Nunca tem PINs, códigos nem chaves. Nada sai do telemóvel até o enviares ou partilhares."), color = Theme.dim, fontSize = 13.sp)
+            Spacer(Modifier.height(12.dp))
+            SelectionContainer(Modifier.fillMaxWidth()) {
+                Text(text, fontFamily = FontFamily.Monospace, fontSize = 11.sp, lineHeight = 15.sp, modifier = Modifier.testTag("diagnostics:text"))
             }
         }
     }

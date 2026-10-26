@@ -281,12 +281,43 @@ struct MoreSheet: View {
 /// O registo de diagnóstico (DebugLog): ver, copiar, partilhar ou limpar. Não sai do telemóvel a não ser que se partilhe.
 struct DiagnosticsView: View {
     @State private var text = ""
+    @State private var message = ""
+    @State private var contact = ""
+    @State private var sending = false
+    @State private var result: String?
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                Text(L("Never includes PINs, codes or keys. Nothing is sent unless you share it.",
-                       "Nunca tem PINs, códigos nem chaves. Nada é enviado a não ser que o partilhes."))
+                VStack(alignment: .leading, spacing: 10) {
+                    TextField(L("What happened?", "O que aconteceu?"), text: $message, axis: .vertical)
+                        .lineLimit(2...5)
+                        .accessibilityIdentifier("diagnostics:message")
+                    Divider()
+                    TextField(L("How can we reach you? (optional)", "Como te contactamos? (opcional)"), text: $contact)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    Button {
+                        Task { await send() }
+                    } label: {
+                        HStack {
+                            if sending { ProgressView().tint(.white) }
+                            Text(L("Send report", "Enviar relatório")).fontWeight(.semibold)
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Theme.accent)
+                    .disabled(sending)
+                    .accessibilityIdentifier("diagnostics:send")
+                    if let result {
+                        Text(result).font(.footnote).foregroundStyle(.white)
+                    }
+                }
+                .padding(16)
+                .liquidGlass(RoundedRectangle(cornerRadius: 16, style: .continuous), interactive: false)
+                Text(L("Never includes PINs, codes or keys. Nothing is sent until you send or share it.",
+                       "Nunca tem PINs, códigos nem chaves. Nada sai do telemóvel até o enviares ou partilhares."))
                     .font(.footnote).foregroundStyle(Theme.dim)
                 Text(text)
                     .font(.system(.caption2, design: .monospaced))
@@ -297,7 +328,7 @@ struct DiagnosticsView: View {
             }
             .padding(18)
         }
-        .defaultScrollAnchor(.bottom)
+        .scrollDismissesKeyboard(.interactively)
         .navigationTitle(L("Diagnostics", "Diagnóstico"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -315,6 +346,24 @@ struct DiagnosticsView: View {
             }
         }
         .onAppear { text = DebugLog.text }
+    }
+
+    private func send() async {
+        sending = true
+        defer { sending = false }
+        do {
+            let id = try await DebugLog.send(message: message, contact: contact)
+            result = L("Sent. Report \(id).", "Enviado. Relatório \(id).")
+            message = ""
+        } catch DebugLog.SendFailure.tooMany {
+            result = L("Too many reports from this network. Try again later, or use Share.",
+                       "Demasiados relatórios desta rede. Tenta mais tarde, ou usa Partilhar.")
+        } catch DebugLog.SendFailure.http(let status) {
+            result = L("Couldn't send (HTTP \(status)). Use Share instead.", "Não deu para enviar (HTTP \(status)). Usa Partilhar.")
+        } catch {
+            result = L("Couldn't send: \(error.localizedDescription)", "Não deu para enviar: \(error.localizedDescription)")
+        }
+        text = DebugLog.text
     }
 }
 
