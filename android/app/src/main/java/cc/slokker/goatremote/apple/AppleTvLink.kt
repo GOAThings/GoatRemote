@@ -61,13 +61,24 @@ class CompanionCredentials(
 object AppleTvPairing {
     class WrongPin : Exception("wrong PIN")
 
+    /**
+     * A TV recusou com um código de erro do emparelhamento HomeKit (3 = espera, 4 = demasiados aparelhos,
+     * 5 = demasiadas tentativas, 6 = indisponível, 7 = ocupada) e, às vezes, quantos segundos esperar.
+     */
+    class Refused(val code: Int, val retryAfter: Int?) : Exception("refused $code")
+
     suspend fun pair(host: String, port: Int, name: String, askPin: suspend () -> String): CompanionCredentials {
         val conn = CompanionConnection(host, port)
         conn.open()
         try {
             fun pd(message: Opack): Map<Int, ByteArray> {
                 val tlv = Tlv8.decode(message["_pd"]?.data ?: ByteArray(0))
-                tlv[7]?.firstOrNull()?.let { throw if (it.toInt() == 2) WrongPin() else CompanionConnection.TvError("erro $it") }
+                tlv[7]?.firstOrNull()?.let { error ->
+                    if (error.toInt() == 2) throw WrongPin()
+                    // RetryDelay (tipo 8): segundos, little-endian.
+                    val delay = tlv[8]?.foldRight(0) { b, acc -> acc shl 8 or (b.toInt() and 0xFF) }
+                    throw Refused(error.toInt() and 0xFF, delay)
+                }
                 return tlv
             }
             suspend fun send(frame: CompanionConnection.Frame, vararg tlv: Pair<Int, ByteArray>) =

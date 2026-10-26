@@ -551,7 +551,25 @@ class PairingModel(private val vm: RemoteViewModel, val name: String, private va
         is NotPairedException, is java.io.EOFException ->
             L("The TV closed the connection. Try again.", "A TV fechou a ligação. Tenta outra vez.")
         is AppleTvPairing.WrongPin -> L("Wrong PIN. Try again: the TV will show a new one.", "PIN errado. Tenta outra vez: a TV mostra um novo.")
+        is AppleTvPairing.Refused -> appleRefusal(e.code, e.retryAfter)
         is CompanionConnection.TvError -> L("The TV refused: ${e.message}", "A TV recusou: ${e.message}")
         else -> vm.describe(e)
     }
+}
+
+/** O que quer dizer cada recusa da Apple TV (códigos de erro do emparelhamento HomeKit). */
+private fun appleRefusal(code: Int, retryAfter: Int?): String = when (code) {
+    3 -> {
+        val wait = retryAfter?.let { if (it >= 90) L("${(it + 59) / 60} minutes", "${(it + 59) / 60} minutos") else L("$it seconds", "$it segundos") }
+            ?: L("a few minutes", "uns minutos")
+        L("After several tries, the Apple TV is blocking pairing for a while. Wait $wait (or restart the Apple TV) and try again with the Apple TV awake and on screen.",
+            "Depois de várias tentativas, a Apple TV bloqueou o emparelhamento por um bocado. Espera $wait (ou reinicia a Apple TV) e tenta outra vez com a Apple TV ligada e no ecrã.")
+    }
+    4 -> L("The Apple TV has too many paired devices. Remove one in Settings → Remotes and Devices → Remote App and Devices.",
+        "A Apple TV tem demasiados aparelhos emparelhados. Remove um em Definições → Comandos e dispositivos → App Remote e dispositivos.")
+    5 -> L("Too many wrong PINs. Restart the Apple TV and try again.", "Demasiados PINs errados. Reinicia a Apple TV e tenta outra vez.")
+    6 -> L("The Apple TV isn't accepting new devices. On the Apple TV, set Settings → AirPlay and HomeKit → Allow Access to “Everyone on the Same Network” and try again.",
+        "A Apple TV não está a aceitar aparelhos novos. Na Apple TV, põe Definições → AirPlay e HomeKit → Permitir acesso em “Todos na mesma rede” e tenta outra vez.")
+    7 -> L("The Apple TV is busy pairing with another device. Try again in a moment.", "A Apple TV está a emparelhar com outro aparelho. Tenta outra vez daqui a pouco.")
+    else -> L("The Apple TV refused (code $code). Try again.", "A Apple TV recusou (código $code). Tenta outra vez.")
 }

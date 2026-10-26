@@ -27,6 +27,9 @@ enum AppleTVPairing {
     enum Failure: Error {
         case wrongPIN
         case tv(String)
+        /// A TV recusou com um código de erro do emparelhamento HomeKit (3 = espera, 4 = demasiados aparelhos,
+        /// 5 = demasiadas tentativas, 6 = indisponível, 7 = ocupada), e às vezes quantos segundos esperar.
+        case refused(code: Int, retryAfter: Int?)
     }
 
     static func pair(host: String, port: UInt16, name: String, askPIN: () async throws -> String) async throws -> CompanionCredentials {
@@ -35,7 +38,12 @@ enum AppleTVPairing {
         defer { conn.close() }
         func pd(_ message: OPACK) throws -> [UInt8: [UInt8]] {
             let tlv = TLV8.decode(message["_pd"]?.data ?? [])
-            if let error = tlv[7]?.first { throw error == 2 ? Failure.wrongPIN : Failure.tv("erro \(error)") }
+            if let error = tlv[7]?.first {
+                if error == 2 { throw Failure.wrongPIN }
+                // RetryDelay (tipo 8): segundos, little-endian.
+                let delay = tlv[8].map { $0.reversed().reduce(0) { $0 << 8 | Int($1) } }
+                throw Failure.refused(code: Int(error), retryAfter: delay)
+            }
             return tlv
         }
         func send(_ frame: CompanionConnection.Frame, _ tlv: [(UInt8, [UInt8])]) async throws {

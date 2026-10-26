@@ -494,6 +494,29 @@ final class PairingModel: Identifiable {
         connection?.close()
     }
 
+    /// O que quer dizer cada recusa da Apple TV (códigos de erro do emparelhamento HomeKit).
+    private static func appleRefusal(_ code: Int, _ retryAfter: Int?) -> String {
+        switch code {
+        case 3:
+            let wait = retryAfter.map { $0 >= 90 ? L("\(($0 + 59) / 60) minutes", "\(($0 + 59) / 60) minutos") : L("\($0) seconds", "\($0) segundos") }
+                ?? L("a few minutes", "uns minutos")
+            return L("After several tries, the Apple TV is blocking pairing for a while. Wait \(wait) (or restart the Apple TV) and try again with the Apple TV awake and on screen.",
+                     "Depois de várias tentativas, a Apple TV bloqueou o emparelhamento por um bocado. Espera \(wait) (ou reinicia a Apple TV) e tenta outra vez com a Apple TV ligada e no ecrã.")
+        case 4:
+            return L("The Apple TV has too many paired devices. Remove one in Settings → Remotes and Devices → Remote App and Devices.",
+                     "A Apple TV tem demasiados aparelhos emparelhados. Remove um em Definições → Comandos e dispositivos → App Remote e dispositivos.")
+        case 5:
+            return L("Too many wrong PINs. Restart the Apple TV and try again.", "Demasiados PINs errados. Reinicia a Apple TV e tenta outra vez.")
+        case 6:
+            return L("The Apple TV isn't accepting new devices. On the Apple TV, set Settings → AirPlay and HomeKit → Allow Access to “Everyone on the Same Network” and try again.",
+                     "A Apple TV não está a aceitar aparelhos novos. Na Apple TV, põe Definições → AirPlay e HomeKit → Permitir acesso em “Todos na mesma rede” e tenta outra vez.")
+        case 7:
+            return L("The Apple TV is busy pairing with another device. Try again in a moment.", "A Apple TV está a emparelhar com outro aparelho. Tenta outra vez daqui a pouco.")
+        default:
+            return L("The Apple TV refused (code \(code)). Try again.", "A Apple TV recusou (código \(code)). Tenta outra vez.")
+        }
+    }
+
     private static func explain(_ error: Error) -> String {
         switch error {
         case Pairing.Failure.rejected(let status):
@@ -502,6 +525,8 @@ final class PairingModel: Identifiable {
             return L("The TV closed the connection. Try again.", "A TV fechou a ligação. Tenta outra vez.")
         case AppleTVPairing.Failure.wrongPIN:
             return L("Wrong PIN. Try again: the TV will show a new one.", "PIN errado. Tenta outra vez: a TV mostra um novo.")
+        case AppleTVPairing.Failure.refused(let code, let retryAfter):
+            return appleRefusal(code, retryAfter)
         case AppleTVPairing.Failure.tv(let why):
             return L("The TV refused: \(why)", "A TV recusou: \(why)")
         case CompanionConnection.Failure.unreachable(let why):
