@@ -165,6 +165,8 @@ struct CompanionCredentials: Codable {
     var tvID: Data
     /// O nosso identificador (UUID em texto, 36 bytes ASCII).
     var clientID: Data
+    /// Emparelhada pelo AirPlay (ver AirPlayPairing): a identidade da TV no Companion pode ser outra.
+    var viaAirPlay: Bool?
 
     private static let service = "cc.slokker.goatremote.appletv"
 

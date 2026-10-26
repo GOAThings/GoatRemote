@@ -32,41 +32,43 @@ enum AppleTVPairing {
         case refused(code: Int, retryAfter: Int?)
     }
 
+    /// Uma troca do emparelhamento: manda os TLV e devolve os da resposta.
+    typealias Exchange = ([(UInt8, [UInt8])]) async throws -> [UInt8: [UInt8]]
+
     static func pair(host: String, port: UInt16, name: String, askPIN: () async throws -> String) async throws -> CompanionCredentials {
         let conn = CompanionConnection(host: host, port: port)
         try await conn.open()
         DebugLog.add("Apple pairing: connected to \(host):\(port)")
         defer { conn.close() }
-        func pd(_ message: OPACK) throws -> [UInt8: [UInt8]] {
-            let tlv = TLV8.decode(message["_pd"]?.data ?? [])
-            // Só os tipos e tamanhos: os valores são o sal, as chaves e as provas.
-            DebugLog.add("Apple pairing: got \(AppleTVLink.keys(message)) TLV \(tlv.keys.sorted().map { "\($0):\(tlv[$0]!.count)" })")
-            if let error = tlv[7]?.first {
-                if error == 2 { throw Failure.wrongPIN }
-                // RetryDelay (tipo 8): segundos, little-endian.
-                let delay = tlv[8].map { $0.reversed().reduce(0) { $0 << 8 | Int($1) } }
-                DebugLog.add("Apple pairing: refused, code \(error), retry after \(delay.map(String.init) ?? "-")")
-                throw Failure.refused(code: Int(error), retryAfter: delay)
-            }
-            return tlv
-        }
-        func send(_ frame: CompanionConnection.Frame, _ tlv: [(UInt8, [UInt8])]) async throws {
+        var first = true
+        // A primeira trama é PS_Start; as outras, PS_Next.
+        let exchange: Exchange = { tlv in
+            let frame: CompanionConnection.Frame = first ? .pairSetupStart : .pairSetupNext
+            first = false
             try await conn.send(frame, .dict(["_pd": .data(TLV8.encode(tlv)), "_pwTy": .int(1), "_x": .int(conn.nextXID())]))
+            let message = try await conn.receive().1
+            let reply = TLV8.decode(message["_pd"]?.data ?? [])
+            // Só os tipos e tamanhos: os valores são o sal, as chaves e as provas.
+            DebugLog.add("Apple pairing: got \(AppleTVLink.keys(message)) TLV \(describe(reply))")
+            return try check(reply)
         }
         // M1 → M2: o sal e o B; a TV mostra o PIN. O nome vai já no M1 (além do M5): no tvOS 26/27 a Apple TV 4K
         // de 3.ª geração entrava em modo de PIN mas não o mostrava, e no AirPlay isso era a falta do nome do cliente
         // no início do emparelhamento (pyatv #2837, Home Assistant #173352).
-        try await send(.pairSetupStart, [(0, [0]), (6, [1]), (0x11, OPACK.dict(["name": .string(name)]).encoded)])
-        DebugLog.add("Apple pairing: M1 sent as \"\(name)\", waiting for the TV to show the PIN")
-        let m2 = try pd(try await conn.receive().1)
-        guard let salt = m2[2], let serverKey = m2[3] else { throw Failure.tv("M2 sem sal") }
+        DebugLog.add("Apple pairing: sending M1 as \"\(name)\", then the TV should show the PIN")
+        let m2 = try await exchange([(0, [0]), (6, [1]), (0x11, OPACK.dict(["name": .string(name)]).encoded)])
         let pin = try await askPIN()
         DebugLog.add("Apple pairing: PIN entered, sending M3")
+        return try await finish(m2: m2, pin: pin, name: name, exchange: exchange)
+    }
+
+    /// M3 a M6, iguais no Companion e no AirPlay: as provas do SRP com o PIN e a troca das identidades (Ed25519).
+    static func finish(m2: [UInt8: [UInt8]], pin: String, name: String, exchange: Exchange) async throws -> CompanionCredentials {
+        guard let salt = m2[2], let serverKey = m2[3] else { throw Failure.tv("M2 sem sal") }
         // M3 → M4: as provas do SRP.
         let srp = SRPClient(privateKey: (0..<32).map { _ in UInt8.random(in: 0...255) })
         guard let result = srp.process(salt: salt, serverPublicKey: serverKey, pin: pin) else { throw Failure.tv("B inválido") }
-        try await send(.pairSetupNext, [(6, [3]), (3, srp.publicKey), (4, result.proof)])
-        let m4 = try pd(try await conn.receive().1)
+        let m4 = try await exchange([(6, [3]), (3, srp.publicKey), (4, result.proof)])
         guard m4[4] == result.expectedServerProof else { throw Failure.wrongPIN }
         DebugLog.add("Apple pairing: PIN accepted, sending M5")
         // M5 → M6: trocam-se as identidades (Ed25519), cifradas com a chave do SRP.
@@ -79,8 +81,7 @@ enum AppleTVPairing {
         let signature = Array(try signing.signature(for: deviceX + clientID + ltpk))
         let sub = TLV8.encode([(1, clientID), (3, ltpk), (10, signature), (0x11, OPACK.dict(["name": .string(name)]).encoded)])
         let box = try ChaChaPoly.seal(sub, using: encKey, nonce: CompanionConnection.pairingNonce("PS-Msg05"))
-        try await send(.pairSetupNext, [(6, [5]), (5, Array(box.ciphertext) + Array(box.tag))])
-        let m6 = try pd(try await conn.receive().1)
+        let m6 = try await exchange([(6, [5]), (5, Array(box.ciphertext) + Array(box.tag))])
         guard let encrypted = m6[5], encrypted.count > 16 else { throw Failure.tv("M6 sem dados") }
         let opened = try ChaChaPoly.open(ChaChaPoly.SealedBox(nonce: CompanionConnection.pairingNonce("PS-Msg06"),
                                                               ciphertext: encrypted.dropLast(16), tag: encrypted.suffix(16)), using: encKey)
@@ -91,6 +92,22 @@ enum AppleTVPairing {
               publicKey.isValidSignature(tvSignature, for: accessoryX + tvID + tvKey) else { throw Failure.tv("a assinatura da TV não bate certo") }
         DebugLog.add("Apple pairing: done")
         return CompanionCredentials(tvPublicKey: Data(tvKey), privateKey: signing.rawRepresentation, tvID: Data(tvID), clientID: Data(clientID))
+    }
+
+    /// Os erros que a TV manda no TLV 7 (e o tempo de espera no 8).
+    static func check(_ tlv: [UInt8: [UInt8]]) throws -> [UInt8: [UInt8]] {
+        if let error = tlv[7]?.first {
+            if error == 2 { throw Failure.wrongPIN }
+            // RetryDelay (tipo 8): segundos, little-endian.
+            let delay = tlv[8].map { $0.reversed().reduce(0) { $0 << 8 | Int($1) } }
+            DebugLog.add("Apple pairing: refused, code \(error), retry after \(delay.map(String.init) ?? "-")")
+            throw Failure.refused(code: Int(error), retryAfter: delay)
+        }
+        return tlv
+    }
+
+    static func describe(_ tlv: [UInt8: [UInt8]]) -> String {
+        "\(tlv.keys.sorted().map { "\($0):\(tlv[$0]!.count)" })"
     }
 }
 
@@ -181,9 +198,14 @@ final class AppleTVLink: TVControl, @unchecked Sendable {
         let pvKey = SymmetricKey(data: SHA512.hkdf(salt: "Pair-Verify-Encrypt-Salt", info: "Pair-Verify-Encrypt-Info", key: secret))
         let inner = TLV8.decode(Array(try ChaChaPoly.open(ChaChaPoly.SealedBox(nonce: CompanionConnection.pairingNonce("PV-Msg02"),
                                                                               ciphertext: encrypted.dropLast(16), tag: encrypted.suffix(16)), using: pvKey)))
-        guard let id = inner[1], Data(id) == creds.tvID, let signature = inner[10],
-              let tvKey = try? Curve25519.Signing.PublicKey(rawRepresentation: creds.tvPublicKey),
-              tvKey.isValidSignature(signature, for: tvEph + id + epk) else { throw Failure.notPaired }
+        guard let id = inner[1], let signature = inner[10] else { throw Failure.notPaired }
+        let tvKey = try? Curve25519.Signing.PublicKey(rawRepresentation: creds.tvPublicKey)
+        if Data(id) != creds.tvID || tvKey?.isValidSignature(signature, for: tvEph + id + epk) != true {
+            // Emparelhada pelo AirPlay: a identidade da TV no Companion pode ser outra. Segue-se na mesma, para ver
+            // se a TV aceita a nossa chave (responde sem erro à M3).
+            guard creds.viaAirPlay == true else { throw Failure.notPaired }
+            DebugLog.add("Apple TV: Companion identity differs from AirPlay's (same id: \(Data(id) == creds.tvID)), trying the AirPlay key")
+        }
         let signing = try Curve25519.Signing.PrivateKey(rawRepresentation: creds.privateKey)
         let clientID = Array(creds.clientID)
         let mySignature = Array(try signing.signature(for: epk + clientID + tvEph))

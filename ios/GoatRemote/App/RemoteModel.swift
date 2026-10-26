@@ -382,6 +382,8 @@ final class PairingModel: Identifiable {
     let id = UUID()
     let name: String
     let kind: TVKind
+    /// A emparelhar pelo AirPlay (depois de "Não aparece o PIN?").
+    private(set) var usingAirPlay = false
     private(set) var phase: Phase = .connecting {
         didSet { if phase != oldValue { DebugLog.add("Pairing \(name): \(phase)") } }
     }
@@ -464,12 +466,31 @@ final class PairingModel: Identifiable {
             guard let host, let port else {
                 throw RemoteLink.Failure.unreachable(L("Couldn't find the TV on the network", "Não deu para encontrar a TV na rede"))
             }
-            DebugLog.add("Pairing: Apple TV at \(host):\(port)")
-            let creds = try await AppleTVPairing.pair(host: host, port: port, name: UIDevice.current.name) { [weak self] in
+            DebugLog.add("Pairing: Apple TV at \(host):\(port)\(usingAirPlay ? " (via AirPlay)" : "")")
+            let askPIN: () async throws -> String = { [weak self] in
                 guard let self else { throw CancellationError() }
                 return try await self.askCode(retry: false)
             }
-            creds.save(tvID)
+            if usingAirPlay {
+                let creds = try await AirPlayPairing.pair(host: host, name: UIDevice.current.name, askPIN: askPIN)
+                creds.save(tvID)
+                // A experiência: a chave do AirPlay serve no Companion (o comando)? Liga-se já para saber.
+                phase = .checking
+                let link = AppleTVLink(tv: SavedTV(id: tvID, name: name, host: host, kind: .apple, port: port))
+                do {
+                    try await link.connect()
+                    link.close()
+                    DebugLog.add("AirPlay pairing: the Apple TV accepts the AirPlay key for the remote")
+                } catch {
+                    link.close()
+                    CompanionCredentials.delete(tvID)
+                    DebugLog.add("AirPlay pairing: the Apple TV doesn't accept the AirPlay key for the remote: \(error)")
+                    throw AirPlayPairing.NotForRemote()
+                }
+            } else {
+                let creds = try await AppleTVPairing.pair(host: host, port: port, name: UIDevice.current.name, askPIN: askPIN)
+                creds.save(tvID)
+            }
             phase = .done
             onPaired(SavedTV(id: tvID, name: name, host: host, kind: .apple, port: port))
         } catch is CancellationError {
@@ -492,6 +513,15 @@ final class PairingModel: Identifiable {
         codeContinuation = nil
         phase = .checking
         cont.resume(returning: code)
+    }
+
+    /// "Não aparece o PIN?": emparelhar pelo AirPlay (ver AirPlayPairing).
+    func useAirPlay() {
+        DebugLog.add("Pairing: switching to AirPlay")
+        cancel()
+        usingAirPlay = true
+        phase = .connecting
+        start()
     }
 
     /// Recomeça (a TV volta a mostrar um código novo).
@@ -541,6 +571,9 @@ final class PairingModel: Identifiable {
             return L("Wrong PIN. Try again: the TV will show a new one.", "PIN errado. Tenta outra vez: a TV mostra um novo.")
         case AppleTVPairing.Failure.refused(let code, let retryAfter):
             return appleRefusal(code, retryAfter)
+        case is AirPlayPairing.NotForRemote:
+            return L("The PIN worked over AirPlay, but this Apple TV doesn't accept it for the remote. Send a report so we can look into it.",
+                     "O PIN funcionou pelo AirPlay, mas esta Apple TV não o aceita para o comando. Envia um relatório para vermos.")
         case AppleTVPairing.Failure.tv(let why):
             return L("The TV refused: \(why)", "A TV recusou: \(why)")
         case CompanionConnection.Failure.unreachable(let why):

@@ -102,6 +102,13 @@ struct PairingSheet: View {
                     .foregroundStyle(retry ? Theme.power : Theme.dim)
                     .multilineTextAlignment(.center)
                 codeField
+                // Algumas Apple TV (tvOS 26/27) entram em modo de PIN mas não o mostram: tenta-se pelo AirPlay.
+                if pairing.kind == .apple, !pairing.usingAirPlay {
+                    Button(L("No PIN on the TV?", "Não aparece o PIN na TV?")) { pairing.useAirPlay() }
+                        .font(.subheadline)
+                        .foregroundStyle(Theme.accent)
+                        .accessibilityIdentifier("pairing:airplay")
+                }
             case .checking:
                 ProgressView(L("Pairing…", "A emparelhar…"))
             case .done:
