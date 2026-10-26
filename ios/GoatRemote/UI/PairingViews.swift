@@ -60,6 +60,12 @@ struct AddTVView: View {
                 if let onDone, !model.tvs.isEmpty {
                     ToolbarItem(placement: .cancellationAction) { Button(L("Close", "Fechar"), action: onDone) }
                 }
+                // Antes de haver uma TV não há o Mais: o diagnóstico fica aqui também.
+                ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink { DiagnosticsView() } label: { Image(systemName: "ladybug") }
+                        .accessibilityLabel(L("Diagnostics", "Diagnóstico"))
+                        .accessibilityIdentifier("add:diagnostics")
+                }
             }
         }
         .onAppear { finder.start() }
@@ -73,6 +79,7 @@ struct PairingSheet: View {
     @Environment(RemoteModel.self) private var model
     let pairing: PairingModel
     @State private var code = ""
+    @State private var diagnostics = false
     @FocusState private var focused: Bool
 
     init(pairing: PairingModel) {
@@ -104,6 +111,10 @@ struct PairingSheet: View {
                 Button(L("Try again", "Tentar outra vez")) { pairing.retry() }
                     .buttonStyle(.borderedProminent)
                     .tint(Theme.accent)
+                Button(L("Send a report", "Enviar relatório")) { diagnostics = true }
+                    .font(.subheadline)
+                    .foregroundStyle(Theme.accent)
+                    .accessibilityIdentifier("pairing:report")
             }
             Spacer()
             Button(L("Cancel", "Cancelar")) {
@@ -114,6 +125,10 @@ struct PairingSheet: View {
         }
         .padding(28)
         .presentationDetents([.medium])
+        .sheet(isPresented: $diagnostics) {
+            NavigationStack { DiagnosticsView() }
+                .preferredColorScheme(.dark)
+        }
         .interactiveDismissDisabled(pairing.phase == .checking)
         .onDisappear { if pairing.phase != .done { pairing.cancel() } }
         .onChange(of: pairing.phase) { _, phase in

@@ -59,6 +59,8 @@ fun PairingDialog(vm: RemoteViewModel, pairing: PairingModel) {
         vm.pairing = null
     }
     val phase = pairing.phase
+    var diagnostics by remember { mutableStateOf(false) }
+    if (diagnostics) DiagnosticsSheet { diagnostics = false }
     Dialog(
         onDismissRequest = { if (phase != Phase.Checking) cancel() },
         properties = DialogProperties(dismissOnClickOutside = false),
@@ -95,6 +97,9 @@ fun PairingDialog(vm: RemoteViewModel, pairing: PairingModel) {
                         Spacer(Modifier.height(14.dp))
                         Button(onClick = pairing::retry, colors = ButtonDefaults.buttonColors(containerColor = Theme.accent)) {
                             Text(L("Try again", "Tentar outra vez"))
+                        }
+                        TextButton({ diagnostics = true }, Modifier.testTag("pairing:report")) {
+                            Text(L("Send a report", "Enviar relatório"), color = Theme.accent)
                         }
                     }
                 }

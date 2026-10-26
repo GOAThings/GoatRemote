@@ -44,6 +44,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Apps
+import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.ClosedCaption
 import androidx.compose.material.icons.rounded.Delete
@@ -343,7 +344,7 @@ fun MoreSheet(vm: RemoteViewModel, onDismiss: () -> Unit) {
 
 /** O registo de diagnóstico (DebugLog): enviar para o site, ver, copiar, partilhar ou limpar. */
 @Composable
-private fun DiagnosticsSheet(onDismiss: () -> Unit) {
+fun DiagnosticsSheet(onDismiss: () -> Unit) {
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
@@ -568,8 +569,16 @@ fun AddTvSheet(vm: RemoteViewModel, onDismiss: () -> Unit) {
 /** O ecrã inicial sem TVs: juntar a primeira. */
 @Composable
 fun AddTvScreen(vm: RemoteViewModel) {
+    var diagnostics by remember { mutableStateOf(false) }
+    if (diagnostics) DiagnosticsSheet { diagnostics = false }
     Column(Modifier.fillMaxSize().padding(top = 24.dp)) {
-        Text(L("Add a TV", "Juntar uma TV"), fontSize = 28.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 18.dp))
+        Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(L("Add a TV", "Juntar uma TV"), fontSize = 28.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            // Antes de haver uma TV não há o Mais: o diagnóstico fica aqui também.
+            IconButton({ diagnostics = true }, Modifier.testTag("add:diagnostics")) {
+                Icon(Icons.Rounded.BugReport, L("Diagnostics", "Diagnóstico"), tint = Theme.dim)
+            }
+        }
         Spacer(Modifier.height(12.dp))
         AddTvList(vm, Modifier.weight(1f))
     }
