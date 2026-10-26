@@ -62,10 +62,18 @@ object DebugLog {
             conn.doOutput = true
             conn.setRequestProperty("Content-Type", "application/json")
             conn.setRequestProperty("X-Goat-Client", "goatremote/${BuildConfig.VERSION_NAME} (android)")
-            conn.outputStream.use { it.write(body.toString().toByteArray()) }
-            val status = conn.responseCode
-            if (status == 429) throw TooManyReports()
-            if (status != 200 && status != 201) throw ReportFailed(status)
+            val status = try {
+                conn.outputStream.use { it.write(body.toString().toByteArray()) }
+                conn.responseCode
+            } catch (e: java.io.IOException) {
+                add("Report failed: $e")
+                throw e
+            }
+            if (status != 200 && status != 201) {
+                val error = runCatching { conn.errorStream?.bufferedReader()?.use { it.readText().take(300) } }.getOrNull()
+                add("Report failed: HTTP $status ${error.orEmpty()}")
+                throw if (status == 429) TooManyReports() else ReportFailed(status)
+            }
             val id = JSONObject(conn.inputStream.bufferedReader().use { it.readText() }).optString("id")
             if (id.isEmpty()) throw ReportFailed(status)
             add("Report $id sent")

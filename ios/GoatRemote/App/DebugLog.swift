@@ -58,12 +58,19 @@ enum DebugLog {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("goatremote/\(version) (ios)", forHTTPHeaderField: "X-Goat-Client")
         request.httpBody = try JSONSerialization.data(withJSONObject: body.filter { !$0.value.isEmpty })
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await URLSession.shared.data(for: request)
+        } catch {
+            add("Report failed: \(error)")
+            throw error
+        }
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-        if status == 429 { throw SendFailure.tooMany }
         guard status == 201 || status == 200,
               let id = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["id"] as? String else {
-            throw SendFailure.http(status)
+            add("Report failed: HTTP \(status) \(String(decoding: data.prefix(300), as: UTF8.self))")
+            throw status == 429 ? SendFailure.tooMany : SendFailure.http(status)
         }
         add("Report \(id) sent")
         return id

@@ -118,6 +118,7 @@ struct PairingSheet: View {
             }
             Spacer()
             Button(L("Cancel", "Cancelar")) {
+                DebugLog.add("Pairing: Cancel tapped")
                 pairing.cancel()
                 model.pairing = nil
             }
@@ -130,7 +131,11 @@ struct PairingSheet: View {
                 .preferredColorScheme(.dark)
         }
         .interactiveDismissDisabled(pairing.phase == .checking)
-        .onDisappear { if pairing.phase != .done { pairing.cancel() } }
+        .onDisappear {
+            guard pairing.phase != .done else { return }
+            DebugLog.add("Pairing: sheet closed (\(pairing.phase))")
+            pairing.cancel()
+        }
         .onChange(of: pairing.phase) { _, phase in
             if case .waitingCode = phase {
                 code = ""

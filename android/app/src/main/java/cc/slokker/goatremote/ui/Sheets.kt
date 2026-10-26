@@ -388,6 +388,10 @@ fun DiagnosticsSheet(onDismiss: () -> Unit) {
                                 "Demasiados relatórios desta rede. Tenta mais tarde, ou usa Partilhar.")
                         } catch (e: DebugLog.ReportFailed) {
                             L("Couldn't send (HTTP ${e.status}). Use Share instead.", "Não deu para enviar (HTTP ${e.status}). Usa Partilhar.")
+                        } catch (e: java.net.UnknownHostException) {
+                            // O DNS da rede (filtro no router ou no fornecedor) pode não encontrar o servidor.
+                            L("This network can't find the GOAT server (its DNS may be blocking it). Try again on mobile data, or use Share.",
+                                "Esta rede não encontra o servidor GOAT (o DNS dela pode estar a bloqueá-lo). Tenta com os dados móveis, ou usa Partilhar.")
                         } catch (e: kotlinx.coroutines.CancellationException) {
                             throw e
                         } catch (e: Exception) {

@@ -358,6 +358,10 @@ struct DiagnosticsView: View {
         } catch DebugLog.SendFailure.tooMany {
             result = L("Too many reports from this network. Try again later, or use Share.",
                        "Demasiados relatórios desta rede. Tenta mais tarde, ou usa Partilhar.")
+        } catch let error as URLError where error.code == .cannotFindHost || error.code == .dnsLookupFailed {
+            // Visto num iPhone: o DNS da rede (filtro no router ou no fornecedor) não encontrava o servidor.
+            result = L("This network can't find the GOAT server (its DNS may be blocking it). Try again on mobile data, or use Share.",
+                       "Esta rede não encontra o servidor GOAT (o DNS dela pode estar a bloqueá-lo). Tenta com os dados móveis, ou usa Partilhar.")
         } catch DebugLog.SendFailure.http(let status) {
             result = L("Couldn't send (HTTP \(status)). Use Share instead.", "Não deu para enviar (HTTP \(status)). Usa Partilhar.")
         } catch {

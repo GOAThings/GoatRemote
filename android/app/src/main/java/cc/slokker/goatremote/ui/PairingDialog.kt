@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import cc.slokker.goatremote.DebugLog
 import cc.slokker.goatremote.L
 import cc.slokker.goatremote.PairingModel
 import cc.slokker.goatremote.Phase
@@ -55,6 +56,7 @@ import cc.slokker.goatremote.data.TvKind
 @Composable
 fun PairingDialog(vm: RemoteViewModel, pairing: PairingModel) {
     fun cancel() {
+        DebugLog.add("Pairing: cancelled from the dialog (${pairing.phase})")
         pairing.cancel()
         vm.pairing = null
     }
