@@ -90,9 +90,12 @@ object AppleTvPairing {
                 conn.send(frame, Opack.dict("_pd" to Opack.Data(Tlv8.encode(*tlv)), "_pwTy" to Opack.Int(1), "_x" to Opack.Int(conn.nextXid())))
             suspend fun receive() = kotlinx.coroutines.withContext(Dispatchers.IO) { conn.receive().second }
 
-            // M1 → M2: o sal e o B; a TV mostra o PIN.
-            send(CompanionConnection.Frame.PAIR_SETUP_START, 0 to byteArrayOf(0), 6 to byteArrayOf(1))
-            DebugLog.add("Apple pairing: M1 sent, waiting for the TV to show the PIN")
+            // M1 → M2: o sal e o B; a TV mostra o PIN. O nome vai já no M1 (além do M5): no tvOS 26/27 a Apple TV 4K
+            // de 3.ª geração entrava em modo de PIN mas não o mostrava, e no AirPlay isso era a falta do nome do
+            // cliente no início do emparelhamento (pyatv #2837, Home Assistant #173352).
+            send(CompanionConnection.Frame.PAIR_SETUP_START, 0 to byteArrayOf(0), 6 to byteArrayOf(1),
+                0x11 to Opack.dict("name" to Opack.Str(name)).encoded)
+            DebugLog.add("Apple pairing: M1 sent as \"$name\", waiting for the TV to show the PIN")
             val m2 = pd(receive())
             val salt = m2[2] ?: throw CompanionConnection.TvError("M2 sem sal")
             val serverKey = m2[3] ?: throw CompanionConnection.TvError("M2 sem B")

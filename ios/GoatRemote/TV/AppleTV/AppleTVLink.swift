@@ -53,9 +53,11 @@ enum AppleTVPairing {
         func send(_ frame: CompanionConnection.Frame, _ tlv: [(UInt8, [UInt8])]) async throws {
             try await conn.send(frame, .dict(["_pd": .data(TLV8.encode(tlv)), "_pwTy": .int(1), "_x": .int(conn.nextXID())]))
         }
-        // M1 → M2: o sal e o B; a TV mostra o PIN.
-        try await send(.pairSetupStart, [(0, [0]), (6, [1])])
-        DebugLog.add("Apple pairing: M1 sent, waiting for the TV to show the PIN")
+        // M1 → M2: o sal e o B; a TV mostra o PIN. O nome vai já no M1 (além do M5): no tvOS 26/27 a Apple TV 4K
+        // de 3.ª geração entrava em modo de PIN mas não o mostrava, e no AirPlay isso era a falta do nome do cliente
+        // no início do emparelhamento (pyatv #2837, Home Assistant #173352).
+        try await send(.pairSetupStart, [(0, [0]), (6, [1]), (0x11, OPACK.dict(["name": .string(name)]).encoded)])
+        DebugLog.add("Apple pairing: M1 sent as \"\(name)\", waiting for the TV to show the PIN")
         let m2 = try pd(try await conn.receive().1)
         guard let salt = m2[2], let serverKey = m2[3] else { throw Failure.tv("M2 sem sal") }
         let pin = try await askPIN()
