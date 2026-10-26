@@ -113,7 +113,7 @@ final class TVFinder: ObservableObject {
     }
 }
 
-private extension NWEndpoint.Metadata {
+private extension NWBrowser.Result.Metadata {
     var txtDictionary: [String: String]? {
         if case .bonjour(let txt) = self { return txt.dictionary }
         return nil
