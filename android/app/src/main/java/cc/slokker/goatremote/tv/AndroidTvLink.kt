@@ -1,6 +1,7 @@
 package cc.slokker.goatremote.tv
 
 import android.annotation.SuppressLint
+import cc.slokker.goatremote.DebugLog
 import java.io.EOFException
 import java.io.IOException
 import java.net.ConnectException
@@ -82,6 +83,7 @@ class TvSocket private constructor(private val socket: SSLSocket) {
             try {
                 plain.connect(InetSocketAddress(host, port), 6000)
             } catch (e: IOException) {
+                DebugLog.add("Can't connect to $host:$port: $e")
                 plain.close()
                 throw UnreachableException(e.message ?: e.javaClass.simpleName)
             }
@@ -90,6 +92,7 @@ class TvSocket private constructor(private val socket: SSLSocket) {
                 socket.soTimeout = 8000
                 socket.startHandshake()
             } catch (e: IOException) {
+                DebugLog.add("TLS $host:$port failed: $e")
                 socket.close()
                 throw if (e is SSLException || e is EOFException) NotPairedException() else UnreachableException(e.message ?: "")
             }
@@ -143,6 +146,7 @@ class AndroidTvLink(private val host: String, private val identity: () -> Identi
                 socket.setTimeout(15_000)
             }
         } catch (e: Exception) {
+            DebugLog.add("Android TV: no set_active from the TV: $e")
             socket.close()
             throw if (e is SocketTimeoutException || e is EOFException || e is SSLException) NotPairedException() else e
         }

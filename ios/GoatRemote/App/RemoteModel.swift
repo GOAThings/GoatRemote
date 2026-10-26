@@ -20,7 +20,9 @@ final class RemoteModel {
 
     private(set) var tvs: [SavedTV] = []
     private(set) var current: SavedTV?
-    private(set) var status: Status = .noTV
+    private(set) var status: Status = .noTV {
+        didSet { if status != oldValue { DebugLog.add("Status: \(status)" + (current.map { " (\($0.name), \($0.kind))" } ?? "")) } }
+    }
     private(set) var state = TVState()
     /// As apps que se viu abertas nesta TV (as mais recentes primeiro), para as abrir com um toque.
     private(set) var recentApps: [String] = []
@@ -77,6 +79,7 @@ final class RemoteModel {
         }
         if link != nil, status == .connected || status == .connecting { return }
         link?.close()
+        DebugLog.add("Connecting to \(tv.name) (\(tv.kind), \(tv.host)\(tv.port.map { ":\($0)" } ?? ""))")
         status = .connecting
         let link = Self.makeLink(tv)
         link.onState = { [weak self] state in self?.update(state) }
@@ -95,10 +98,12 @@ final class RemoteModel {
                 self.update(link.state)
                 self.refreshApps()
             } catch let error where Self.isNotPaired(error) {
+                DebugLog.add("Connect: not paired (\(error))")
                 guard self.link === link else { return }
                 self.link = nil
                 self.status = .notPaired
             } catch {
+                DebugLog.add("Connect failed: \(error)")
                 guard self.link === link else { return }
                 self.link = nil
                 self.status = .unreachable(Self.describe(error))
@@ -377,7 +382,9 @@ final class PairingModel: Identifiable {
     let id = UUID()
     let name: String
     let kind: TVKind
-    private(set) var phase: Phase = .connecting
+    private(set) var phase: Phase = .connecting {
+        didSet { if phase != oldValue { DebugLog.add("Pairing \(name): \(phase)") } }
+    }
 
     /// O código que a TV mostra: 6 caracteres hexadecimais (Android TV) ou um PIN de 4 algarismos (Apple TV).
     var codeLength: Int { kind == .apple ? 4 : Pairing.codeLength }
@@ -407,16 +414,19 @@ final class PairingModel: Identifiable {
     }
 
     private func run() async {
+        DebugLog.add("Pairing \(name) (\(kind)) started")
         if kind == .apple { return await runApple() }
         var opened: TVConnection?
         do {
             if host == nil, let endpoint { host = await TVFinder.resolve(endpoint) }
             guard let host else { throw RemoteLink.Failure.unreachable(L("Couldn't find the TV on the network", "Não deu para encontrar a TV na rede")) }
+            DebugLog.add("Pairing: TV at \(host):\(Pairing.port)")
             let identity = try Identity.load()
             let connection = TVConnection(host: host, port: Pairing.port, identity: identity.identity)
             self.connection = connection
             opened = connection
             try await connection.open()
+            DebugLog.add("Pairing: TLS open")
             guard let der = connection.serverCertificate, let server = RSAKey(certificate: der) else {
                 throw RemoteLink.Failure.unreachable(L("The TV's certificate is unreadable", "O certificado da TV não se lê"))
             }
@@ -437,6 +447,7 @@ final class PairingModel: Identifiable {
         } catch is CancellationError {
             opened?.close()
         } catch {
+            DebugLog.add("Pairing failed: \(error)")
             opened?.close()
             // Um "tentar outra vez" já começou outro: este não mexe no ecrã.
             if !Task.isCancelled { phase = .failed(Self.explain(error)) }
@@ -453,6 +464,7 @@ final class PairingModel: Identifiable {
             guard let host, let port else {
                 throw RemoteLink.Failure.unreachable(L("Couldn't find the TV on the network", "Não deu para encontrar a TV na rede"))
             }
+            DebugLog.add("Pairing: Apple TV at \(host):\(port)")
             let creds = try await AppleTVPairing.pair(host: host, port: port, name: UIDevice.current.name) { [weak self] in
                 guard let self else { throw CancellationError() }
                 return try await self.askCode(retry: false)
@@ -461,8 +473,10 @@ final class PairingModel: Identifiable {
             phase = .done
             onPaired(SavedTV(id: tvID, name: name, host: host, kind: .apple, port: port))
         } catch is CancellationError {
+            DebugLog.add("Pairing cancelled")
             return
         } catch {
+            DebugLog.add("Pairing failed: \(error)")
             if !Task.isCancelled { phase = .failed(Self.explain(error)) }
         }
     }

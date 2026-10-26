@@ -1,5 +1,15 @@
 package cc.slokker.goatremote.ui
 
+import android.content.Intent
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontFamily
+import cc.slokker.goatremote.DebugLog
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -269,6 +279,8 @@ private fun AppTile(vm: RemoteViewModel, app: TvApp, remoteImage: Boolean, onDis
 /** As teclas que não cabem no comando, os números e as opções. */
 @Composable
 fun MoreSheet(vm: RemoteViewModel, onDismiss: () -> Unit) {
+    var diagnostics by remember { mutableStateOf(false) }
+    if (diagnostics) DiagnosticsSheet { diagnostics = false }
     GoatSheet(onDismiss) {
         SheetTitle(L("More", "Mais"))
         LazyVerticalGrid(
@@ -311,7 +323,53 @@ fun MoreSheet(vm: RemoteViewModel, onDismiss: () -> Unit) {
                     Option(L("Arrows on the edges", "Setas nas bordas"),
                         L("Tap near an edge of the touch surface for that arrow", "Tocar perto de uma borda da superfície carrega nessa seta"),
                         vm.dpadTaps, vm::changeDpadTaps, "opt:dpad")
+                    HorizontalDivider(color = Theme.faint)
+                    Row(Modifier.fillMaxWidth().clickable { diagnostics = true }.padding(vertical = 12.dp).testTag("opt:diagnostics"),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(L("Diagnostics", "Diagnóstico"), fontSize = 16.sp)
+                            Text(L("What the app did, to send when something fails", "O que a app fez, para mandar quando algo falha"),
+                                color = Theme.dim, fontSize = 13.sp)
+                        }
+                        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Theme.dim)
+                    }
                 }
+            }
+        }
+    }
+}
+
+/** O registo de diagnóstico (DebugLog): ver, copiar, partilhar ou limpar. Não sai do telemóvel a não ser que se partilhe. */
+@Composable
+private fun DiagnosticsSheet(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val clipboard = LocalClipboardManager.current
+    var text by remember { mutableStateOf(DebugLog.text) }
+    GoatSheet(onDismiss, skipPartial = true) {
+        SheetTitle(L("Diagnostics", "Diagnóstico"))
+        Column(Modifier.padding(horizontal = 18.dp).padding(bottom = 24.dp)) {
+            Text(L("Never includes PINs, codes or keys. Nothing is sent unless you share it.",
+                "Nunca tem PINs, códigos nem chaves. Nada é enviado a não ser que o partilhes."), color = Theme.dim, fontSize = 13.sp)
+            Spacer(Modifier.height(12.dp))
+            val scroll = rememberScrollState()
+            LaunchedEffect(text) { scroll.scrollTo(scroll.maxValue) }
+            SelectionContainer(Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = 420.dp).verticalScroll(scroll)) {
+                Text(text, fontFamily = FontFamily.Monospace, fontSize = 11.sp, lineHeight = 15.sp, modifier = Modifier.testTag("diagnostics:text"))
+            }
+            Spacer(Modifier.height(16.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Button(
+                    onClick = {
+                        val send = Intent(Intent.ACTION_SEND).setType("text/plain")
+                            .putExtra(Intent.EXTRA_SUBJECT, "GoatRemote diagnostics")
+                            .putExtra(Intent.EXTRA_TEXT, text)
+                        context.startActivity(Intent.createChooser(send, null))
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Theme.accent, contentColor = Color.White),
+                    modifier = Modifier.weight(1f).testTag("diagnostics:share"),
+                ) { Text(L("Share", "Partilhar")) }
+                TextButton({ clipboard.setText(AnnotatedString(text)) }) { Text(L("Copy", "Copiar"), color = Color.White) }
+                TextButton({ DebugLog.clear(); text = DebugLog.text }) { Text(L("Clear", "Limpar"), color = Theme.dim) }
             }
         }
     }

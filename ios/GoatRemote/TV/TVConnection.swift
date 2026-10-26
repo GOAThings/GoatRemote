@@ -70,9 +70,11 @@ final class TVConnection: @unchecked Sendable {
                     cont.resume()
                 case .failed(let error):
                     resumed = true
+                    DebugLog.add("TLS \(self.map { "\($0.connection.endpoint)" } ?? "?") failed: \(error)")
                     cont.resume(throwing: Self.classify(error))
                 case .waiting(let error):
                     resumed = true
+                    DebugLog.add("TLS \(self.map { "\($0.connection.endpoint)" } ?? "?") waiting: \(error)")
                     self?.connection.cancel()
                     cont.resume(throwing: Self.classify(error))
                 case .cancelled:

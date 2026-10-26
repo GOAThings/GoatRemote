@@ -58,12 +58,16 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        DebugLog.add("App active")
         vm.connect()
     }
 
     override fun onStop() {
         super.onStop()
-        if (!isChangingConfigurations) vm.disconnect()
+        if (!isChangingConfigurations) {
+            DebugLog.add("App background")
+            vm.disconnect()
+        }
     }
 
     /** Os botões de volume do telemóvel mexem no volume da TV (com a app aberta e a opção ligada). */

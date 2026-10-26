@@ -35,13 +35,17 @@ enum AppleTVPairing {
     static func pair(host: String, port: UInt16, name: String, askPIN: () async throws -> String) async throws -> CompanionCredentials {
         let conn = CompanionConnection(host: host, port: port)
         try await conn.open()
+        DebugLog.add("Apple pairing: connected to \(host):\(port)")
         defer { conn.close() }
         func pd(_ message: OPACK) throws -> [UInt8: [UInt8]] {
             let tlv = TLV8.decode(message["_pd"]?.data ?? [])
+            // Só os tipos e tamanhos: os valores são o sal, as chaves e as provas.
+            DebugLog.add("Apple pairing: got \(AppleTVLink.keys(message)) TLV \(tlv.keys.sorted().map { "\($0):\(tlv[$0]!.count)" })")
             if let error = tlv[7]?.first {
                 if error == 2 { throw Failure.wrongPIN }
                 // RetryDelay (tipo 8): segundos, little-endian.
                 let delay = tlv[8].map { $0.reversed().reduce(0) { $0 << 8 | Int($1) } }
+                DebugLog.add("Apple pairing: refused, code \(error), retry after \(delay.map(String.init) ?? "-")")
                 throw Failure.refused(code: Int(error), retryAfter: delay)
             }
             return tlv
@@ -51,15 +55,18 @@ enum AppleTVPairing {
         }
         // M1 → M2: o sal e o B; a TV mostra o PIN.
         try await send(.pairSetupStart, [(0, [0]), (6, [1])])
+        DebugLog.add("Apple pairing: M1 sent, waiting for the TV to show the PIN")
         let m2 = try pd(try await conn.receive().1)
         guard let salt = m2[2], let serverKey = m2[3] else { throw Failure.tv("M2 sem sal") }
         let pin = try await askPIN()
+        DebugLog.add("Apple pairing: PIN entered, sending M3")
         // M3 → M4: as provas do SRP.
         let srp = SRPClient(privateKey: (0..<32).map { _ in UInt8.random(in: 0...255) })
         guard let result = srp.process(salt: salt, serverPublicKey: serverKey, pin: pin) else { throw Failure.tv("B inválido") }
         try await send(.pairSetupNext, [(6, [3]), (3, srp.publicKey), (4, result.proof)])
         let m4 = try pd(try await conn.receive().1)
         guard m4[4] == result.expectedServerProof else { throw Failure.wrongPIN }
+        DebugLog.add("Apple pairing: PIN accepted, sending M5")
         // M5 → M6: trocam-se as identidades (Ed25519), cifradas com a chave do SRP.
         let k = result.sessionKey
         let encKey = SymmetricKey(data: SHA512.hkdf(salt: "Pair-Setup-Encrypt-Salt", info: "Pair-Setup-Encrypt-Info", key: k))
@@ -80,6 +87,7 @@ enum AppleTVPairing {
         let accessoryX = SHA512.hkdf(salt: "Pair-Setup-Accessory-Sign-Salt", info: "Pair-Setup-Accessory-Sign-Info", key: k)
         guard let publicKey = try? Curve25519.Signing.PublicKey(rawRepresentation: tvKey),
               publicKey.isValidSignature(tvSignature, for: accessoryX + tvID + tvKey) else { throw Failure.tv("a assinatura da TV não bate certo") }
+        DebugLog.add("Apple pairing: done")
         return CompanionCredentials(tvPublicKey: Data(tvKey), privateKey: signing.rawRepresentation, tvID: Data(tvID), clientID: Data(clientID))
     }
 }
@@ -131,12 +139,15 @@ final class AppleTVLink: TVControl, @unchecked Sendable {
         do {
             try await conn.open()
         } catch CompanionConnection.Failure.unreachable(let why) {
+            DebugLog.add("Apple TV: can't connect to \(tv.host):\(tv.port ?? 49_153): \(why)")
             throw RemoteLink.Failure.unreachable(why)
         }
         self.conn = conn
         do {
             try await verify(conn, creds)
+            DebugLog.add("Apple TV: verified")
         } catch {
+            DebugLog.add("Apple TV: verify failed: \(error)")
             conn.close()
             throw Failure.notPaired
         }
@@ -161,6 +172,7 @@ final class AppleTVLink: TVControl, @unchecked Sendable {
         let epk = Array(ephemeral.publicKey.rawRepresentation)
         try await conn.send(.pairVerifyStart, .dict(["_pd": .data(TLV8.encode([(6, [1]), (3, epk)])), "_auTy": .int(4), "_x": .int(conn.nextXID())]))
         let m2 = TLV8.decode(try await conn.receive().1["_pd"]?.data ?? [])
+        if let error = m2[7]?.first { DebugLog.add("Apple TV: verify refused, code \(error)") }
         guard m2[7] == nil, let tvEph = m2[3], let encrypted = m2[5], encrypted.count > 16 else { throw Failure.notPaired }
         let shared = try ephemeral.sharedSecretFromKeyAgreement(with: Curve25519.KeyAgreement.PublicKey(rawRepresentation: tvEph))
         let secret = shared.withUnsafeBytes { Array($0) }
@@ -176,6 +188,7 @@ final class AppleTVLink: TVControl, @unchecked Sendable {
         let box = try ChaChaPoly.seal(TLV8.encode([(1, clientID), (10, mySignature)]), using: pvKey, nonce: CompanionConnection.pairingNonce("PV-Msg03"))
         try await conn.send(.pairVerifyNext, .dict(["_pd": .data(TLV8.encode([(6, [3]), (5, Array(box.ciphertext) + Array(box.tag))])), "_x": .int(conn.nextXID())]))
         let m4 = TLV8.decode(try await conn.receive().1["_pd"]?.data ?? [])
+        if let error = m4[7]?.first { DebugLog.add("Apple TV: verify M4 refused, code \(error)") }
         guard m4[7] == nil else { throw Failure.notPaired }
         conn.encrypt(out: SymmetricKey(data: SHA512.hkdf(salt: "", info: "ClientEncrypt-main", key: secret)),
                      in: SymmetricKey(data: SHA512.hkdf(salt: "", info: "ServerEncrypt-main", key: secret)))
@@ -210,6 +223,12 @@ final class AppleTVLink: TVControl, @unchecked Sendable {
             let list = apps.compactMapValues { $0.string }
             if let onApps = self.onApps { await onApps(list) }
         }
+    }
+
+    /// As chaves de uma mensagem, e o erro se a TV mandar um (para o registo de diagnóstico).
+    static func keys(_ message: OPACK) -> String {
+        let keys = message.dict.map { $0.keys.sorted().joined(separator: ",") } ?? "?"
+        return message["_em"]?.string.map { "[\(keys)] error \($0)" } ?? "[\(keys)]"
     }
 
     /// Um id estável por instalação (sem ele a TV não manda os eventos de ligada/desligada).
@@ -269,6 +288,7 @@ final class AppleTVLink: TVControl, @unchecked Sendable {
         case 3:
             guard let x = message["_x"]?.int else { return }
             if let error = message["_em"]?.string {
+                DebugLog.add("Apple TV: request \(x) failed: \(error)")
                 finish(UInt64(x), .failure(CompanionConnection.Failure.tv(error)))
             } else {
                 finish(UInt64(x), .success(message["_c"] ?? .dict([:])))

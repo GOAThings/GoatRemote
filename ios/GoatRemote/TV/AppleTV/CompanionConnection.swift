@@ -46,6 +46,7 @@ final class CompanionConnection: @unchecked Sendable {
                     cont.resume()
                 case .failed(let error), .waiting(let error):
                     resumed = true
+                    DebugLog.add("Companion \(self.map { "\($0.connection.endpoint)" } ?? "?"): \(state)")
                     self?.connection.cancel()
                     cont.resume(throwing: Failure.unreachable(error.localizedDescription))
                 case .cancelled:

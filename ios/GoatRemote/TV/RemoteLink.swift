@@ -109,6 +109,7 @@ final class RemoteLink: @unchecked Sendable {
         do {
             try await connection.open()
         } catch TVConnection.Failure.closed {
+            DebugLog.add("Android TV: TLS closed by the TV (not paired?)")
             throw Failure.notPaired
         } catch TVConnection.Failure.unreachable(let why) {
             throw Failure.unreachable(why)
@@ -133,6 +134,7 @@ final class RemoteLink: @unchecked Sendable {
             return first
         }
         guard ready else {
+            DebugLog.add("Android TV: no set_active from the TV (not paired?)")
             connection.close()
             throw Failure.notPaired
         }

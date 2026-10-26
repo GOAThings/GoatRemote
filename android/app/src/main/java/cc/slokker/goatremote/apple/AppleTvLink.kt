@@ -2,6 +2,7 @@ package cc.slokker.goatremote.apple
 
 import android.content.Context
 import android.util.Base64
+import cc.slokker.goatremote.DebugLog
 import cc.slokker.goatremote.tv.Key
 import cc.slokker.goatremote.tv.KeyDirection
 import cc.slokker.goatremote.tv.NotPairedException
@@ -70,13 +71,17 @@ object AppleTvPairing {
     suspend fun pair(host: String, port: Int, name: String, askPin: suspend () -> String): CompanionCredentials {
         val conn = CompanionConnection(host, port)
         conn.open()
+        DebugLog.add("Apple pairing: connected to $host:$port")
         try {
             fun pd(message: Opack): Map<Int, ByteArray> {
                 val tlv = Tlv8.decode(message["_pd"]?.data ?: ByteArray(0))
+                // Só os tipos e tamanhos: os valores são o sal, as chaves e as provas.
+                DebugLog.add("Apple pairing: got ${AppleTvLink.keys(message)} TLV ${tlv.keys.sorted().map { "$it:${tlv[it]!!.size}" }}")
                 tlv[7]?.firstOrNull()?.let { error ->
                     if (error.toInt() == 2) throw WrongPin()
                     // RetryDelay (tipo 8): segundos, little-endian.
                     val delay = tlv[8]?.foldRight(0) { b, acc -> acc shl 8 or (b.toInt() and 0xFF) }
+                    DebugLog.add("Apple pairing: refused, code ${error.toInt() and 0xFF}, retry after ${delay ?: "-"}")
                     throw Refused(error.toInt() and 0xFF, delay)
                 }
                 return tlv
@@ -87,16 +92,19 @@ object AppleTvPairing {
 
             // M1 → M2: o sal e o B; a TV mostra o PIN.
             send(CompanionConnection.Frame.PAIR_SETUP_START, 0 to byteArrayOf(0), 6 to byteArrayOf(1))
+            DebugLog.add("Apple pairing: M1 sent, waiting for the TV to show the PIN")
             val m2 = pd(receive())
             val salt = m2[2] ?: throw CompanionConnection.TvError("M2 sem sal")
             val serverKey = m2[3] ?: throw CompanionConnection.TvError("M2 sem B")
             val pin = askPin()
+            DebugLog.add("Apple pairing: PIN entered, sending M3")
             // M3 → M4: as provas do SRP.
             val srp = SrpClient(Crypto.randomBytes(32))
             val result = srp.process(salt, serverKey, pin) ?: throw CompanionConnection.TvError("B inválido")
             send(CompanionConnection.Frame.PAIR_SETUP_NEXT, 6 to byteArrayOf(3), 3 to srp.publicKey, 4 to result.proof)
             val m4 = pd(receive())
             if (!(m4[4] ?: ByteArray(0)).contentEquals(result.expectedServerProof)) throw WrongPin()
+            DebugLog.add("Apple pairing: PIN accepted, sending M5")
             // M5 → M6: trocam-se as identidades (Ed25519), cifradas com a chave do SRP.
             val k = result.sessionKey
             val encKey = Crypto.hkdf("Pair-Setup-Encrypt-Salt", "Pair-Setup-Encrypt-Info", k)
@@ -118,6 +126,7 @@ object AppleTvPairing {
             if (!Crypto.verify(tvKey, tvSignature, accessoryX + tvId + tvKey)) {
                 throw CompanionConnection.TvError("a assinatura da TV não bate certo")
             }
+            DebugLog.add("Apple pairing: done")
             return CompanionCredentials(tvKey, signing.raw, tvId, clientId)
         } finally {
             conn.close()
@@ -151,11 +160,18 @@ class AppleTvLink(
     override suspend fun connect() {
         val creds = credentials() ?: throw NotPairedException()
         val conn = CompanionConnection(host, port)
-        conn.open()
+        try {
+            conn.open()
+        } catch (e: Exception) {
+            DebugLog.add("Apple TV: can't connect to $host:$port: $e")
+            throw e
+        }
         this.conn = conn
         try {
             verify(conn, creds)
+            DebugLog.add("Apple TV: verified")
         } catch (e: Exception) {
+            DebugLog.add("Apple TV: verify failed: $e")
             conn.close()
             throw NotPairedException()
         }
@@ -180,6 +196,7 @@ class AppleTvLink(
         conn.send(CompanionConnection.Frame.PAIR_VERIFY_START,
             Opack.dict("_pd" to Opack.Data(Tlv8.encode(6 to byteArrayOf(1), 3 to epk)), "_auTy" to Opack.Int(4), "_x" to Opack.Int(conn.nextXid())))
         val m2 = Tlv8.decode(receive()["_pd"]?.data ?: ByteArray(0))
+        m2[7]?.firstOrNull()?.let { DebugLog.add("Apple TV: verify refused, code ${it.toInt() and 0xFF}") }
         val tvEph = m2[3]
         val encrypted = m2[5]
         if (m2[7] != null || tvEph == null || encrypted == null || encrypted.size <= 16) throw NotPairedException()
@@ -196,6 +213,7 @@ class AppleTvLink(
         conn.send(CompanionConnection.Frame.PAIR_VERIFY_NEXT,
             Opack.dict("_pd" to Opack.Data(Tlv8.encode(6 to byteArrayOf(3), 5 to box)), "_x" to Opack.Int(conn.nextXid())))
         val m4 = Tlv8.decode(receive()["_pd"]?.data ?: ByteArray(0))
+        m4[7]?.firstOrNull()?.let { DebugLog.add("Apple TV: verify M4 refused, code ${it.toInt() and 0xFF}") }
         if (m4[7] != null) throw NotPairedException()
         conn.encrypt(Crypto.hkdf("", "ClientEncrypt-main", secret), Crypto.hkdf("", "ServerEncrypt-main", secret))
     }
@@ -254,6 +272,7 @@ class AppleTvLink(
                 val x = message["_x"]?.int ?: return
                 val reply = pending.remove(x) ?: return
                 val error = message["_em"]?.string
+                if (error != null) DebugLog.add("Apple TV: request $x failed: $error")
                 if (error != null) reply.completeExceptionally(CompanionConnection.TvError(error))
                 else reply.complete(message["_c"] ?: Opack.Dict(emptyMap()))
             }
@@ -368,6 +387,12 @@ class AppleTvLink(
     companion object {
         const val SERVICE = "_companion-link._tcp"
         const val DEFAULT_PORT = 49_153
+
+        /** As chaves de uma mensagem, e o erro se a TV mandar um (para o registo de diagnóstico). */
+        fun keys(message: Opack): String {
+            val keys = message.dict?.keys?.sorted()?.joinToString(",") ?: "?"
+            return message["_em"]?.string?.let { "[$keys] error $it" } ?: "[$keys]"
+        }
 
         /** As teclas da Apple TV (códigos HID do _hidC). */
         private fun hid(key: Key): Int? = when (key) {

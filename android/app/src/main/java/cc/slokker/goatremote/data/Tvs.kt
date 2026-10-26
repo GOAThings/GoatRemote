@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.os.Build
+import cc.slokker.goatremote.DebugLog
 import cc.slokker.goatremote.apple.AppleTvLink
 import cc.slokker.goatremote.tv.RemoteProtocol
 import java.net.Inet4Address
@@ -109,10 +110,12 @@ class TvFinder(context: Context) {
                 override fun onServiceLost(info: NsdServiceInfo) = lost(info.serviceName, kind)
                 override fun onDiscoveryStarted(serviceType: String) = Unit
                 override fun onDiscoveryStopped(serviceType: String) = Unit
-                override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) = Unit
+                override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) = DebugLog.add("Discovery $serviceType failed: $errorCode")
                 override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) = Unit
             }
-            runCatching { nsd.discoverServices(type, NsdManager.PROTOCOL_DNS_SD, listener) }.onSuccess { listeners.add(listener) }
+            runCatching { nsd.discoverServices(type, NsdManager.PROTOCOL_DNS_SD, listener) }
+                .onSuccess { listeners.add(listener) }
+                .onFailure { DebugLog.add("Discovery $type: $it") }
         }
     }
 
@@ -128,7 +131,10 @@ class TvFinder(context: Context) {
             @Suppress("DEPRECATION")
             val ok = runCatching {
                 nsd.resolveService(info, object : NsdManager.ResolveListener {
-                    override fun onResolveFailed(info: NsdServiceInfo, errorCode: Int) = done.countDown()
+                    override fun onResolveFailed(info: NsdServiceInfo, errorCode: Int) {
+                        DebugLog.add("Resolve ${info.serviceName} ($kind) failed: $errorCode")
+                        done.countDown()
+                    }
                     override fun onServiceResolved(info: NsdServiceInfo) {
                         found(info, kind)
                         done.countDown()
@@ -141,8 +147,10 @@ class TvFinder(context: Context) {
 
     private fun found(info: NsdServiceInfo, kind: TvKind) {
         val model = info.attributes["rpMd"]?.toString(Charsets.UTF_8)
-        if (kind == TvKind.APPLE && model?.startsWith("AppleTV") != true) return
+        // Os outros aparelhos Apple só pelo modelo, para ver se a Apple TV aparece com outro rpMd.
+        if (kind == TvKind.APPLE && model?.startsWith("AppleTV") != true) return DebugLog.add("Ignored Apple device ($model)")
         val host = hostOf(info)
+        DebugLog.add("Found ${info.serviceName} ($kind${model?.let { ", $it" } ?: ""}) at $host:${info.port}")
         val tv = FoundTv(info.serviceName, kind, host, info.port, model)
         synchronized(tvs) {
             tvs[tv.id] = tv

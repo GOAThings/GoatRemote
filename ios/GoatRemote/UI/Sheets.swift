@@ -1,6 +1,7 @@
 import OSLog
 import RemoteCore
 import SwiftUI
+import UIKit
 
 /// Escrever no campo de texto aberto na TV (aparece sozinho quando a TV abre um).
 struct KeyboardSheet: View {
@@ -230,6 +231,24 @@ struct MoreSheet: View {
                         }
                         .padding(.vertical, 12)
                         .accessibilityIdentifier("opt:dpad")
+                        Divider()
+                        NavigationLink {
+                            DiagnosticsView()
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(L("Diagnostics", "Diagnóstico")).foregroundStyle(.white)
+                                    Text(L("What the app did, to send when something fails", "O que a app fez, para mandar quando algo falha"))
+                                        .font(.footnote).foregroundStyle(Theme.dim)
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Theme.dim)
+                            }
+                            .padding(.vertical, 12)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("opt:diagnostics")
                     }
                     .padding(.horizontal, 16)
                     .liquidGlass(RoundedRectangle(cornerRadius: 16, style: .continuous), interactive: false)
@@ -256,6 +275,46 @@ struct MoreSheet: View {
         .accessibilityAddTraits(.isButton)
         .accessibilityIdentifier("key:\(key)")
         .accessibilityLabel(title)
+    }
+}
+
+/// O registo de diagnóstico (DebugLog): ver, copiar, partilhar ou limpar. Não sai do telemóvel a não ser que se partilhe.
+struct DiagnosticsView: View {
+    @State private var text = ""
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(L("Never includes PINs, codes or keys. Nothing is sent unless you share it.",
+                       "Nunca tem PINs, códigos nem chaves. Nada é enviado a não ser que o partilhes."))
+                    .font(.footnote).foregroundStyle(Theme.dim)
+                Text(text)
+                    .font(.system(.caption2, design: .monospaced))
+                    .foregroundStyle(.white)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityIdentifier("diagnostics:text")
+            }
+            .padding(18)
+        }
+        .defaultScrollAnchor(.bottom)
+        .navigationTitle(L("Diagnostics", "Diagnóstico"))
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                Button { UIPasteboard.general.string = text } label: { Image(systemName: "doc.on.doc") }
+                    .accessibilityLabel(L("Copy", "Copiar"))
+                ShareLink(item: text) { Image(systemName: "square.and.arrow.up") }
+                    .accessibilityIdentifier("diagnostics:share")
+            }
+            ToolbarItem(placement: .bottomBar) {
+                Button(L("Clear", "Limpar"), role: .destructive) {
+                    DebugLog.clear()
+                    text = DebugLog.text
+                }
+            }
+        }
+        .onAppear { text = DebugLog.text }
     }
 }
 

@@ -32,6 +32,7 @@ final class TVFinder: ObservableObject {
                 guard case .service(let name, _, _, _) = result.endpoint else { return nil }
                 return FoundTV(name: name, endpoint: result.endpoint, kind: .android)
             }
+            DebugLog.add("Found Android TVs: \(tvs.map(\.name))")
             Task { @MainActor in self?.android = tvs; self?.merge() }
         }
         // O _companion-link também é anunciado por iPhones, iPads, Macs e HomePods: só as Apple TV (rpMd).
@@ -43,9 +44,20 @@ final class TVFinder: ObservableObject {
                       let model = txt.dictionary["rpMd"], model.hasPrefix("AppleTV") else { return nil }
                 return FoundTV(name: name, endpoint: result.endpoint, kind: .apple, model: model)
             }
+            // Os outros aparelhos Apple só pelo modelo, para ver se a Apple TV aparece com outro rpMd.
+            let others = results.compactMap { result -> String? in
+                let model = result.metadata.txtDictionary?["rpMd"] ?? "?"
+                return model.hasPrefix("AppleTV") ? nil : model
+            }
+            DebugLog.add("Found Apple TVs: \(tvs.map { "\($0.name) (\($0.model ?? "?"))" })" + (others.isEmpty ? "" : ", ignored \(others)"))
             Task { @MainActor in self?.apple = tvs; self?.merge() }
         }
-        for browser in [androidBrowser, appleBrowser] { browser.start(queue: .main) }
+        for browser in [androidBrowser, appleBrowser] {
+            // Sem a autorização da rede local, o browser fica em "waiting" e nunca encontra nada.
+            let what = "\(browser.descriptor)"
+            browser.stateUpdateHandler = { state in DebugLog.add("Browser \(what): \(state)") }
+            browser.start(queue: .main)
+        }
         browsers = [androidBrowser, appleBrowser]
     }
 
@@ -98,5 +110,12 @@ final class TVFinder: ObservableObject {
             DispatchQueue.global().asyncAfter(deadline: .now() + 6) { connection.cancel() }
         }
         return hostPort
+    }
+}
+
+private extension NWEndpoint.Metadata {
+    var txtDictionary: [String: String]? {
+        if case .bonjour(let txt) = self { return txt.dictionary }
+        return nil
     }
 }

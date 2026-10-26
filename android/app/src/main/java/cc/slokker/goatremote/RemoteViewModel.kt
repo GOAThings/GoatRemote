@@ -83,8 +83,13 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var current by mutableStateOf(store.current)
         private set
-    var status by mutableStateOf<Status>(if (store.current == null) Status.NoTv else Status.Connecting)
-        private set
+    private var statusValue by mutableStateOf<Status>(if (store.current == null) Status.NoTv else Status.Connecting)
+    var status: Status
+        get() = statusValue
+        private set(value) {
+            if (value != statusValue) DebugLog.add("Status: $value" + (current?.let { " (${it.name}, ${it.kind})" } ?: ""))
+            statusValue = value
+        }
     var state by mutableStateOf(TvState())
         private set
     /** As apps que se viu abertas nesta TV (as mais recentes primeiro), para as abrir com um toque. */
@@ -138,6 +143,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
         val tv = current ?: run { status = Status.NoTv; return }
         if (link != null && (status == Status.Connected || status == Status.Connecting)) return
         link?.close()
+        DebugLog.add("Connecting to ${tv.name} (${tv.kind}, ${tv.host}${tv.port?.let { ":$it" } ?: ""})")
         status = Status.Connecting
         val link = makeLink(tv)
         this.link = link
@@ -160,10 +166,12 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
                 update(link.state.value)
                 refreshApps()
             } catch (e: NotPairedException) {
+                DebugLog.add("Connect: not paired ($e)")
                 if (this@RemoteViewModel.link !== link) return@launch
                 this@RemoteViewModel.link = null
                 status = Status.NotPaired
             } catch (e: Exception) {
+                DebugLog.add("Connect failed${if (retry) " (will retry)" else ""}: $e")
                 if (this@RemoteViewModel.link !== link) return@launch
                 this@RemoteViewModel.link = null
                 link.close()
@@ -452,8 +460,13 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
 
 /** Um emparelhamento: liga à TV, a TV mostra o código e espera-se que a pessoa o escreva. */
 class PairingModel(private val vm: RemoteViewModel, val name: String, private val tvId: String, private var host: String?, val kind: TvKind, private var port: Int?) {
-    var phase by mutableStateOf<Phase>(Phase.Connecting)
-        private set
+    private var phaseValue by mutableStateOf<Phase>(Phase.Connecting)
+    var phase: Phase
+        get() = phaseValue
+        private set(value) {
+            if (value != phaseValue) DebugLog.add("Pairing $name: $value")
+            phaseValue = value
+        }
 
     /** O código que a TV mostra: 6 caracteres hexadecimais (Android TV) ou um PIN de 4 algarismos (Apple TV). */
     val codeLength: Int get() = if (kind == TvKind.APPLE) 4 else Pairing.CODE_LENGTH
@@ -463,14 +476,17 @@ class PairingModel(private val vm: RemoteViewModel, val name: String, private va
     private var socket: TvSocket? = null
 
     fun start() {
+        DebugLog.add("Pairing $name ($kind) started")
         job = vm.viewModelScope.launch { if (kind == TvKind.APPLE) runApple() else runAndroid() }
     }
 
     private suspend fun runAndroid() {
         try {
             val host = host ?: throw UnreachableException(L("Couldn't find the TV on the network", "Não deu para encontrar a TV na rede"))
+            DebugLog.add("Pairing: TV at $host:${Pairing.PORT}")
             val identity = withContext(Dispatchers.IO) { vm.identities.get() }
             val socket = TvSocket.open(host, Pairing.PORT, identity)
+            DebugLog.add("Pairing: TLS open")
             this.socket = socket
             val server = socket.serverCertificate?.let(RsaKey::of)
                 ?: throw UnreachableException(L("The TV's certificate is unreadable", "O certificado da TV não se lê"))
@@ -491,6 +507,7 @@ class PairingModel(private val vm: RemoteViewModel, val name: String, private va
         } catch (e: kotlinx.coroutines.CancellationException) {
             socket?.close()
         } catch (e: Exception) {
+            DebugLog.add("Pairing failed: $e")
             socket?.close()
             phase = Phase.Failed(explain(e))
         }
@@ -504,6 +521,7 @@ class PairingModel(private val vm: RemoteViewModel, val name: String, private va
             if (host == null || port == null) {
                 throw UnreachableException(L("Couldn't find the TV on the network", "Não deu para encontrar a TV na rede"))
             }
+            DebugLog.add("Pairing: Apple TV at $host:$port")
             val creds = AppleTvPairing.pair(host, port, vm.deviceName) { askCode(false) }
             CompanionCredentials.save(vm.appContext, tvId, creds)
             phase = Phase.Done
@@ -511,8 +529,10 @@ class PairingModel(private val vm: RemoteViewModel, val name: String, private va
             delay(700)
             if (vm.pairing === this) vm.pairing = null
         } catch (e: kotlinx.coroutines.CancellationException) {
+            DebugLog.add("Pairing cancelled")
             return
         } catch (e: Exception) {
+            DebugLog.add("Pairing failed: $e")
             phase = Phase.Failed(explain(e))
         }
     }

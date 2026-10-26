@@ -11,6 +11,7 @@ struct GoatRemoteApp: App {
                 .environment(model)
                 .preferredColorScheme(.dark)
                 .onChange(of: scenePhase) { _, phase in
+                    if phase != .inactive { DebugLog.add("App \(phase == .active ? "active" : "background")") }
                     // O iOS não deixa a ligação aberta em segundo plano: fecha-se e volta-se a abrir.
                     if phase == .active { model.connect() }
                     if phase == .background { model.disconnect() }
