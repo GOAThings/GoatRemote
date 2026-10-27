@@ -273,6 +273,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
                     }
                 }.getOrNull()
             }
+            if (apps != null) setLauncher(tv.id, true)
             if (apps != null && current?.id == tv.id) installedApps = apps
         }
     }
@@ -296,7 +297,6 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun resetFor(tv: SavedTv?) {
-        launcherVolume = null
         state = TvState()
         recentApps = loadRecents(tv?.id)
         installedApps = emptyList()
@@ -357,13 +357,22 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** O GoatLauncher da TV sabe mudar o volume (null: ainda não se sabe; false: é uma versão sem isso). */
-    private var launcherVolume: Boolean? = null
-
     /**
-     * Com o GoatLauncher na TV, o volume vai por ele (POST /volume/…) em vez de tecla: as teclas de volume do
-     * protocolo rebentam o Android 11 da SHIELD quando o GoatLauncher vê as teclas (botões a abrir apps). Um
-     * GoatLauncher antigo responde 404 e volta-se às teclas.
+     * Se a TV tem o GoatLauncher (fica guardado por TV: null enquanto não se sabe). Com ele, ou sem se saber, o
+     * volume nunca vai como tecla: as teclas de volume do protocolo rebentam o Android 11 da SHIELD quando o
+     * GoatLauncher vê as teclas (botões a abrir apps). Só se manda tecla quando se tem a certeza de que não há
+     * launcher (404, ou ligação recusada na porta dele).
      */
+    private fun hasLauncher(tvId: String): Boolean? =
+        if (prefs.contains("launcher.$tvId")) prefs.getBoolean("launcher.$tvId", false) else null
+
+    private fun setLauncher(tvId: String, value: Boolean) = prefs.edit().putBoolean("launcher.$tvId", value).apply()
+
+    /** Mostrado no indicador de volume quando o launcher não respondeu (null: nada a dizer). */
+    var volumeProblem by mutableStateOf<String?>(null)
+        private set
+
+    /** O volume pelo GoatLauncher (POST /volume/…) em vez de tecla; false se esta TV não tem launcher (tecla). */
     private fun volumeViaLauncher(key: Key): Boolean {
         val tv = current ?: return false
         val what = when (key) {
@@ -372,26 +381,45 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
             Key.MUTE -> "mute"
             else -> return false
         }
-        if (tv.kind != TvKind.ANDROID || installedApps.isEmpty() || launcherVolume == false) return false
+        if (tv.kind != TvKind.ANDROID || hasLauncher(tv.id) == false) return false
         viewModelScope.launch {
+            var refused = false
             val status = withContext(Dispatchers.IO) {
-                runCatching {
+                try {
                     val c = URL("http://${tv.host}:$LAUNCHER_PORT/volume/$what").openConnection() as HttpURLConnection
                     c.requestMethod = "POST"
-                    c.connectTimeout = 2000
-                    c.readTimeout = 2000
+                    c.connectTimeout = 3000
+                    c.readTimeout = 3000
                     try {
                         c.responseCode
                     } finally {
                         c.disconnect()
                     }
-                }.getOrDefault(0)
+                } catch (e: java.net.ConnectException) {
+                    refused = true
+                    0
+                } catch (e: Exception) {
+                    DebugLog.add("Volume via launcher failed: $e")
+                    0
+                }
             }
-            if (status == 200) {
-                launcherVolume = true
-            } else if (current?.id == tv.id) {
-                if (status == 404) launcherVolume = false
-                link?.key(key)
+            when {
+                status == 200 -> {
+                    setLauncher(tv.id, true)
+                    volumeProblem = null
+                }
+                status == 404 || refused -> {
+                    // Não há launcher nesta TV: a tecla é segura.
+                    DebugLog.add("Volume: no launcher on ${tv.name} (${if (refused) "refused" else "404"}), using keys")
+                    setLauncher(tv.id, false)
+                    if (current?.id == tv.id) link?.key(key)
+                }
+                current?.id == tv.id -> {
+                    // Pode haver launcher e ele não respondeu (TV ocupada): nunca a tecla, que podia reiniciar a TV.
+                    DebugLog.add("Volume: launcher on ${tv.name} didn't answer (HTTP $status), not sending the key")
+                    volumeProblem = L("The TV's launcher didn't answer. Try again", "O launcher da TV não respondeu. Tenta outra vez")
+                    volumeChanged++
+                }
             }
         }
         return true
@@ -410,9 +438,8 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
         val link = link
         if (link == null || status != Status.Connected) return reconnectIfNeeded()
         if (down && noVolume(key)) return
-        if (key in listOf(Key.VOLUME_UP, Key.VOLUME_DOWN, Key.MUTE) && current?.kind == TvKind.ANDROID && installedApps.isNotEmpty() &&
-            launcherVolume != false
-        ) {
+        val tv = current
+        if (key in listOf(Key.VOLUME_UP, Key.VOLUME_DOWN, Key.MUTE) && tv?.kind == TvKind.ANDROID && hasLauncher(tv.id) != false) {
             // Pelo GoatLauncher não há "manter": cada toque é um passo.
             if (down) volumeViaLauncher(key)
             return

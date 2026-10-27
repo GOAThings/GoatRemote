@@ -48,6 +48,7 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.PowerSettingsNew
 import androidx.compose.material.icons.rounded.Tv
 import androidx.compose.material.icons.rounded.VolumeOff
+import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.WifiOff
 import androidx.compose.material3.Button
@@ -320,6 +321,16 @@ private fun Notice(icon: androidx.compose.ui.graphics.vector.ImageVector, title:
 @Composable
 private fun VolumeHud(vm: RemoteViewModel) {
     val shape = RoundedCornerShape(50)
+    val problem = vm.volumeProblem
+    if (problem != null) {
+        Row(Modifier.padding(horizontal = 16.dp).glass(shape).padding(horizontal = 14.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Rounded.Warning, null, tint = Color.White, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(problem, color = Color.White, fontSize = 13.sp, textAlign = TextAlign.Center)
+        }
+        return
+    }
     if (!vm.state.volumeControl) {
         Row(Modifier.padding(horizontal = 16.dp).glass(shape).padding(horizontal = 14.dp, vertical = 7.dp),
             verticalAlignment = Alignment.CenterVertically) {

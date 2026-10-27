@@ -195,8 +195,9 @@ final class RemoteModel {
             request.timeoutInterval = 4
             guard let (data, response) = try? await URLSession.shared.data(for: request),
                   (response as? HTTPURLResponse)?.statusCode == 200,
-                  let apps = try? JSONDecoder().decode([TVApp].self, from: data),
-                  current?.id == tv.id else { return }
+                  let apps = try? JSONDecoder().decode([TVApp].self, from: data) else { return }
+            Self.setLauncher(tv.id, true)
+            guard current?.id == tv.id else { return }
             installedApps = apps
         }
     }
@@ -221,7 +222,6 @@ final class RemoteModel {
         state = TVState()
         recentApps = Self.loadRecents(tv.id)
         installedApps = []
-        launcherVolume = nil
         connect()
     }
 
@@ -236,7 +236,6 @@ final class RemoteModel {
             state = TVState()
             recentApps = Self.loadRecents(current?.id)
             installedApps = []
-            launcherVolume = nil
             status = current == nil ? .noTV : .connecting
             connect()
         }
@@ -286,7 +285,6 @@ final class RemoteModel {
         state = TVState()
         recentApps = Self.loadRecents(tv.id)
         installedApps = []
-        launcherVolume = nil
         status = .connecting
         connect()
     }
@@ -300,12 +298,22 @@ final class RemoteModel {
         link.key(key)
     }
 
-    /// O GoatLauncher da TV sabe mudar o volume (nil: ainda não se sabe; false: é uma versão sem isso).
-    @ObservationIgnored private var launcherVolume: Bool?
+    /// Se a TV tem o GoatLauncher (fica guardado por TV: nil enquanto não se sabe). Com ele, ou sem se saber, o
+    /// volume nunca vai como tecla: as teclas de volume do protocolo rebentam o Android 11 da SHIELD quando o
+    /// GoatLauncher vê as teclas (botões a abrir apps). Só se manda tecla quando se tem a certeza de que não há
+    /// launcher (404, ou ligação recusada na porta dele).
+    static func hasLauncher(_ tvID: String) -> Bool? {
+        UserDefaults.standard.object(forKey: "launcher.\(tvID)") as? Bool
+    }
 
-    /// Com o GoatLauncher na TV, o volume vai por ele (POST /volume/…) em vez de tecla: as teclas de volume do
-    /// protocolo rebentam o Android 11 da SHIELD quando o GoatLauncher vê as teclas (botões a abrir apps). Um
-    /// GoatLauncher antigo responde 404 e volta-se às teclas.
+    static func setLauncher(_ tvID: String, _ value: Bool) {
+        UserDefaults.standard.set(value, forKey: "launcher.\(tvID)")
+    }
+
+    /// Mostrado no indicador de volume quando o launcher não respondeu (nil: nada a dizer).
+    private(set) var volumeProblem: String?
+
+    /// O volume pelo GoatLauncher (POST /volume/…) em vez de tecla; false se esta TV não tem launcher (tecla).
     private func volumeViaLauncher(_ key: Key) -> Bool {
         let what: String
         switch key {
@@ -314,18 +322,34 @@ final class RemoteModel {
         case .mute: what = "mute"
         default: return false
         }
-        guard let tv = current, tv.kind == .android, !installedApps.isEmpty, launcherVolume != false,
+        guard let tv = current, tv.kind == .android, Self.hasLauncher(tv.id) != false,
               let url = URL(string: "http://\(tv.host):\(Self.launcherPort)/volume/\(what)") else { return false }
         Task {
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
-            request.timeoutInterval = 2
-            let status = ((try? await URLSession.shared.data(for: request))?.1 as? HTTPURLResponse)?.statusCode ?? 0
+            request.timeoutInterval = 3
+            var status = 0
+            var refused = false
+            do {
+                status = ((try await URLSession.shared.data(for: request)).1 as? HTTPURLResponse)?.statusCode ?? 0
+            } catch let error as URLError where error.code == .cannotConnectToHost || error.code == .networkConnectionLost {
+                refused = true
+            } catch {
+                DebugLog.add("Volume via launcher failed: \(error)")
+            }
             if status == 200 {
-                launcherVolume = true
+                Self.setLauncher(tv.id, true)
+                volumeProblem = nil
+            } else if status == 404 || refused {
+                // Não há launcher nesta TV: a tecla é segura.
+                DebugLog.add("Volume: no launcher on \(tv.name) (\(refused ? "refused" : "404")), using keys")
+                Self.setLauncher(tv.id, false)
+                if current?.id == tv.id { link?.key(key) }
             } else if current?.id == tv.id {
-                if status == 404 { launcherVolume = false }
-                link?.key(key)
+                // Pode haver launcher e ele não respondeu (TV ocupada): nunca a tecla, que podia reiniciar a TV.
+                DebugLog.add("Volume: launcher on \(tv.name) didn't answer (HTTP \(status)), not sending the key")
+                volumeProblem = L("The TV's launcher didn't answer. Try again", "O launcher da TV não respondeu. Tenta outra vez")
+                volumeChanged += 1
             }
         }
         return true
@@ -343,7 +367,7 @@ final class RemoteModel {
         if down, haptics { heavyHaptics.impactOccurred() }
         guard let link, status == .connected else { return reconnectIfNeeded() }
         if down, noVolume(key) { return }
-        if [.volumeUp, .volumeDown, .mute].contains(key), current?.kind == .android, !installedApps.isEmpty, launcherVolume != false {
+        if [.volumeUp, .volumeDown, .mute].contains(key), let tv = current, tv.kind == .android, Self.hasLauncher(tv.id) != false {
             // Pelo GoatLauncher não há "manter": cada toque é um passo.
             if down { _ = volumeViaLauncher(key) }
             return

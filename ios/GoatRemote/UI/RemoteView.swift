@@ -233,7 +233,17 @@ struct VolumeHUD: View {
     @Environment(RemoteModel.self) private var model
 
     var body: some View {
-        if model.state.volumeControl {
+        if let problem = model.volumeProblem {
+            Label(problem, systemImage: "exclamationmark.triangle.fill")
+                .font(.footnote)
+                .foregroundStyle(.white)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 7)
+                .liquidGlass(Capsule(), interactive: false)
+                .padding(.horizontal, 16)
+                .accessibilityIdentifier("volume-hud")
+        } else if model.state.volumeControl {
             level
         } else {
             Label(L("The Apple TV can't change this TV's volume. Use its remote",
