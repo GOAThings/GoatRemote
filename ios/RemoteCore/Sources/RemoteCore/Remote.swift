@@ -61,6 +61,8 @@ public struct RemoteProtocol: Sendable {
     /// As funções que a TV aceita e nós também (a resposta ao configure e ao set_active).
     private var active = RemoteProtocol.features
     private var fieldCounter = 0
+    /// O que a caixa de texto da TV tem, segundo nós (o que lá estava mais o que já escrevemos).
+    private var typed = ""
     private let model: String
     private let appVersion: String
 
@@ -106,6 +108,7 @@ public struct RemoteProtocol: Sendable {
         } else if m.has(22) {
             let field = m.message(22).message(2)
             state.textValue = field.string(2)
+            typed = state.textValue
             state.textLabel = field.string(6).isEmpty ? nil : field.string(6)
             state.keyboardRequests += 1
         } else if m.has(3) {
@@ -122,8 +125,20 @@ public struct RemoteProtocol: Sendable {
         Frame.encode(Proto().message(10, Proto().varint(1, code).varint(2, direction.rawValue)))
     }
 
-    /// Escreve [text] no campo de texto aberto na TV (substitui o que lá estiver).
-    public func text(_ text: String) -> Data {
+    /// Põe [text] no campo de texto aberto na TV. A TV não substitui o campo: insere o que recebe no cursor.
+    /// Por isso manda-se só a diferença para o que já lá está: Apagar por cada letra a menos, e o texto novo.
+    public mutating func text(_ text: String) -> Data {
+        let old = Array(typed.unicodeScalars), new = Array(text.unicodeScalars)
+        var same = 0
+        while same < old.count, same < new.count, old[same] == new[same] { same += 1 }
+        typed = text
+        var frames = Data()
+        for _ in same..<old.count { frames += key(.delete) }
+        if same < new.count { frames += insert(String(String.UnicodeScalarView(new[same...]))) }
+        return frames
+    }
+
+    private func insert(_ text: String) -> Data {
         // O cursor no fim (em caracteres Unicode, como o cliente de referência).
         let end = max(text.unicodeScalars.count - 1, 0)
         let status = Proto().varint(1, end).varint(2, end).string(3, text)

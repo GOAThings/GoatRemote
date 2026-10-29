@@ -57,11 +57,19 @@ class CoreTest {
         val key = ProtoMessage.parse(r.key(Key.CENTER)).message(10)
         assertEquals(23, key.int(1))
         assertEquals(3, key.int(2))
-        val text = ProtoMessage.parse(r.text("olá")).message(21)
+        // O campo já tem "abc": escrever "abcolá" só insere "olá".
+        val typed = r.text("abcolá")
+        assertEquals(1, typed.size)
+        val text = ProtoMessage.parse(typed[0]).message(21)
         assertEquals(7, text.int(1))
         assertEquals(3, text.int(2))
         assertEquals("olá", text.message(3).message(2).string(3))
         assertEquals(2, text.message(3).message(2).int(1))
+        // Apagar "olá" e escrever "d": três Apagar e depois "d".
+        val edit = r.text("abcd")
+        assertEquals(listOf(67, 67, 67), edit.dropLast(1).map { ProtoMessage.parse(it).message(10).int(1) })
+        assertEquals("d", ProtoMessage.parse(edit.last()).message(21).message(3).message(2).string(3))
+        assertEquals(0, r.text("abcd").size)
     }
 
     @Test

@@ -181,7 +181,14 @@ final class RemoteLink: @unchecked Sendable {
 
     func key(_ key: Key, _ direction: KeyDirection = .short) { send { $0.key(key, direction) } }
 
-    func text(_ text: String) { send { $0.text(text) } }
+    func text(_ text: String) {
+        // Os Apagar e o texto vão juntos, para chegarem por ordem.
+        lock.lock()
+        let data = proto.text(text)
+        lock.unlock()
+        guard !data.isEmpty else { return }
+        Task { try? await connection?.send(data) }
+    }
 
     func openApp(_ link: String) { send { $0.appLink(link) } }
 

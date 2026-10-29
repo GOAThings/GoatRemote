@@ -110,11 +110,17 @@ enum CoreTests {
         let key = try ProtoMessage(Array(r.key(.center).dropFirst())).message(10)
         try expect(key.int(1), 23)
         try expect(key.int(2), 3)
-        let text = try ProtoMessage(Array(r.text("olá").dropFirst())).message(21)
+        // O campo já tem "abc": escrever "abcolá" só insere "olá".
+        let text = try ProtoMessage(Array(r.text("abcolá").dropFirst())).message(21)
         try expect(text.int(1), 7)
         try expect(text.int(2), 3)
         try expect(text.message(3).message(2).string(3), "olá")
         try expect(text.message(3).message(2).int(1), 2)
+        // Apagar "olá" e escrever "d": três Apagar (7 bytes cada) e depois "d".
+        let edit = r.text("abcd")
+        try expect(try ProtoMessage(Array(edit.prefix(7).dropFirst())).message(10).int(1), 67)
+        try expect(edit.count > 21, true)
+        try expect(r.text("abcd").isEmpty, true)
     }
 
     static func hex(_ s: String) -> [UInt8] {

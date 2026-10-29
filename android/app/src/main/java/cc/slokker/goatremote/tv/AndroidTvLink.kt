@@ -174,7 +174,12 @@ class AndroidTvLink(private val host: String, private val identity: () -> Identi
 
     override fun key(key: Key, direction: KeyDirection) = send { it.key(key, direction) }
 
-    override fun text(text: String) = send { it.text(text) }
+    override fun text(text: String) {
+        val socket = socket ?: return
+        val frames = synchronized(proto) { proto.text(text) }
+        // Uma só tarefa, para os Apagar chegarem antes do texto.
+        scope.launch { runCatching { frames.forEach { socket.send(it) } } }
+    }
 
     override fun openApp(id: String) = send { it.appLink(id) }
 

@@ -61,6 +61,9 @@ class RemoteProtocol(private val model: String, private val appVersion: String) 
     private var imeCounter = 0
     private var fieldCounter = 0
 
+    /** O que a caixa de texto da TV tem, segundo nós (o que lá estava mais o que já escrevemos). */
+    private var typed = ""
+
     /** As funções que a TV aceita e nós também (a resposta ao configure e ao set_active). */
     private var active = FEATURES
 
@@ -105,7 +108,7 @@ class RemoteProtocol(private val model: String, private val appVersion: String) 
             m.has(22) -> {
                 val field = m.message(22).message(2)
                 state = state.copy(
-                    textValue = field.string(2),
+                    textValue = field.string(2).also { typed = it },
                     textLabel = field.string(6).ifEmpty { null },
                     keyboardRequests = state.keyboardRequests + 1,
                 )
@@ -118,8 +121,19 @@ class RemoteProtocol(private val model: String, private val appVersion: String) 
     fun key(key: Key, direction: KeyDirection = KeyDirection.SHORT): ByteArray =
         ProtoWriter().message(10) { varint(1, key.code); varint(2, direction.code) }.toByteArray()
 
-    /** Escreve [text] no campo de texto aberto na TV (substitui o que lá estiver). */
-    fun text(text: String): ByteArray {
+    /**
+     * Põe [text] no campo de texto aberto na TV. A TV não substitui o campo: insere o que recebe no cursor.
+     * Por isso manda-se só a diferença para o que já lá está: Apagar por cada letra a menos, e o texto novo.
+     */
+    fun text(text: String): List<ByteArray> {
+        var same = typed.commonPrefixWith(text).length
+        if (same > 0 && text[same - 1].isHighSurrogate()) same--
+        val deletes = typed.codePointCount(same, typed.length)
+        typed = text
+        return List(deletes) { key(Key.DELETE) } + listOfNotNull(text.substring(same).ifEmpty { null }?.let(::insert))
+    }
+
+    private fun insert(text: String): ByteArray {
         // O cursor no fim (em caracteres Unicode, como o cliente de referência).
         val end = maxOf(text.codePointCount(0, text.length) - 1, 0)
         return ProtoWriter().message(21) {
