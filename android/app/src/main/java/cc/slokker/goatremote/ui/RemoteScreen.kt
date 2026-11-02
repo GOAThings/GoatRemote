@@ -400,6 +400,8 @@ private fun TouchSurface(vm: RemoteViewModel) {
                     var anchor = start
                     var moved = false
                     var holding: Key? = null
+                    // Dedo parado depois de deslizar: a mesma direção repete-se, cada vez mais depressa.
+                    var repeating: Job? = null
                     val key = target(start)
                     val timer: Job = scope.launch {
                         delay(500)
@@ -419,13 +421,27 @@ private fun TouchSurface(vm: RemoteViewModel) {
                         val dy = change.position.y - anchor.y
                         if (abs(dx) >= step || abs(dy) >= step) {
                             timer.cancel()
-                            vm.press(if (abs(dx) > abs(dy)) (if (dx > 0) Key.RIGHT else Key.LEFT) else (if (dy > 0) Key.DOWN else Key.UP))
+                            repeating?.cancel()
+                            val direction = if (abs(dx) > abs(dy)) (if (dx > 0) Key.RIGHT else Key.LEFT) else (if (dy > 0) Key.DOWN else Key.UP)
+                            vm.press(direction)
                             addRipple(change.position)
                             anchor = change.position
                             moved = true
+                            val position = change.position
+                            repeating = scope.launch {
+                                delay(350)
+                                var interval = 220L
+                                while (true) {
+                                    vm.press(direction)
+                                    addRipple(position)
+                                    delay(interval)
+                                    interval = (interval - 20).coerceAtLeast(80)
+                                }
+                            }
                         }
                     }
                     timer.cancel()
+                    repeating?.cancel()
                     val held = holding
                     if (held != null) {
                         vm.hold(held, false)

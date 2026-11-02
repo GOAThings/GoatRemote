@@ -292,6 +292,7 @@ struct TouchSurface: View {
     @State private var moved = false
     @State private var holding: Key?
     @State private var holdTask: Task<Void, Never>?
+    @State private var repeatTask: Task<Void, Never>?
     private let step: CGFloat = 44
 
     struct Ripple: Identifiable {
@@ -365,14 +366,29 @@ struct TouchSurface: View {
                 let dy = value.location.y - anchor.y
                 if abs(dx) >= step || abs(dy) >= step {
                     holdTask?.cancel()
-                    if abs(dx) > abs(dy) { model.press(dx > 0 ? .right : .left) } else { model.press(dy > 0 ? .down : .up) }
+                    repeatTask?.cancel()
+                    let direction: Key = abs(dx) > abs(dy) ? (dx > 0 ? .right : .left) : (dy > 0 ? .down : .up)
+                    model.press(direction)
                     addRipple(value.location)
                     last = value.location
                     moved = true
+                    // Dedo parado depois de deslizar: a mesma direção repete-se, cada vez mais depressa.
+                    let location = value.location
+                    repeatTask = Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 350_000_000)
+                        var interval: UInt64 = 220
+                        while !Task.isCancelled {
+                            model.press(direction)
+                            addRipple(location)
+                            try? await Task.sleep(nanoseconds: interval * 1_000_000)
+                            interval = max(80, interval - 20)
+                        }
+                    }
                 }
             }
             .onEnded { value in
                 holdTask?.cancel()
+                repeatTask?.cancel()
                 if let key = holding {
                     model.hold(key, down: false)
                 } else if !moved {
