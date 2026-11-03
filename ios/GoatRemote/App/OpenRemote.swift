@@ -4,7 +4,6 @@ import AppIntents
 struct OpenRemote: AppIntent {
     static let title: LocalizedStringResource = "Open GoatRemote"
     static let openAppWhenRun = true
-    static let isDiscoverable = false
 
     func perform() async throws -> some IntentResult {
         .result()

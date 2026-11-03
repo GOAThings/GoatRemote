@@ -16,8 +16,8 @@ private fun openApp(context: Context): PendingIntent =
         PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
     )
 
-/** O mosaico das definições rápidas. */
-class RemoteTile : TileService() {
+/** Os mosaicos das definições rápidas: as setas e a cabra do logo, ou um comando. */
+open class RemoteTile : TileService() {
     override fun onClick() {
         if (isLocked) unlockAndRun { open() } else open()
     }
@@ -31,6 +31,8 @@ class RemoteTile : TileService() {
         }
     }
 }
+
+class RemoteShapeTile : RemoteTile()
 
 /** O widget do ecrã principal. */
 class RemoteWidget : AppWidgetProvider() {
