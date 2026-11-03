@@ -2,6 +2,7 @@
 /ios/build/
 /ios/GoatRemote.xcodeproj/
 /ios/GoatRemote/Info.plist
+/ios/GoatRemoteWidget/Info.plist
 /ios/UITests/Info.plist
 /build/
 *.ipa

@@ -29,6 +29,7 @@ iPhone screenshots against the fake TV used in the tests. The Android app looks 
   up with their banners; without it, the apps you've opened on that TV. On Apple TV, the TV's own app list, with
   App Store icons.
 - **Several TVs**, and on the iPhone, Siri and Shortcuts ("press a TV button").
+- **Quick access**: a Control Center button (iOS 18 or newer) or a Quick Settings tile, and a home screen widget.
 - English and Portuguese.
 
 ### GoatLauncher and the SHIELD

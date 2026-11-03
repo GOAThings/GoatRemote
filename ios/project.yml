@@ -21,6 +21,7 @@ targets:
       - path: GoatRemote
     dependencies:
       - package: RemoteCore
+      - target: GoatRemoteWidget
     info:
       path: GoatRemote/Info.plist
       properties:
@@ -46,6 +47,28 @@ targets:
         CODE_SIGN_STYLE: Manual
     scheme:
       testTargets: [GoatRemoteUITests]
+  # O botão do Centro de Controlo e o widget do ecrã principal.
+  GoatRemoteWidget:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: GoatRemoteWidget
+      - path: GoatRemote/App/OpenRemote.swift
+      - path: GoatRemote/App/Localization.swift
+    info:
+      path: GoatRemoteWidget/Info.plist
+      properties:
+        CFBundleDisplayName: GoatRemote
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: cc.slokker.goatremote.widget
+        PRODUCT_NAME: GoatRemoteWidget
+        TARGETED_DEVICE_FAMILY: "1"
+        CODE_SIGN_STYLE: Manual
   # Testes de interface no simulador contra a TV falsa (tools/AtvTool.java), no workflow "iOS UI tests".
   GoatRemoteUITests:
     type: bundle.ui-testing

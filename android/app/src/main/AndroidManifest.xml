@@ -29,5 +29,27 @@
         <receiver
             android:name=".InstallResultReceiver"
             android:exported="false" />
+        <!-- Abrem a app: o mosaico das definições rápidas e o widget do ecrã principal. -->
+        <service
+            android:name=".RemoteTile"
+            android:exported="true"
+            android:icon="@drawable/ic_tile_remote"
+            android:label="GoatRemote"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+        <receiver
+            android:name=".RemoteWidget"
+            android:exported="true"
+            android:label="GoatRemote">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/remote_widget" />
+        </receiver>
     </application>
 </manifest>
