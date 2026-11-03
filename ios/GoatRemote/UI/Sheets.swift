@@ -168,6 +168,82 @@ struct AppsSheet: View {
 }
 
 /// As teclas que não cabem no comando, os números e as opções.
+/// A versão instalada e, se houver outra mais recente, tocar para descarregar a IPA e passá-la à app que a assina.
+struct UpdateRow: View {
+    private static let latest = URL(string: "https://api.github.com/repos/GOAThings/GoatRemote/releases/latest")!
+    private static let ipa = URL(string: "https://github.com/GOAThings/GoatRemote/releases/latest/download/GoatRemote.ipa")!
+    private static let page = URL(string: "https://github.com/GOAThings/GoatRemote/releases/latest")!
+
+    struct Downloaded: Identifiable {
+        let url: URL
+        var id: URL { url }
+    }
+
+    private var current: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "" }
+    @State private var newer: String?
+    @State private var downloading = false
+    @State private var downloaded: Downloaded?
+
+    var body: some View {
+        Button(action: download) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(newer.map { L("Update to \($0)", "Atualizar para \($0)") } ?? L("Version", "Versão"))
+                    .foregroundStyle(newer != nil ? Theme.accent : .white)
+                Text(downloading ? L("Downloading…", "A descarregar…") : current)
+                    .font(.footnote).foregroundStyle(Theme.dim)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 12)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(newer == nil || downloading)
+        .accessibilityIdentifier("opt:update")
+        .task { await check() }
+        .sheet(item: $downloaded) { IPAShare(url: $0.url) }
+    }
+
+    private func check() async {
+        var request = URLRequest(url: Self.latest)
+        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        request.timeoutInterval = 20
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              (response as? HTTPURLResponse)?.statusCode == 200,
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let tag = json["tag_name"] as? String else { return }
+        let version = tag.hasPrefix("v") ? String(tag.dropFirst()) : tag
+        if version.compare(current, options: .numeric) == .orderedDescending { newer = version }
+    }
+
+    private func download() {
+        downloading = true
+        Task {
+            defer { downloading = false }
+            do {
+                let (file, response) = try await URLSession.shared.download(from: Self.ipa)
+                guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
+                let target = FileManager.default.temporaryDirectory.appendingPathComponent("GoatRemote.ipa")
+                try? FileManager.default.removeItem(at: target)
+                try FileManager.default.moveItem(at: file, to: target)
+                downloaded = Downloaded(url: target)
+            } catch {
+                DebugLog.add("Update download failed: \(error)")
+                await UIApplication.shared.open(Self.page)
+            }
+        }
+    }
+}
+
+private struct IPAShare: UIViewControllerRepresentable {
+    let url: URL
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: [url], applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
+}
+
 struct MoreSheet: View {
     @Environment(RemoteModel.self) private var model
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 10), count: 4)
@@ -231,6 +307,8 @@ struct MoreSheet: View {
                         }
                         .padding(.vertical, 12)
                         .accessibilityIdentifier("opt:dpad")
+                        Divider()
+                        UpdateRow()
                         Divider()
                         NavigationLink {
                             DiagnosticsView()

@@ -327,6 +327,8 @@ fun MoreSheet(vm: RemoteViewModel, onDismiss: () -> Unit) {
                         L("Tap near an edge of the touch surface for that arrow", "Tocar perto de uma borda da superfície carrega nessa seta"),
                         vm.dpadTaps, vm::changeDpadTaps, "opt:dpad")
                     HorizontalDivider(color = Theme.faint)
+                    UpdateRow()
+                    HorizontalDivider(color = Theme.faint)
                     Row(Modifier.fillMaxWidth().clickable { diagnostics = true }.padding(vertical = 12.dp).testTag("opt:diagnostics"),
                         verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
