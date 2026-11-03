@@ -11,8 +11,8 @@ packages:
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "0.1.8"
-    CURRENT_PROJECT_VERSION: "10"
+    MARKETING_VERSION: "0.1.9"
+    CURRENT_PROJECT_VERSION: "11"
 targets:
   GoatRemote:
     type: application
