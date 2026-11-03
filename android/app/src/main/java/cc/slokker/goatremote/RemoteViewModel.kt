@@ -201,7 +201,10 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
         val old = state
         state = new
         if (new.keyboardRequests > old.keyboardRequests) showKeyboard = true
-        if (old.volume != null && (new.volume != old.volume || new.muted != old.muted) && !volumeUnknown) volumeChanged++
+        // Ao ligar, a TV manda vários valores seguidos (na SHIELD, com HDMI-CEC, acaba em 0): isso não é mudar o volume.
+        if (old.volume == null && new.volume != null) volumeSettlesAt = System.currentTimeMillis() + 5000
+        if (old.volume != null && (new.volume != old.volume || new.muted != old.muted) && !volumeUnknown &&
+            System.currentTimeMillis() >= volumeSettlesAt) volumeChanged++
         val app = new.currentApp
         if (app != null && app != old.currentApp && !AppCatalog.isLauncher(app)) {
             recentApps = (listOf(app) + recentApps.filterNot { it == app }).take(12)
@@ -374,6 +377,8 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
      */
     private val volumeUnknown: Boolean
         get() = current?.let { prefs.getBoolean("volumeUnknown.${it.id}", false) } ?: false
+
+    private var volumeSettlesAt = 0L
 
     /** A última tecla, para o indicador numa TV sem valor de volume (null: mostra-se a barra). */
     var volumePressed by mutableStateOf<Key?>(null)

@@ -123,11 +123,15 @@ final class RemoteModel {
         connect()
     }
 
+    private var volumeSettlesAt = Date.distantPast
+
     private func update(_ new: TVState) {
         let old = state
         state = new
         if new.keyboardRequests > old.keyboardRequests { showKeyboard = true }
-        if old.volume != nil, new.volume != old.volume || new.muted != old.muted, !volumeUnknown { volumeChanged += 1 }
+        // Ao ligar, a TV manda vários valores seguidos (na SHIELD, com HDMI-CEC, acaba em 0): isso não é mudar o volume.
+        if old.volume == nil, new.volume != nil { volumeSettlesAt = Date().addingTimeInterval(5) }
+        if old.volume != nil, new.volume != old.volume || new.muted != old.muted, !volumeUnknown, Date() >= volumeSettlesAt { volumeChanged += 1 }
         if let app = new.currentApp, !AppCatalog.isLauncher(app) {
             recentApps.removeAll { $0 == app }
             recentApps.insert(app, at: 0)
