@@ -49,6 +49,7 @@ import androidx.compose.material.icons.rounded.PowerSettingsNew
 import androidx.compose.material.icons.rounded.Tv
 import androidx.compose.material.icons.rounded.VolumeOff
 import androidx.compose.material.icons.rounded.Warning
+import androidx.compose.material.icons.rounded.VolumeDown
 import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.WifiOff
 import androidx.compose.material3.Button
@@ -338,6 +339,17 @@ private fun VolumeHud(vm: RemoteViewModel) {
             Spacer(Modifier.width(8.dp))
             Text(L("The Apple TV can't change this TV's volume. Use its remote", "A Apple TV não muda o volume desta TV. Usa o comando dela"),
                 color = Color.White, fontSize = 13.sp, textAlign = TextAlign.Center)
+        }
+        return
+    }
+    vm.volumePressed?.let { key ->
+        // Sem valor para mostrar (HDMI-CEC): só o que se carregou.
+        Row(Modifier.height(30.dp).glass(shape).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(when (key) {
+                Key.MUTE -> Icons.Rounded.VolumeOff
+                Key.VOLUME_UP -> Icons.Rounded.VolumeUp
+                else -> Icons.Rounded.VolumeDown
+            }, null, tint = Color.White, modifier = Modifier.size(16.dp))
         }
         return
     }

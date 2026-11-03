@@ -127,7 +127,7 @@ final class RemoteModel {
         let old = state
         state = new
         if new.keyboardRequests > old.keyboardRequests { showKeyboard = true }
-        if old.volume != nil, new.volume != old.volume || new.muted != old.muted { volumeChanged += 1 }
+        if old.volume != nil, new.volume != old.volume || new.muted != old.muted, !volumeUnknown { volumeChanged += 1 }
         if let app = new.currentApp, !AppCatalog.isLauncher(app) {
             recentApps.removeAll { $0 == app }
             recentApps.insert(app, at: 0)
@@ -310,6 +310,15 @@ final class RemoteModel {
         UserDefaults.standard.set(value, forKey: "launcher.\(tvID)")
     }
 
+    /// Com HDMI-CEC, o volume está na TV e a box não sabe o valor: o que reporta não diz nada. Descobre-se ao
+    /// carregar: o launcher mudou o volume e o valor não mexeu. Fica guardado por TV.
+    private var volumeUnknown: Bool {
+        current.map { UserDefaults.standard.bool(forKey: "volumeUnknown.\($0.id)") } ?? false
+    }
+
+    /// A última tecla, para o indicador numa TV sem valor de volume (nil: mostra-se a barra).
+    private(set) var volumePressed: Key?
+
     /// Mostrado no indicador de volume quando o launcher não respondeu (nil: nada a dizer).
     private(set) var volumeProblem: String?
 
@@ -324,6 +333,7 @@ final class RemoteModel {
         }
         guard let tv = current, tv.kind == .android, Self.hasLauncher(tv.id) != false,
               let url = URL(string: "http://\(tv.host):\(Self.launcherPort)/volume/\(what)") else { return false }
+        let before = (state.volume, state.muted)
         Task {
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
@@ -340,6 +350,12 @@ final class RemoteModel {
             if status == 200 {
                 Self.setLauncher(tv.id, true)
                 volumeProblem = nil
+                try? await Task.sleep(for: .milliseconds(800))
+                guard current?.id == tv.id else { return }
+                let unknown = state.volume == before.0 && state.muted == before.1
+                UserDefaults.standard.set(unknown, forKey: "volumeUnknown.\(tv.id)")
+                volumePressed = unknown ? key : nil
+                if unknown { volumeChanged += 1 }
             } else if status == 404 || refused {
                 // Não há launcher nesta TV: a tecla é segura.
                 DebugLog.add("Volume: no launcher on \(tv.name) (\(refused ? "refused" : "404")), using keys")

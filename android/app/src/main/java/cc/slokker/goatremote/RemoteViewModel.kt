@@ -201,7 +201,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
         val old = state
         state = new
         if (new.keyboardRequests > old.keyboardRequests) showKeyboard = true
-        if (old.volume != null && (new.volume != old.volume || new.muted != old.muted)) volumeChanged++
+        if (old.volume != null && (new.volume != old.volume || new.muted != old.muted) && !volumeUnknown) volumeChanged++
         val app = new.currentApp
         if (app != null && app != old.currentApp && !AppCatalog.isLauncher(app)) {
             recentApps = (listOf(app) + recentApps.filterNot { it == app }).take(12)
@@ -368,6 +368,17 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun setLauncher(tvId: String, value: Boolean) = prefs.edit().putBoolean("launcher.$tvId", value).apply()
 
+    /**
+     * Com HDMI-CEC, o volume está na TV e a box não sabe o valor: o que reporta não diz nada. Descobre-se ao
+     * carregar: o launcher mudou o volume e o valor não mexeu. Fica guardado por TV.
+     */
+    private val volumeUnknown: Boolean
+        get() = current?.let { prefs.getBoolean("volumeUnknown.${it.id}", false) } ?: false
+
+    /** A última tecla, para o indicador numa TV sem valor de volume (null: mostra-se a barra). */
+    var volumePressed by mutableStateOf<Key?>(null)
+        private set
+
     /** Mostrado no indicador de volume quando o launcher não respondeu (null: nada a dizer). */
     var volumeProblem by mutableStateOf<String?>(null)
         private set
@@ -382,6 +393,8 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
             else -> return false
         }
         if (tv.kind != TvKind.ANDROID || hasLauncher(tv.id) == false) return false
+        val beforeVolume = state.volume
+        val beforeMuted = state.muted
         viewModelScope.launch {
             var refused = false
             val status = withContext(Dispatchers.IO) {
@@ -407,6 +420,13 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
                 status == 200 -> {
                     setLauncher(tv.id, true)
                     volumeProblem = null
+                    delay(800)
+                    if (current?.id == tv.id) {
+                        val unknown = state.volume == beforeVolume && state.muted == beforeMuted
+                        prefs.edit().putBoolean("volumeUnknown.${tv.id}", unknown).apply()
+                        volumePressed = if (unknown) key else null
+                        if (unknown) volumeChanged++
+                    }
                 }
                 status == 404 || refused -> {
                     // Não há launcher nesta TV: a tecla é segura.

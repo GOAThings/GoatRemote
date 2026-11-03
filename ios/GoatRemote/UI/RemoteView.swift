@@ -243,6 +243,15 @@ struct VolumeHUD: View {
                 .liquidGlass(Capsule(), interactive: false)
                 .padding(.horizontal, 16)
                 .accessibilityIdentifier("volume-hud")
+        } else if let key = model.volumePressed {
+            // Sem valor para mostrar (HDMI-CEC): só o que se carregou.
+            Image(systemName: key == .mute ? "speaker.slash.fill" : key == .volumeUp ? "speaker.wave.3.fill" : "speaker.wave.1.fill")
+                .font(.footnote)
+                .foregroundStyle(.white)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 7)
+                .liquidGlass(Capsule(), interactive: false)
+                .accessibilityIdentifier("volume-hud")
         } else if model.state.volumeControl {
             level
         } else {
