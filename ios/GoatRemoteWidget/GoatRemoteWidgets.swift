@@ -1,7 +1,7 @@
 import SwiftUI
 import WidgetKit
 
-/// Só abre a app. Sem botão do Centro de Controlo: assinado no Signulous, o iOS não prepara a ação do controlo e a
+/// Só abre a app. Sem botão do Centro de Controlo: assinado por um serviço de sideload, o iOS não prepara a ação do controlo e a
 /// extensão crasha ("Can't create CHSIntentReference"). O iOS já tem um controlo próprio para abrir apps.
 @main
 struct GoatRemoteWidgets: WidgetBundle {
