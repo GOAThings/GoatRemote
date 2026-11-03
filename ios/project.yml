@@ -47,13 +47,12 @@ targets:
         CODE_SIGN_STYLE: Manual
     scheme:
       testTargets: [GoatRemoteUITests]
-  # O botão do Centro de Controlo e o widget do ecrã principal.
+  # O widget do ecrã principal e do ecrã bloqueado.
   GoatRemoteWidget:
     type: app-extension
     platform: iOS
     sources:
       - path: GoatRemoteWidget
-      - path: GoatRemote/App/OpenRemote.swift
       - path: GoatRemote/App/Localization.swift
     info:
       path: GoatRemoteWidget/Info.plist

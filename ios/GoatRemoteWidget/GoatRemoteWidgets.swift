@@ -1,50 +1,13 @@
-import AppIntents
 import SwiftUI
 import WidgetKit
 
-/// Só abrem a app: mandar teclas daqui obrigava a partilhar o emparelhamento num App Group, e nem todos os serviços
-/// de assinatura os mantêm.
+/// Só abre a app. Sem botão do Centro de Controlo: assinado no Signulous, o iOS não prepara a ação do controlo e a
+/// extensão crasha ("Can't create CHSIntentReference"). O iOS já tem um controlo próprio para abrir apps.
 @main
 struct GoatRemoteWidgets: WidgetBundle {
     var body: some Widget {
         RemoteWidget()
-        if #available(iOS 18.0, *) {
-            LogoControl()
-            RemoteShapeControl()
-        }
     }
-}
-
-/// Os botões do Centro de Controlo (também dão para o ecrã bloqueado e o botão de ação): as setas e a cabra do logo,
-/// ou um comando. O iOS só desenha símbolos a uma cor.
-@available(iOS 18.0, *)
-struct LogoControl: ControlWidget {
-    var body: some ControlWidgetConfiguration {
-        StaticControlConfiguration(kind: "cc.slokker.goatremote.control") {
-            ControlWidgetButton(action: OpenRemote()) {
-                Label("GoatRemote", image: "goatremote.logo")
-            }
-        }
-        .displayName("GoatRemote")
-        .description(controlDescription)
-    }
-}
-
-@available(iOS 18.0, *)
-struct RemoteShapeControl: ControlWidget {
-    var body: some ControlWidgetConfiguration {
-        StaticControlConfiguration(kind: "cc.slokker.goatremote.control.remote") {
-            ControlWidgetButton(action: OpenRemote()) {
-                Label("GoatRemote", image: "goatremote.remote")
-            }
-        }
-        .displayName(LocalizedStringResource(String.LocalizationValue(L("GoatRemote (remote)", "GoatRemote (comando)"))))
-        .description(controlDescription)
-    }
-}
-
-private var controlDescription: LocalizedStringResource {
-    LocalizedStringResource(String.LocalizationValue(L("Opens the remote.", "Abre o comando.")))
 }
 
 /// O widget do ecrã principal e do ecrã bloqueado.
