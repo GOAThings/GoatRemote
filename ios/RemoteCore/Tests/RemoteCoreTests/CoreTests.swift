@@ -107,6 +107,12 @@ enum CoreTests {
         try expect(r.state.keyboardRequests, 1)
         try expect(r.state.textValue, "abc")
         try expect(r.state.textLabel, "Search")
+        // A TV recusar um pedido não acaba com a ligação.
+        let refusal = Proto().message(3, Proto().bool(1, true).message(2, Proto().message(90, Proto().string(1, "x")))).bytes
+        try expect(try r.handle(refusal).isEmpty, true)
+        try expect(r.ready, true)
+        try expect(RemoteProtocol.reportedError(refusal), "[90]")
+        try expect(RemoteProtocol.reportedError(Proto().message(8, Proto().varint(1, 42)).bytes), nil)
         let key = try ProtoMessage(Array(r.key(.center).dropFirst())).message(10)
         try expect(key.int(1), 23)
         try expect(key.int(2), 3)

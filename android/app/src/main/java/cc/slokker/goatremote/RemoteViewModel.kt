@@ -126,6 +126,8 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
 
     private var link: TvControl? = null
     private var stateJob: Job? = null
+    private var autoReconnect: Job? = null
+    private var lastAutoReconnect = 0L
     /** Ícones das apps da Apple TV (da App Store, por bundle id). */
     private val appleArtwork = mutableStateMapOf<String, String>()
     private val vibrator = app.getSystemService(Vibrator::class.java)
@@ -142,6 +144,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
     fun connect(retry: Boolean = true) {
         val tv = current ?: run { status = Status.NoTv; return }
         if (link != null && (status == Status.Connected || status == Status.Connecting)) return
+        autoReconnect?.cancel()
         link?.close()
         DebugLog.add("Connecting to ${tv.name} (${tv.kind}, ${tv.host}${tv.port?.let { ":$it" } ?: ""})")
         status = Status.Connecting
@@ -152,7 +155,18 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
             viewModelScope.launch {
                 if (this@RemoteViewModel.link === link) {
                     this@RemoteViewModel.link = null
-                    status = Status.Unreachable(L("The TV closed the connection", "A TV fechou a ligação"))
+                    // Liga outra vez sem incomodar; se voltar a fechar logo a seguir, aí sim mostra-se o aviso.
+                    if (tv.kind == TvKind.ANDROID && System.currentTimeMillis() - lastAutoReconnect > 10_000) {
+                        lastAutoReconnect = System.currentTimeMillis()
+                        DebugLog.add("Reconnecting to ${tv.name}")
+                        status = Status.Connecting
+                        autoReconnect = viewModelScope.launch {
+                            delay(1500)
+                            if (this@RemoteViewModel.link == null && current?.id == tv.id) connect()
+                        }
+                    } else {
+                        status = Status.Unreachable(L("The TV closed the connection", "A TV fechou a ligação"))
+                    }
                 }
             }
         }
@@ -186,6 +200,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun disconnect() {
+        autoReconnect?.cancel()
         link?.close()
         link = null
         if (current != null) status = Status.Connecting
@@ -481,6 +496,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
         if (haptics) vibrate(false)
         val link = link
         if (link == null || status != Status.Connected) return reconnectIfNeeded()
+        DebugLog.add("Open app: $target")
         link.openApp(target)
     }
 

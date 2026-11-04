@@ -153,7 +153,8 @@ class AndroidTvLink(private val host: String, private val identity: () -> Identi
         scope.launch {
             try {
                 while (true) handle(socket, socket.receive())
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                if (!closed) DebugLog.add("Android TV: connection ended: $e")
             }
             socket.close()
             if (!closed) onClose?.invoke()
@@ -161,7 +162,14 @@ class AndroidTvLink(private val host: String, private val identity: () -> Identi
     }
 
     private suspend fun handle(socket: TvSocket, frame: ByteArray) {
-        val replies = synchronized(proto) { proto.handle(frame) }
+        RemoteProtocol.reportedError(frame)?.let { DebugLog.add("Android TV: the TV reported an error about $it") }
+        val replies = try {
+            synchronized(proto) { proto.handle(frame) }
+        } catch (e: ProtocolException) {
+            // Uma mensagem que não se percebe não é razão para largar a TV.
+            DebugLog.add("Android TV: unreadable message: $e")
+            return
+        }
         replies.forEach { socket.send(it) }
         _state.value = proto.state
     }

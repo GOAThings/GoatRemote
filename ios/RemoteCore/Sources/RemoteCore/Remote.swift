@@ -111,10 +111,14 @@ public struct RemoteProtocol: Sendable {
             typed = state.textValue
             state.textLabel = field.string(6).isEmpty ? nil : field.string(6)
             state.keyboardRequests += 1
-        } else if m.has(3) {
-            throw ProtocolError.unexpected("a TV mandou um erro")
         }
         return []
+    }
+
+    /// Se a mensagem é um erro da TV, os campos do pedido que ela recusou. Não acaba com a ligação: a TV continua lá.
+    public static func reportedError(_ frame: [UInt8]) -> String? {
+        guard let m = try? ProtoMessage(frame), m.has(3) else { return nil }
+        return m.message(3).message(2).description
     }
 
     public func key(_ key: Key, _ direction: KeyDirection = .short) -> Data {

@@ -113,7 +113,6 @@ class RemoteProtocol(private val model: String, private val appVersion: String) 
                     keyboardRequests = state.keyboardRequests + 1,
                 )
             }
-            m.has(3) -> throw ProtocolException("a TV mandou um erro")
         }
         return emptyList()
     }
@@ -153,6 +152,13 @@ class RemoteProtocol(private val model: String, private val appVersion: String) 
         const val PORT = 6466
         /** PING, KEY, IME, POWER, VOLUME, APP_LINK. */
         const val FEATURES = 1 or 2 or 4 or 32 or 64 or 512
+
+        /** Se a mensagem é um erro da TV, os campos do pedido que ela recusou. Não acaba com a ligação: a TV continua lá. */
+        fun reportedError(frame: ByteArray): String? {
+            val m = runCatching { ProtoMessage.parse(frame) }.getOrNull() ?: return null
+            return if (m.has(3)) m.message(3).message(2).toString() else null
+        }
+
         /** Como as Android TV se anunciam na rede. */
         const val SERVICE = "_androidtvremote2._tcp"
     }

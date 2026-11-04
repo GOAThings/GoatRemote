@@ -143,9 +143,11 @@ final class RemoteLink: @unchecked Sendable {
                 do {
                     try await self.handle(try await connection.receive())
                 } catch {
+                    if !Task.isCancelled { DebugLog.add("Android TV: connection ended: \(error)") }
                     break
                 }
             }
+            connection.close()
             if !Task.isCancelled, let onClose = self?.onClose { await onClose() }
         }
     }
@@ -157,6 +159,7 @@ final class RemoteLink: @unchecked Sendable {
     }
 
     private func handle(_ frame: [UInt8]) async throws {
+        if let refused = RemoteProtocol.reportedError(frame) { DebugLog.add("Android TV: the TV reported an error about \(refused)") }
         lock.lock()
         let before = proto.state
         let replies: [Data]
@@ -164,7 +167,9 @@ final class RemoteLink: @unchecked Sendable {
             replies = try proto.handle(frame)
         } catch {
             lock.unlock()
-            throw error
+            // Uma mensagem que não se percebe não é razão para largar a TV.
+            DebugLog.add("Android TV: unreadable message: \(error)")
+            return
         }
         let after = proto.state
         lock.unlock()

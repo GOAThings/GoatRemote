@@ -54,6 +54,12 @@ class CoreTest {
         assertEquals(1, r.state.keyboardRequests)
         assertEquals("abc", r.state.textValue)
         assertEquals("Search", r.state.textLabel)
+        // A TV recusar um pedido não acaba com a ligação.
+        val refusal = ProtoWriter().message(3) { bool(1, true); message(2) { message(90) { string(1, "x") } } }.toByteArray()
+        assertEquals(emptyList<ByteArray>(), r.handle(refusal))
+        assertEquals(true, r.ready)
+        assertEquals("[90]", RemoteProtocol.reportedError(refusal))
+        assertEquals(null, RemoteProtocol.reportedError(ProtoWriter().message(8) { varint(1, 42) }.toByteArray()))
         val key = ProtoMessage.parse(r.key(Key.CENTER)).message(10)
         assertEquals(23, key.int(1))
         assertEquals(3, key.int(2))

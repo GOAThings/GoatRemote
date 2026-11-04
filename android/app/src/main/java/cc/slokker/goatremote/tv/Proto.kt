@@ -55,6 +55,8 @@ class ProtoMessage(private val fields: Map<Int, List<Any>>) {
 
     fun messages(field: Int): List<ProtoMessage> = fields[field].orEmpty().filterIsInstance<ByteArray>().map(::parse)
 
+    override fun toString() = fields.keys.sorted().toString()
+
     companion object {
         fun parse(data: ByteArray): ProtoMessage {
             val fields = LinkedHashMap<Int, MutableList<Any>>()

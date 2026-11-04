@@ -53,6 +53,8 @@ final class RemoteModel {
     }
 
     @ObservationIgnored private var link: TVControl?
+    @ObservationIgnored private var autoReconnect: Task<Void, Never>?
+    @ObservationIgnored private var lastAutoReconnect = Date.distantPast
     /// Ícones das apps da Apple TV (da App Store, por bundle id).
     private var appleArtwork: [String: URL] = [:]
     @ObservationIgnored private let lightHaptics = UIImpactFeedbackGenerator(style: .light)
@@ -78,6 +80,7 @@ final class RemoteModel {
             return
         }
         if link != nil, status == .connected || status == .connecting { return }
+        autoReconnect?.cancel()
         link?.close()
         DebugLog.add("Connecting to \(tv.name) (\(tv.kind), \(tv.host)\(tv.port.map { ":\($0)" } ?? ""))")
         status = .connecting
@@ -87,6 +90,18 @@ final class RemoteModel {
         link.onClose = { [weak self, weak link] in
             guard let self, let link, self.link === link else { return }
             self.link = nil
+            // Liga outra vez sem incomodar; se voltar a fechar logo a seguir, aí sim mostra-se o aviso.
+            if tv.kind == .android, Date().timeIntervalSince(self.lastAutoReconnect) > 10 {
+                self.lastAutoReconnect = Date()
+                DebugLog.add("Reconnecting to \(tv.name)")
+                self.status = .connecting
+                self.autoReconnect = Task {
+                    try? await Task.sleep(nanoseconds: 1_500_000_000)
+                    guard !Task.isCancelled, self.link == nil, self.current?.id == tv.id else { return }
+                    self.connect()
+                }
+                return
+            }
             self.status = .unreachable(L("The TV closed the connection", "A TV fechou a ligação"))
         }
         self.link = link
@@ -112,6 +127,7 @@ final class RemoteModel {
     }
 
     func disconnect() {
+        autoReconnect?.cancel()
         link?.close()
         link = nil
         if current != nil { status = .connecting }
@@ -403,6 +419,7 @@ final class RemoteModel {
     func open(_ link: String) {
         if haptics { lightHaptics.impactOccurred() }
         guard let remote = self.link, status == .connected else { return reconnectIfNeeded() }
+        DebugLog.add("Open app: \(link)")
         remote.openApp(link)
     }
 
