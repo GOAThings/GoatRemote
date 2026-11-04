@@ -203,7 +203,22 @@ final class RemoteModel {
 
     /// Abre uma app da lista (Android: pelo pacote; Apple TV: pelo bundle id).
     func launch(_ app: TVApp) {
-        open(current?.kind == .apple ? app.package : app.link)
+        guard let tv = current, tv.kind == .android, Self.hasLauncher(tv.id) != false,
+              let url = URL(string: "http://\(tv.host):\(Self.launcherPort)/open/\(app.package)") else {
+            return open(current?.kind == .apple ? app.package : app.link)
+        }
+        // Pelo GoatLauncher: a SHIELD recusa o link do comando e fecha a ligação.
+        if haptics { lightHaptics.impactOccurred() }
+        DebugLog.add("Open app via launcher: \(app.package)")
+        Task {
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.timeoutInterval = 3
+            let status = (try? await URLSession.shared.data(for: request))?.1 as? HTTPURLResponse
+            if status?.statusCode == 200 { return }
+            DebugLog.add("Launcher didn't open it (HTTP \(status?.statusCode ?? 0)), using the remote's link")
+            if current?.id == tv.id { open(app.link) }
+        }
     }
 
     /// Pede a lista de apps ao GoatLauncher da TV (porta 6470). Sem ele, fica vazia e usam-se as apps vistas.

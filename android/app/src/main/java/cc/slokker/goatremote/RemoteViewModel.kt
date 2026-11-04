@@ -267,7 +267,34 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Abre uma app da lista (Android: pelo pacote; Apple TV: pelo bundle id). */
-    fun launch(app: TvApp) = open(if (current?.kind == TvKind.APPLE) app.pkg else app.link)
+    fun launch(app: TvApp) {
+        val tv = current
+        if (tv == null || tv.kind != TvKind.ANDROID || hasLauncher(tv.id) == false) {
+            return open(if (tv?.kind == TvKind.APPLE) app.pkg else app.link)
+        }
+        // Pelo GoatLauncher: a SHIELD recusa o link do comando e fecha a ligação.
+        if (haptics) vibrate(false)
+        DebugLog.add("Open app via launcher: ${app.pkg}")
+        viewModelScope.launch {
+            val status = withContext(Dispatchers.IO) {
+                runCatching {
+                    val c = URL("http://${tv.host}:$LAUNCHER_PORT/open/${app.pkg}").openConnection() as HttpURLConnection
+                    c.requestMethod = "POST"
+                    c.connectTimeout = 3000
+                    c.readTimeout = 3000
+                    try {
+                        c.responseCode
+                    } finally {
+                        c.disconnect()
+                    }
+                }.getOrDefault(0)
+            }
+            if (status != 200) {
+                DebugLog.add("Launcher didn't open it (HTTP $status), using the remote's link")
+                if (current?.id == tv.id) open(app.link)
+            }
+        }
+    }
 
     /** Pede a lista de apps ao GoatLauncher da TV (porta 6470). Sem ele, fica vazia e usam-se as apps vistas. */
     fun refreshApps() {
