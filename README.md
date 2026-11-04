@@ -39,6 +39,9 @@ watches the remote's buttons, which GoatLauncher does when remote buttons are se
 Android itself (the Google TV app triggers it too). With GoatLauncher 0.8.7 or newer on the TV, GoatRemote changes
 the volume through GoatLauncher instead, the same way the physical remote does.
 
+The SHIELD also refuses the remote protocol's request to open an app and drops the connection. With GoatLauncher 0.9.2
+or newer on the TV and its accessibility service on, GoatRemote opens apps through GoatLauncher instead.
+
 ## Install
 
 ### Android
