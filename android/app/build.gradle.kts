@@ -77,6 +77,7 @@ dependencies {
     implementation(libs.bouncycastle)
 
     testImplementation(libs.junit)
+    testImplementation(libs.json)
     testImplementation(libs.kotlinx.coroutines.test)
 
     androidTestImplementation(platform(libs.compose.bom))

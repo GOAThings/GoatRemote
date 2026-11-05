@@ -98,7 +98,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-enum class Sheet { APPS, MORE, TVS, ADD }
+enum class Sheet { APPS, CHANNELS, MORE, TVS, ADD }
 
 /**
  * O comando, ao jeito do da Apple TV: em cima som, a TV e ligar; ao meio uma superfície de toque; em baixo
@@ -136,6 +136,8 @@ fun RemoteScreen(vm: RemoteViewModel) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
             GlassKey(Icons.Rounded.Keyboard, L("Keyboard", "Teclado"), "keyboard", 48.dp, small) { vm.showKeyboard = true }
             GlassKey(Icons.Rounded.Apps, "Apps", "apps", 48.dp, small) { sheet = Sheet.APPS }
+            // Só com o GoatTV na TV a dar os canais.
+            if (vm.hasChannels) GlassKey(Icons.Rounded.LiveTv, L("Channels", "Canais"), "channels", 48.dp, small) { sheet = Sheet.CHANNELS }
             GlassKey(Icons.Rounded.FastRewind, L("Rewind", "Recuar"), "key:rewind", 48.dp, small, onHold = { vm.hold(Key.REWIND, it) }) { vm.press(Key.REWIND) }
             GlassKey(Icons.Rounded.FastForward, L("Forward", "Avançar"), "key:fastForward", 48.dp, small, onHold = { vm.hold(Key.FAST_FORWARD, it) }) {
                 vm.press(Key.FAST_FORWARD)
@@ -154,6 +156,7 @@ fun RemoteScreen(vm: RemoteViewModel) {
     if (vm.showKeyboard) KeyboardSheet(vm) { vm.showKeyboard = false }
     when (sheet) {
         Sheet.APPS -> AppsSheet(vm) { sheet = null }
+        Sheet.CHANNELS -> ChannelsSheet(vm) { sheet = null }
         Sheet.MORE -> MoreSheet(vm) { sheet = null }
         Sheet.TVS -> TvsSheet(vm, onAdd = { sheet = Sheet.ADD }) { sheet = null }
         Sheet.ADD -> AddTvSheet(vm) { sheet = null }

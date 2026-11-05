@@ -15,7 +15,8 @@ import javax.net.ssl.*;
  * O protocolo do comando das Android TV (o da app Google TV, "Android TV Remote v2") dos dois lados, num só ficheiro:
  *
  *   java AtvTool.java server [pasta]          uma TV falsa: emparelhamento em :6467, comando em :6466, as apps
- *                                             como o GoatLauncher em :6470 (/apps, /icon/<pacote>) e, em
+ *                                             como o GoatLauncher em :6470 (/apps, /icon/<pacote>), os canais
+ *                                             como o GoatTV em :6471 (/channels, /logo/<chave>, /play/<chave>) e, em
  *                                             127.0.0.1:7000, /code (o código no "ecrã"), /log e /state (para os testes)
  *   java AtvTool.java pair <ip> [pasta]       emparelha com uma TV a sério; o código lê-se de <pasta>/code.txt
  *   java AtvTool.java key <ip> KEY... [pasta] teclas (DPAD_UP, HOME, 23, …; "long:KEY" mantém premida)
@@ -467,6 +468,7 @@ public class AtvTool {
             remote.setNeedClientAuth(true);
             control();
             launcherApps();
+            goatTvChannels();
             System.out.println("TV falsa: emparelhamento :" + PAIRING_PORT + ", comando :" + REMOTE_PORT + ", controlo 127.0.0.1:" + CONTROL_PORT);
             Thread.ofPlatform().start(() -> accept(pairing, this::pairing));
             accept(remote, this::remote);
@@ -654,6 +656,83 @@ public class AtvTool {
                         note("launcher " + path);
                         OutputStream o = c.getOutputStream();
                         o.write(("HTTP/1.1 200 OK\r\nContent-Type: " + type + "\r\nContent-Length: " + body.length + "\r\nConnection: close\r\n\r\n").getBytes(StandardCharsets.US_ASCII));
+                        o.write(body);
+                    } catch (Exception ignored) {}
+                }
+            });
+        }
+
+        // Os canais, como o GoatTV os dá: chave, número, nome, grupo, logótipo e favorito. A segunda chave precisa de ser
+        // codificada no caminho (espaço e barra).
+        static final String[][] GROUPS = {{"g-news", "News"}, {"g-sport", "Sport"}};
+        static final Object[][] CHANNELS = {
+            {"rtp1", 1, "RTP 1", "g-news", true, true},
+            {"news 24/hd", 2, "News 24", "g-news", true, false},
+            {"sport-tv", 3, "Sport TV", "g-sport", true, true},
+            {"arena", 4, "Arena", "g-sport", false, false},
+        };
+        volatile String channel = "rtp1";
+        /** O primeiro /play responde 409 (o GoatTV "não está à frente"): o telemóvel abre-o pelo launcher e tenta outra vez. */
+        final java.util.concurrent.atomic.AtomicBoolean playedOnce = new java.util.concurrent.atomic.AtomicBoolean();
+
+        static String json(String s) { return "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"") + "\""; }
+
+        /** :6471, como o GoatTV: GET /channels (JSON), GET /logo/<chave> (PNG) e POST /play/<chave>. */
+        void goatTvChannels() throws IOException {
+            Map<String, byte[]> logos = new HashMap<>();
+            for (Object[] ch : CHANNELS) if ((Boolean) ch[4]) logos.put((String) ch[0], drawIcon((String) ch[2], "#0F766E", false));
+            ServerSocket http = new ServerSocket(6471);
+            Thread.ofPlatform().daemon().start(() -> {
+                while (true) {
+                    try (Socket c = http.accept()) {
+                        BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), StandardCharsets.UTF_8));
+                        String line = r.readLine();
+                        String raw = line == null ? "/" : line.split(" ")[1];
+                        boolean post = line != null && line.startsWith("POST ");
+                        int status = 200;
+                        byte[] body;
+                        String type = "text/plain";
+                        String path = raw;
+                        if (raw.equals("/channels") && !post) {
+                            StringBuilder j = new StringBuilder("{\"playlist\":{\"id\":\"p1\",\"name\":\"Fake list\"},\"current\":")
+                                .append(json(channel)).append(",\"groups\":[");
+                            for (int i = 0; i < GROUPS.length; i++) {
+                                if (i > 0) j.append(',');
+                                j.append("{\"id\":").append(json(GROUPS[i][0])).append(",\"name\":").append(json(GROUPS[i][1])).append('}');
+                            }
+                            j.append("],\"channels\":[");
+                            for (int i = 0; i < CHANNELS.length; i++) {
+                                Object[] ch = CHANNELS[i];
+                                if (i > 0) j.append(',');
+                                j.append("{\"key\":").append(json((String) ch[0])).append(",\"num\":").append(ch[1])
+                                    .append(",\"name\":").append(json((String) ch[2])).append(",\"group\":").append(json((String) ch[3]))
+                                    .append(",\"logo\":").append(ch[4]).append(",\"favorite\":").append(ch[5]).append('}');
+                            }
+                            body = j.append("]}").toString().getBytes(StandardCharsets.UTF_8);
+                            type = "application/json; charset=utf-8";
+                        } else if (raw.startsWith("/logo/") && !post) {
+                            // A chave vem codificada; regista-se já descodificada.
+                            String key = URLDecoder.decode(raw.substring(6), StandardCharsets.UTF_8);
+                            path = "/logo/" + key;
+                            body = logos.get(key);
+                            if (body == null) { status = 404; body = new byte[0]; } else type = "image/png";
+                        } else if (raw.startsWith("/play/") && post) {
+                            String key = URLDecoder.decode(raw.substring(6), StandardCharsets.UTF_8);
+                            path = "/play/" + key;
+                            boolean known = Arrays.stream(CHANNELS).anyMatch(ch -> ch[0].equals(key));
+                            if (!known) status = 404;
+                            else if (playedOnce.compareAndSet(false, true)) status = 409;
+                            else channel = key;
+                            body = (status == 200 ? "ok" : "").getBytes(StandardCharsets.UTF_8);
+                        } else {
+                            status = 404;
+                            body = new byte[0];
+                        }
+                        note("goattv " + path + (status == 200 ? "" : " " + status));
+                        OutputStream o = c.getOutputStream();
+                        String reason = switch (status) { case 200 -> "OK"; case 409 -> "Conflict"; default -> "Not Found"; };
+                        o.write(("HTTP/1.1 " + status + " " + reason + "\r\nContent-Type: " + type + "\r\nContent-Length: " + body.length
+                            + "\r\nConnection: close\r\n\r\n").getBytes(StandardCharsets.US_ASCII));
                         o.write(body);
                     } catch (Exception ignored) {}
                 }

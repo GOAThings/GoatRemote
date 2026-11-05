@@ -18,9 +18,12 @@ import cc.slokker.goatremote.apple.AppleTvPairing
 import cc.slokker.goatremote.apple.CompanionConnection
 import cc.slokker.goatremote.apple.CompanionCredentials
 import cc.slokker.goatremote.data.AppCatalog
+import cc.slokker.goatremote.data.ChannelList
 import cc.slokker.goatremote.data.FoundTv
+import cc.slokker.goatremote.data.GoatTvChannels
 import cc.slokker.goatremote.data.SavedTv
 import cc.slokker.goatremote.data.TvApp
+import cc.slokker.goatremote.data.TvChannel
 import cc.slokker.goatremote.data.TvFinder
 import cc.slokker.goatremote.data.TvKind
 import cc.slokker.goatremote.data.TvStore
@@ -100,6 +103,21 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
         private set
     /** As apps instaladas na TV, se ela tiver o GoatLauncher (que as dá na rede de casa); vazio sem ele. */
     var installedApps by mutableStateOf<List<TvApp>>(emptyList())
+        private set
+
+    /** A TV tem o GoatTV com os canais para o telemóvel (já respondeu a /channels): mostra-se o botão Canais. */
+    var hasChannels by mutableStateOf(store.current?.let { prefs.getBoolean("goattv.${it.id}", false) } ?: false)
+        private set
+    /** A lista de canais do GoatTV (null enquanto não veio, ou com o GoatTV fechado). */
+    var channels by mutableStateOf<ChannelList?>(null)
+        private set
+    var channelsStatus by mutableStateOf(ChannelsStatus.UNKNOWN)
+        private set
+    /** A abrir o GoatTV na TV, à espera de que dê os canais. */
+    var openingGoatTv by mutableStateOf(false)
+        private set
+    /** Porque é que o último canal não mudou (null: nada a dizer). */
+    var playProblem by mutableStateOf<String?>(null)
         private set
 
     /** O emparelhamento em curso (o diálogo mostra-o). */
@@ -191,6 +209,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
                 status = Status.Connected
                 update(link.state.value)
                 refreshApps()
+                refreshChannels()
             } catch (e: NotPairedException) {
                 DebugLog.add("Connect: not paired ($e)")
                 if (this@RemoteViewModel.link !== link) return@launch
@@ -284,13 +303,13 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Abre uma app da lista (Android: pelo pacote; Apple TV: pelo bundle id). */
-    fun launch(app: TvApp) {
+    fun launch(app: TvApp, haptic: Boolean = true) {
         val tv = current
         if (tv == null || tv.kind != TvKind.ANDROID || hasLauncher(tv.id) == false) {
-            return open(if (tv?.kind == TvKind.APPLE) app.pkg else app.link)
+            return open(if (tv?.kind == TvKind.APPLE) app.pkg else app.link, haptic)
         }
         // Pelo GoatLauncher: a SHIELD recusa o link do comando e fecha a ligação.
-        if (haptics) vibrate(false)
+        if (haptic && haptics) vibrate(false)
         DebugLog.add("Open app via launcher: ${app.pkg}")
         viewModelScope.launch {
             val status = withContext(Dispatchers.IO) {
@@ -308,7 +327,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
             }
             if (status != 200) {
                 DebugLog.add("Launcher didn't open it (HTTP $status), using the remote's link")
-                if (current?.id == tv.id) open(app.link)
+                if (current?.id == tv.id) open(app.link, haptic = false)
             }
         }
     }
@@ -346,6 +365,179 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
         return if (tv.kind == TvKind.APPLE) appleArtwork[pkg] else "http://${tv.host}:$LAUNCHER_PORT/icon/$pkg"
     }
 
+    // ---- Canais do GoatTV (porta 6471) ----
+
+    enum class ChannelsStatus {
+        UNKNOWN,
+        READY,
+        /** Ligação recusada ou 503: o GoatTV não está aberto (ou ainda não carregou a lista). */
+        CLOSED,
+        FAILED,
+    }
+
+    private var channelsJob: Job? = null
+    private var playJob: Job? = null
+
+    /** Pede a lista ao GoatTV da TV. Ao ligar e ao abrir a folha. */
+    fun refreshChannels() {
+        val tv = current ?: return
+        if (channelsJob?.isActive == true) return
+        channelsJob = viewModelScope.launch { loadChannels(tv) }
+    }
+
+    /** true se veio a lista. */
+    private suspend fun loadChannels(tv: SavedTv): Boolean {
+        var refused = false
+        var status = 0
+        val list = withContext(Dispatchers.IO) {
+            try {
+                val c = URL(GoatTvChannels.url(tv.host, "channels")).openConnection() as HttpURLConnection
+                c.connectTimeout = 4000
+                c.readTimeout = 8000
+                try {
+                    status = c.responseCode
+                    if (status != 200) null
+                    else GoatTvChannels.parse(String(c.inputStream.readLimited(GoatTvChannels.MAX_BYTES), Charsets.UTF_8))
+                } finally {
+                    c.disconnect()
+                }
+            } catch (e: java.net.ConnectException) {
+                refused = true
+                null
+            } catch (e: Exception) {
+                DebugLog.add("Channels: $e")
+                null
+            }
+        }
+        if (current?.id != tv.id) return false
+        when {
+            list != null -> {
+                channels = list
+                channelsStatus = ChannelsStatus.READY
+                if (!hasChannels) DebugLog.add("GoatTV channels on ${tv.name}: ${list.channels.size}")
+                hasChannels = true
+                prefs.edit().putBoolean("goattv.${tv.id}", true).apply()
+            }
+            refused || status == 503 -> {
+                channels = null
+                channelsStatus = ChannelsStatus.CLOSED
+            }
+            // Outra resposta (ou nenhuma): fica a lista que já havia.
+            else -> if (channels == null) channelsStatus = ChannelsStatus.FAILED
+        }
+        return list != null
+    }
+
+    /**
+     * Como abrir o GoatTV nesta TV: na Android TV pelo GoatLauncher (só se se sabe que o tem); na Apple TV pela
+     * própria ligação, se ele estiver na lista de apps dela. null: só se pode pedir para o abrirem na TV.
+     */
+    val goatTvApp: TvApp?
+        get() {
+            val tv = current ?: return null
+            return when (tv.kind) {
+                TvKind.ANDROID -> if (hasLauncher(tv.id) == true) TvApp(GoatTvChannels.ANDROID_PACKAGE, "GoatTV") else null
+                TvKind.APPLE -> GoatTvChannels.appleApp(installedApps.associate { it.pkg to it.label })?.let { TvApp(it, "GoatTV") }
+            }
+        }
+
+    /** "Abrir o GoatTV" na folha dos canais: abre-o e espera (até 10 s) que dê a lista. */
+    fun openGoatTv() {
+        val tv = current ?: return
+        val app = goatTvApp ?: return
+        DebugLog.add("Opening GoatTV for the channels")
+        launch(app)
+        openingGoatTv = true
+        viewModelScope.launch {
+            try {
+                repeat(10) {
+                    delay(1000)
+                    if (current?.id != tv.id || loadChannels(tv)) return@launch
+                }
+            } finally {
+                if (current?.id == tv.id) openingGoatTv = false
+            }
+        }
+    }
+
+    fun goatTvClosedLine() = L("GoatTV has to be open on the TV", "O GoatTV tem de estar aberto na TV")
+
+    fun channelLogoUrl(channel: TvChannel): String? {
+        val tv = current ?: return null
+        return if (channel.logo) GoatTvChannels.url(tv.host, "logo", channel.key) else null
+    }
+
+    /**
+     * Muda de canal no GoatTV. Se ele não estiver à frente (409, 503 ou ligação recusada), abre-se e tenta-se outra vez
+     * a cada segundo, até 10 s. Um toque novo cancela o anterior (para fazer zapping).
+     */
+    fun play(channel: TvChannel) {
+        val tv = current ?: return
+        if (haptics) vibrate(false)
+        playProblem = null
+        DebugLog.add("Play channel ${channel.num ?: "-"} via GoatTV")
+        playJob?.cancel()
+        playJob = viewModelScope.launch {
+            var deadline = 0L
+            while (true) {
+                val (status, refused) = postPlay(tv, channel.key)
+                if (current?.id != tv.id) return@launch
+                when (GoatTvChannels.playOutcome(status, refused)) {
+                    GoatTvChannels.Play.DONE -> {
+                        channels = channels?.copy(current = channel.key)
+                        return@launch
+                    }
+                    GoatTvChannels.Play.NOT_FOUND -> {
+                        playProblem = L("This channel isn't available on the TV", "Este canal não está disponível na TV")
+                        refreshChannels()
+                        return@launch
+                    }
+                    GoatTvChannels.Play.FAILED -> {
+                        DebugLog.add("Play: GoatTV answered HTTP $status")
+                        playProblem = L("GoatTV didn't answer. Try again", "O GoatTV não respondeu. Tenta outra vez")
+                        return@launch
+                    }
+                    GoatTvChannels.Play.RETRY -> {
+                        if (deadline == 0L) {
+                            val app = goatTvApp ?: if (tv.kind == TvKind.ANDROID) TvApp(GoatTvChannels.ANDROID_PACKAGE, "GoatTV") else null
+                            if (app == null) {
+                                playProblem = goatTvClosedLine()
+                                return@launch
+                            }
+                            DebugLog.add("Play: GoatTV isn't in front (${if (refused) "refused" else "HTTP $status"}), opening it")
+                            launch(app, haptic = false)
+                            deadline = System.currentTimeMillis() + 10_000
+                        } else if (System.currentTimeMillis() >= deadline) {
+                            playProblem = L("GoatTV didn't switch channels. Check the TV and try again",
+                                "O GoatTV não mudou de canal. Vê a TV e tenta outra vez")
+                            return@launch
+                        }
+                        delay(1000)
+                    }
+                }
+            }
+        }
+    }
+
+    private suspend fun postPlay(tv: SavedTv, key: String): Pair<Int, Boolean> = withContext(Dispatchers.IO) {
+        try {
+            val c = URL(GoatTvChannels.url(tv.host, "play", key)).openConnection() as HttpURLConnection
+            c.requestMethod = "POST"
+            c.connectTimeout = 3000
+            c.readTimeout = 4000
+            try {
+                c.responseCode to false
+            } finally {
+                c.disconnect()
+            }
+        } catch (e: java.net.ConnectException) {
+            0 to true
+        } catch (e: Exception) {
+            DebugLog.add("Play failed: $e")
+            0 to false
+        }
+    }
+
     // ---- TVs ----
 
     fun select(tv: SavedTv) {
@@ -362,12 +554,18 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
         state = TvState()
         recentApps = loadRecents(tv?.id)
         installedApps = emptyList()
+        playJob?.cancel()
+        hasChannels = tv?.let { prefs.getBoolean("goattv.${it.id}", false) } ?: false
+        channels = null
+        channelsStatus = ChannelsStatus.UNKNOWN
+        openingGoatTv = false
+        playProblem = null
     }
 
     fun forget(tv: SavedTv) {
         if (tv.kind == TvKind.APPLE) CompanionCredentials.delete(context, tv.id)
         store.remove(tv.id)
-        prefs.edit().remove("recents.${tv.id}").remove("launcher.${tv.id}").remove("volumeUnknown.${tv.id}").apply()
+        prefs.edit().remove("recents.${tv.id}").remove("launcher.${tv.id}").remove("volumeUnknown.${tv.id}").remove("goattv.${tv.id}").apply()
         tvs = store.all
         if (current?.id == tv.id) {
             link?.close()
@@ -536,8 +734,8 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
         if (status == Status.Connected) link.text(text)
     }
 
-    fun open(target: String) {
-        if (haptics) vibrate(false)
+    fun open(target: String, haptic: Boolean = true) {
+        if (haptic && haptics) vibrate(false)
         val link = link
         if (link == null || status != Status.Connected) return reconnectIfNeeded()
         DebugLog.add("Open app: $target")

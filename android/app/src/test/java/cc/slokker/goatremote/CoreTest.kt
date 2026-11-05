@@ -7,6 +7,7 @@ import cc.slokker.goatremote.apple.Plist
 import cc.slokker.goatremote.apple.Rti
 import cc.slokker.goatremote.apple.SrpClient
 import cc.slokker.goatremote.apple.Tlv8
+import cc.slokker.goatremote.data.GoatTvChannels
 import cc.slokker.goatremote.data.imageSampleSize
 import cc.slokker.goatremote.tv.Key
 import cc.slokker.goatremote.tv.LauncherVolume
@@ -413,5 +414,87 @@ class CoreTest {
         assertNull(Opack.Double(-1.0).percent)
         assertNull(Opack.Double(1e300).percent)
         assertNull(Opack.Int(1).percent)
+    }
+
+    @Test
+    fun goatTvChannels() {
+        val list = GoatTvChannels.parse("""
+            {"playlist": {"id": "p", "name": "My list"}, "current": "k2",
+             "groups": [{"id": "g1", "name": "News"}, {"id": "g2", "name": "Sport"}, {"id": "g1", "name": "Again"}, {"name": "No id"}, 7],
+             "channels": [
+               {"key": "k1", "num": 1, "name": "One", "group": "g1", "logo": true, "favorite": true},
+               {"key": "k2", "num": 2.0, "name": "Two", "group": "g2", "logo": false},
+               {"key": "k1", "num": 3, "name": "Repeated"},
+               {"key": "", "name": "Empty key"},
+               {"key": "k4", "name": 4},
+               {"name": "No key"},
+               {"key": "k5", "num": -1, "name": "${"x".repeat(300)}", "group": 5, "logo": "yes", "favorite": 1},
+               {"key": "k6", "num": 1.5, "name": "Six"},
+               "nope"
+             ]}
+        """.trimIndent())
+        assertEquals("My list", list.playlist)
+        assertEquals("k2", list.current)
+        assertEquals(listOf("g1" to "News", "g2" to "Sport"), list.groups.map { it.id to it.name })
+        assertEquals(listOf("k1", "k2", "k5", "k6"), list.channels.map { it.key })
+        val one = list.channels[0]
+        assertEquals(1, one.num)
+        assertEquals("One", one.name)
+        assertEquals("g1", one.group)
+        assertTrue(one.logo && one.favorite)
+        assertEquals(2, list.channels[1].num)
+        assertEquals(false, list.channels[1].favorite)
+        val five = list.channels[2]
+        assertNull(five.num)
+        assertEquals(GoatTvChannels.MAX_NAME, five.name.length)
+        assertNull(five.group)
+        assertEquals(false, five.logo)
+        assertEquals(false, five.favorite)
+        assertNull(list.channels[3].num)
+        assertEquals(false, list.truncated)
+
+        // Um "current" que não está na lista (canal escondido ou bloqueado) não se mostra.
+        val bare = GoatTvChannels.parse("""{"current": "hidden", "channels": [{"key": "a", "name": "A"}], "truncated": true}""")
+        assertNull(bare.current)
+        assertNull(bare.playlist)
+        assertTrue(bare.groups.isEmpty())
+        assertTrue(bare.truncated)
+        assertTrue(GoatTvChannels.parse("{}").channels.isEmpty())
+        assertThrows(Exception::class.java) { GoatTvChannels.parse("[]") }
+        assertThrows(Exception::class.java) { GoatTvChannels.parse("not json") }
+
+        // Chaves grandes demais ficam de fora; a lista corta-se no limite de canais.
+        val longKey = GoatTvChannels.parse("""{"channels": [{"key": "${"k".repeat(GoatTvChannels.MAX_KEY + 1)}", "name": "Long"}]}""")
+        assertTrue(longKey.channels.isEmpty())
+        val many = (0..GoatTvChannels.MAX_CHANNELS).joinToString(",", "{\"channels\": [", "]}") { "{\"key\": \"c$it\", \"name\": \"C\"}" }
+        val cut = GoatTvChannels.parse(many)
+        assertEquals(GoatTvChannels.MAX_CHANNELS, cut.channels.size)
+        assertTrue(cut.truncated)
+    }
+
+    @Test
+    fun goatTvKeys() {
+        assertEquals("k1", GoatTvChannels.encodeKey("k1"))
+        assertEquals("AZaz09-_~", GoatTvChannels.encodeKey("AZaz09-_~"))
+        assertEquals("news%2024%2Fhd", GoatTvChannels.encodeKey("news 24/hd"))
+        assertEquals("%2E%2E", GoatTvChannels.encodeKey(".."))
+        assertEquals("a%3Fb%23c%25d%2Be%26f", GoatTvChannels.encodeKey("a?b#c%d+e&f"))
+        assertEquals("%C3%A7%C3%A3o", GoatTvChannels.encodeKey("ção"))
+        assertEquals("%F0%9F%93%BA", GoatTvChannels.encodeKey("\uD83D\uDCFA"))
+        assertEquals("http://192.168.1.5:6471/play/a%2Fb", GoatTvChannels.url("192.168.1.5", "play", "a/b"))
+        assertEquals("http://tv.local:6471/channels", GoatTvChannels.url("tv.local", "channels"))
+
+        assertEquals(GoatTvChannels.Play.DONE, GoatTvChannels.playOutcome(200, false))
+        assertEquals(GoatTvChannels.Play.NOT_FOUND, GoatTvChannels.playOutcome(404, false))
+        assertEquals(GoatTvChannels.Play.RETRY, GoatTvChannels.playOutcome(409, false))
+        assertEquals(GoatTvChannels.Play.RETRY, GoatTvChannels.playOutcome(503, false))
+        assertEquals(GoatTvChannels.Play.RETRY, GoatTvChannels.playOutcome(0, true))
+        assertEquals(GoatTvChannels.Play.FAILED, GoatTvChannels.playOutcome(0, false))
+        assertEquals(GoatTvChannels.Play.FAILED, GoatTvChannels.playOutcome(500, false))
+
+        // Na Apple TV: pelo bundle id, senão pelo nome (IPA assinada com outro id).
+        assertEquals("cc.slokker.goattv", GoatTvChannels.appleApp(mapOf("x.goattv" to "GoatTV", "cc.slokker.goattv" to "GoatTV")))
+        assertEquals("x.goattv", GoatTvChannels.appleApp(mapOf("com.netflix" to "Netflix", "x.goattv" to "GoatTV")))
+        assertNull(GoatTvChannels.appleApp(mapOf("com.netflix" to "Netflix")))
     }
 }

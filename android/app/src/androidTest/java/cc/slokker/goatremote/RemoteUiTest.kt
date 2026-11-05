@@ -33,7 +33,7 @@ import org.junit.runner.RunWith
 /**
  * Emparelha com a TV falsa (tools/AtvTool.java, a correr no computador: 10.0.2.2 visto do emulador) pelo IP e usa o
  * comando, com um screenshot a cada passo. No fim confere no registo da TV falsa (porta 7000) que as teclas, o texto
- * e a app chegaram. O mesmo percurso do teste do iPhone.
+ * e a app chegaram, e que o canal mudou. O mesmo percurso do teste do iPhone.
  */
 @OptIn(ExperimentalTestApi::class)
 @RunWith(AndroidJUnit4::class)
@@ -125,6 +125,24 @@ class RemoteUiTest {
         pause(1.5)
         shot("after-app")
 
+        // Os canais vêm do "GoatTV" da TV falsa (porta 6471). O primeiro /play dá 409: abre-se o GoatTV pelo launcher e
+        // tenta-se outra vez. A chave do canal ("news 24/hd") vai codificada no caminho.
+        rule.waitUntilExactlyOneExists(hasTestTag("channels"), 10_000)
+        rule.onNodeWithTag("channels").performClick()
+        rule.waitUntilAtLeastOneExists(hasTestTag("channel:RTP 1"), 8_000)
+        rule.waitUntil(8_000) { rule.onAllNodesWithTag("logo", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
+        pause(0.5)
+        shot("channels")
+        rule.onNodeWithTag("channels-list").performScrollToNode(hasTestTag("group:News"))
+        rule.onNodeWithTag("group:News").performClick()
+        rule.onNodeWithTag("channels-list").performScrollToNode(hasTestTag("channel:News 24"))
+        rule.onAllNodesWithTag("channel:News 24")[0].performClick()
+        // Espera pela segunda tentativa (a seguir a abrir o GoatTV); a folha fica aberta, com o canal novo como atual.
+        rule.waitUntil(15_000) { fetch("log")?.lines()?.contains("goattv /play/news 24/hd") == true }
+        rule.onNodeWithTag("channels-list").assertExists()
+        pause(0.5)
+        shot("channel-played")
+
         // O que a TV falsa recebeu.
         val log = fetch("log") ?: ""
         File(shotsDir, "fake-tv-log.txt").writeText(log)
@@ -136,6 +154,14 @@ class RemoteUiTest {
         )
         val missing = expected.filterNot { log.contains(it) }
         assertTrue("Falta no registo da TV: $missing", missing.isEmpty())
+        // Linhas inteiras: o primeiro /play deu 409, o launcher abriu o GoatTV e o segundo mudou de canal.
+        val lines = log.lines()
+        val channelsMissing = listOf("goattv /channels", "goattv /logo/rtp1", "goattv /play/news 24/hd 409",
+            "launcher /open/cc.slokker.itv", "goattv /play/news 24/hd").filterNot { it in lines }
+        assertTrue("Falta no registo da TV: $channelsMissing", channelsMissing.isEmpty())
+        assertTrue("O GoatTV não se abriu antes de tentar outra vez",
+            lines.indexOf("goattv /play/news 24/hd 409") < lines.indexOf("launcher /open/cc.slokker.itv") &&
+                lines.indexOf("launcher /open/cc.slokker.itv") < lines.lastIndexOf("goattv /play/news 24/hd"))
     }
 
     // ---- Ajudas ----

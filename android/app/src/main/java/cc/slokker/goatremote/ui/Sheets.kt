@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -58,6 +59,7 @@ import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.ListAlt
 import androidx.compose.material.icons.rounded.LiveTv
 import androidx.compose.material.icons.rounded.Menu
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.SkipNext
@@ -87,6 +89,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -112,6 +115,8 @@ import cc.slokker.goatremote.L
 import cc.slokker.goatremote.RemoteViewModel
 import cc.slokker.goatremote.data.AppCatalog
 import cc.slokker.goatremote.data.FoundTv
+import cc.slokker.goatremote.data.GoatTvChannels
+import cc.slokker.goatremote.data.TvChannel
 import cc.slokker.goatremote.data.SavedTv
 import cc.slokker.goatremote.data.TvApp
 import cc.slokker.goatremote.data.TvKind
@@ -276,6 +281,163 @@ private fun AppTile(vm: RemoteViewModel, app: TvApp, remoteImage: Boolean, onDis
                     modifier = Modifier.padding(horizontal = 8.dp))
             }
         }
+    }
+}
+
+/**
+ * Os canais do GoatTV: o que está a dar, os favoritos, a pesquisa e os grupos, e a lista. Tocar muda de canal e a folha
+ * fica aberta, para fazer zapping.
+ */
+@Composable
+fun ChannelsSheet(vm: RemoteViewModel, onDismiss: () -> Unit) {
+    LaunchedEffect(Unit) { vm.refreshChannels() }
+    var query by remember { mutableStateOf("") }
+    var group by remember { mutableStateOf<String?>(null) }
+    val list = vm.channels
+    val shown by remember(list) {
+        derivedStateOf {
+            val q = query.trim()
+            list?.channels.orEmpty().filter { ch ->
+                (group == null || ch.group == group) &&
+                    (q.isEmpty() || ch.name.contains(q, ignoreCase = true) || ch.num?.toString()?.startsWith(q) == true)
+            }
+        }
+    }
+    GoatSheet(onDismiss, skipPartial = true) {
+        SheetTitle(L("Channels", "Canais"))
+        LazyColumn(
+            modifier = Modifier.testTag("channels-list"),
+            contentPadding = PaddingValues(start = 18.dp, end = 18.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            vm.playProblem?.let { problem ->
+                item(key = "problem") {
+                    Text(problem, color = Theme.orange, fontSize = 13.sp, modifier = Modifier.padding(bottom = 6.dp).testTag("channels-problem"))
+                }
+            }
+            if (list == null) {
+                item(key = "state") { ChannelsState(vm) }
+                return@LazyColumn
+            }
+            val current = list.channels.firstOrNull { it.key == list.current }
+            if (current != null) {
+                item(key = "s:now") { Section(L("Now playing", "A dar agora")) }
+                item(key = "c:" + current.key) { ChannelRow(vm, current, true) }
+            }
+            val favorites = list.channels.filter { it.favorite }
+            if (favorites.isNotEmpty()) {
+                item(key = "s:fav") { Section(L("Favourites", "Favoritos")) }
+                items(favorites, key = { "f:" + it.key }) { ChannelRow(vm, it, it.key == list.current) }
+            }
+            item(key = "search") {
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it.take(100) },
+                    placeholder = { Text(L("Search channels", "Procurar canais")) },
+                    leadingIcon = { Icon(Icons.Rounded.Search, null, tint = Theme.dim) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(autoCorrectEnabled = false, imeAction = ImeAction.Search),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Theme.accent, unfocusedBorderColor = Theme.faint),
+                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp).testTag("channels-search"),
+                )
+            }
+            if (list.groups.isNotEmpty()) {
+                item(key = "groups") {
+                    LazyRow(Modifier.padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        item { GroupChip(L("All", "Todos"), group == null, "group:*") { group = null } }
+                        items(list.groups, key = { it.id }) { g -> GroupChip(g.name, group == g.id, "group:" + g.name) { group = g.id } }
+                    }
+                }
+            }
+            if (shown.isEmpty()) {
+                item(key = "empty") {
+                    Text(
+                        if (list.channels.isEmpty()) L("There are no channels in GoatTV's list", "A lista do GoatTV não tem canais")
+                        else L("No channels found", "Nenhum canal encontrado"),
+                        color = Theme.dim, fontSize = 14.sp, modifier = Modifier.padding(vertical = 12.dp),
+                    )
+                }
+            }
+            items(shown, key = { "l:" + it.key }) { ChannelRow(vm, it, it.key == list.current) }
+            if (list.truncated) {
+                item(key = "truncated") {
+                    Text(L("The list is too long: only part of it is shown here.", "A lista é longa demais: aqui só aparece uma parte."),
+                        color = Theme.dim, fontSize = 12.sp, modifier = Modifier.padding(vertical = 8.dp))
+                }
+            }
+        }
+    }
+}
+
+/** Sem lista: a carregar, o GoatTV fechado (com "Abrir o GoatTV" se der para o abrir daqui) ou uma falha. */
+@Composable
+private fun ChannelsState(vm: RemoteViewModel) {
+    Column(Modifier.fillMaxWidth().glass(RoundedCornerShape(18.dp)).padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        when {
+            vm.openingGoatTv || vm.channelsStatus == RemoteViewModel.ChannelsStatus.UNKNOWN ->
+                CircularProgressIndicator(color = Theme.dim, strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
+            vm.channelsStatus == RemoteViewModel.ChannelsStatus.CLOSED -> {
+                val app = vm.goatTvApp
+                if (app != null) {
+                    Text(L("GoatTV isn't open on the TV.", "O GoatTV não está aberto na TV."), color = Theme.dim, fontSize = 14.sp)
+                    Spacer(Modifier.height(10.dp))
+                    Button(onClick = vm::openGoatTv, colors = ButtonDefaults.buttonColors(containerColor = Theme.accent),
+                        modifier = Modifier.testTag("open-goattv")) {
+                        Text(L("Open GoatTV", "Abrir o GoatTV"))
+                    }
+                } else {
+                    Text(vm.goatTvClosedLine(), color = Theme.dim, fontSize = 14.sp, modifier = Modifier.testTag("goattv-closed"))
+                }
+            }
+            else -> {
+                Text(L("Couldn't get the channels from GoatTV.", "Não deu para ter os canais do GoatTV."), color = Theme.dim, fontSize = 14.sp)
+                TextButton(onClick = vm::refreshChannels) { Text(L("Try again", "Tentar outra vez")) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun GroupChip(title: String, selected: Boolean, tag: String, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(50)
+    Box(
+        Modifier.clip(shape)
+            .background(if (selected) Theme.accent else Theme.surfaceHigh)
+            .border(1.dp, Theme.rim, shape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 8.dp)
+            .testTag(tag),
+    ) {
+        Text(title, color = if (selected) Color.Black else Color.White, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+@Composable
+private fun ChannelRow(vm: RemoteViewModel, channel: TvChannel, current: Boolean) {
+    val shape = RoundedCornerShape(12.dp)
+    val logo = rememberImage(vm.channelLogoUrl(channel), GoatTvChannels.MAX_LOGO_BYTES, GoatTvChannels.LOGO_SIDE)
+    Row(
+        Modifier.fillMaxWidth().clip(shape)
+            .background(if (current) Theme.accent.copy(alpha = 0.18f) else Color.Transparent)
+            .clickable { vm.play(channel) }
+            .padding(horizontal = 8.dp, vertical = 6.dp)
+            .semantics { contentDescription = channel.name }
+            .testTag("channel:" + channel.name),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(channel.num?.toString() ?: "", color = Theme.dim, fontSize = 14.sp, maxLines = 1, modifier = Modifier.width(44.dp))
+        Box(Modifier.size(40.dp).clip(RoundedCornerShape(8.dp)).background(Theme.surfaceHigh), contentAlignment = Alignment.Center) {
+            if (logo != null) {
+                Image(logo, null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize().testTag("logo"))
+            } else {
+                Icon(Icons.Rounded.LiveTv, null, tint = Theme.dim, modifier = Modifier.size(20.dp))
+            }
+        }
+        Spacer(Modifier.width(12.dp))
+        Text(channel.name, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+            color = if (current) Theme.accent else Color.White)
+        if (current) Icon(Icons.Rounded.PlayArrow, null, tint = Theme.accent, modifier = Modifier.size(20.dp))
     }
 }
 
