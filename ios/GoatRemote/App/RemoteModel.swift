@@ -540,7 +540,7 @@ final class PairingModel: Identifiable {
             )
             connection.close()
             phase = .done
-            onPaired(SavedTV(id: tvID, name: name, host: host, certificate: Certificate.fingerprint(der)))
+            onPaired(SavedTV(id: tvID, name: name, host: host))
         } catch is CancellationError {
             opened?.close()
         } catch {

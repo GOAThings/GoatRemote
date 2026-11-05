@@ -3,7 +3,7 @@ import Network
 import RemoteCore
 
 /// Uma ligação TLS a uma porta da TV (6467 emparelhar, 6466 comando), às mensagens inteiras. A TV tem um certificado
-/// auto-assinado: o TLS aceita qualquer um, o emparelhamento prova o da TV, e o comando compara-o a cada ligação.
+/// auto-assinado: o TLS aceita qualquer um, e o comando compara o da porta 6466 com o da primeira ligação.
 final class TVConnection: @unchecked Sendable {
     enum Failure: Error {
         /// Não chegou à TV (desligada da rede, IP errado).

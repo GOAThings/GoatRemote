@@ -50,7 +50,7 @@ class UnreachableException(message: String) : Exception(message)
 
 /**
  * Uma ligação TLS a uma porta da TV (6467 emparelhar, 6466 comando), às mensagens inteiras. A TV tem um certificado
- * auto-assinado: o TLS aceita qualquer um, o emparelhamento prova o da TV, e o comando compara-o a cada ligação.
+ * auto-assinado: o TLS aceita qualquer um, e o comando compara o da porta 6466 com o da primeira ligação.
  */
 class TvSocket private constructor(private val socket: SSLSocket) {
     private val input = socket.inputStream.buffered()
@@ -129,7 +129,7 @@ class AndroidTvLink(
     private val identity: () -> Identity,
     appVersion: String,
     model: String,
-    /** O SHA-256 do certificado guardado desta TV; null se foi emparelhada antes de se guardar. */
+    /** O SHA-256 do certificado guardado desta TV; null se ainda não houve ligação desde que foi emparelhada. */
     private val pinned: String? = null,
 ) : TvControl {
     /** O SHA-256 do certificado visto nesta ligação. */
@@ -150,7 +150,7 @@ class AndroidTvLink(
         // Tem de ser a TV emparelhada, antes de ler ou mandar o que quer que seja.
         val seen = socket.serverCertificate?.sha256()
         if (!certificateMatches(pinned, seen)) {
-            DebugLog.add("Android TV: not the certificate seen when pairing")
+            DebugLog.add("Android TV: not the certificate saved for this TV")
             socket.close()
             throw NotPairedException()
         }

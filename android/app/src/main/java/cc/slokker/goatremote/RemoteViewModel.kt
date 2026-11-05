@@ -38,7 +38,6 @@ import cc.slokker.goatremote.tv.TvSocket
 import cc.slokker.goatremote.tv.TvState
 import cc.slokker.goatremote.tv.UnreachableException
 import cc.slokker.goatremote.tv.readLimited
-import cc.slokker.goatremote.tv.sha256
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
@@ -598,8 +597,7 @@ class PairingModel(private val vm: RemoteViewModel, val name: String, private va
             val socket = TvSocket.open(host, Pairing.PORT, identity)
             DebugLog.add("Pairing: TLS open")
             this.socket = socket
-            val certificate = socket.serverCertificate
-            val server = certificate?.let(RsaKey::of)
+            val server = socket.serverCertificate?.let(RsaKey::of)
                 ?: throw UnreachableException(L("The TV's certificate is unreadable", "O certificado da TV não se lê"))
             val client = RsaKey.of(identity.certificate)!!
             Pairing.run(
@@ -612,7 +610,7 @@ class PairingModel(private val vm: RemoteViewModel, val name: String, private va
             )
             socket.close()
             phase = Phase.Done
-            vm.paired(SavedTv(tvId, name, host, certSha256 = certificate.sha256()))
+            vm.paired(SavedTv(tvId, name, host))
             delay(700)
             if (vm.pairing === this) vm.pairing = null
         } catch (e: kotlinx.coroutines.CancellationException) {

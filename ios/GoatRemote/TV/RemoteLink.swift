@@ -17,7 +17,7 @@ struct SavedTV: Codable, Identifiable, Hashable, Sendable {
     var kind: TVKind = .android
     /// A porta do comando, se não for a de sempre (a Apple TV escolhe uma).
     var port: UInt16?
-    /// O SHA-256 do certificado da TV (Android TV), visto ao emparelhar; nil se foi emparelhada antes de se guardar.
+    /// O SHA-256 do certificado do comando da TV (Android TV), guardado na primeira ligação depois de emparelhar.
     var certificate: String?
 
     init(id: String, name: String, host: String, kind: TVKind = .android, port: UInt16? = nil, certificate: String? = nil) {
@@ -75,7 +75,7 @@ enum TVStore {
         all.first { $0.id == id }?.certificate
     }
 
-    /// Uma TV emparelhada antes de se guardar o certificado: fica o que se viu na primeira ligação bem sucedida.
+    /// Ainda sem certificado (acabada de emparelhar, ou de antes de se guardar): fica o da primeira ligação bem sucedida.
     static func pinCertificate(_ id: String, _ certificate: String) {
         var tvs = all
         guard let i = tvs.firstIndex(where: { $0.id == id }), tvs[i].certificate == nil else { return }
@@ -137,7 +137,7 @@ final class RemoteLink: @unchecked Sendable {
         let seen = connection.serverCertificate.map(Certificate.fingerprint)
         let pinned = TVStore.certificate(of: tv.id)
         guard Certificate.matches(pinned: pinned, seen: seen) else {
-            DebugLog.add("Android TV: not the certificate seen when pairing")
+            DebugLog.add("Android TV: not the certificate saved for this TV")
             connection.close()
             throw Failure.notPaired
         }
