@@ -100,7 +100,7 @@ public struct RemoteProtocol: Sendable {
             state.muted = v.bool(8)
         } else if m.has(20) {
             let app = m.message(20).message(1).string(12)
-            if !app.isEmpty { state.currentApp = app }
+            if Self.isPackageName(app) { state.currentApp = app }
         } else if m.has(21) {
             let edit = m.message(21)
             imeCounter = edit.int(1)
@@ -113,6 +113,21 @@ public struct RemoteProtocol: Sendable {
             state.keyboardRequests += 1
         }
         return []
+    }
+
+    /// O que a TV diz ser a app aberta só conta se for um nome de pacote, de tamanho razoável (fica guardado).
+    public static func isPackageName(_ value: String) -> Bool {
+        guard !value.utf8.isEmpty, value.utf8.count <= 255 else { return false }
+        var previous = UInt8(ascii: ".")
+        for c in value.utf8 {
+            switch c {
+            case 0x30...0x39, 0x41...0x5A, 0x5F, 0x61...0x7A: break
+            case 0x2E where previous != 0x2E: break
+            default: return false
+            }
+            previous = c
+        }
+        return previous != 0x2E
     }
 
     /// Um volume da TV é um número pequeno; o que vier fora disso fica no limite.

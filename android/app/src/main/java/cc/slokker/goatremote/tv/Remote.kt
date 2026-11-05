@@ -127,7 +127,7 @@ class RemoteProtocol(private val model: String, private val appVersion: String) 
             }
             m.has(20) -> {
                 val app = m.message(20).message(1).string(12)
-                if (app.isNotEmpty()) state = state.copy(currentApp = app)
+                if (isPackageName(app)) state = state.copy(currentApp = app)
             }
             m.has(21) -> {
                 val edit = m.message(21)
@@ -181,6 +181,12 @@ class RemoteProtocol(private val model: String, private val appVersion: String) 
         const val PORT = 6466
         /** PING, KEY, IME, POWER, VOLUME, APP_LINK. */
         const val FEATURES = 1 or 2 or 4 or 32 or 64 or 512
+
+        private const val MAX_PACKAGE_NAME = 255
+        private val PACKAGE_NAME = Regex("[A-Za-z0-9_]+(\\.[A-Za-z0-9_]+)*")
+
+        /** O que a TV diz ser a app aberta só conta se for um nome de pacote, de tamanho razoável (fica guardado). */
+        fun isPackageName(value: String) = value.length <= MAX_PACKAGE_NAME && PACKAGE_NAME.matches(value)
 
         /** Um volume da TV é um número pequeno; o que vier fora disso fica no limite. */
         private fun volume(value: Long): Int = value.coerceIn(0L, 100_000L).toInt()

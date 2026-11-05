@@ -340,6 +340,23 @@ class CoreTest {
     }
 
     @Test
+    fun currentApp() {
+        val r = RemoteProtocol("Pixel", "1.0")
+        fun report(app: String) = r.handle(ProtoWriter().message(20) { message(1) { string(12, app) } }.toByteArray())
+        report("com.netflix.ninja")
+        assertEquals("com.netflix.ninja", r.state.currentApp)
+        // O que não é um nome de pacote, ou é grande demais, não muda nada.
+        for (bad in listOf("", "a".repeat(256), "a".repeat(1 shl 20), "../x", "a b", ".a", "a.", "a..b", "é.x", "a\nb", "a/b")) {
+            report(bad)
+            assertEquals("com.netflix.ninja", r.state.currentApp)
+        }
+        for (good in listOf("android", "a".repeat(255), "org.xbmc.kodi", "com.A_b.c9", "com.1password.tv")) {
+            report(good)
+            assertEquals(good, r.state.currentApp)
+        }
+    }
+
+    @Test
     fun launcherLimits() {
         val body = ByteArray(10_000) { it.toByte() }
         assertArrayEquals(body, body.inputStream().readLimited(10_000))

@@ -31,6 +31,7 @@ import cc.slokker.goatremote.tv.KeyDirection
 import cc.slokker.goatremote.tv.LauncherVolume
 import cc.slokker.goatremote.tv.NotPairedException
 import cc.slokker.goatremote.tv.Pairing
+import cc.slokker.goatremote.tv.RemoteProtocol
 import cc.slokker.goatremote.tv.RsaKey
 import cc.slokker.goatremote.tv.TvControl
 import cc.slokker.goatremote.tv.TvSocket
@@ -241,9 +242,14 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun loadRecents(id: String?): List<String> {
         id ?: return emptyList()
-        val array = runCatching { JSONArray(context.getSharedPreferences("options", Context.MODE_PRIVATE).getString("recents.$id", "[]")) }
-            .getOrNull() ?: return emptyList()
-        return (0 until array.length()).map { array.getString(it) }
+        val saved = runCatching {
+            val array = JSONArray(prefs.getString("recents.$id", "[]"))
+            (0 until array.length()).map { array.getString(it) }
+        }.getOrNull() ?: return emptyList()
+        // O que não for um nome de pacote não volta a ler-se.
+        val recents = saved.filter { RemoteProtocol.isPackageName(it) }.distinct().take(12)
+        if (recents != saved) prefs.edit().putString("recents.$id", JSONArray(recents).toString()).apply()
+        return recents
     }
 
     /** A ligação certa para o tipo de TV. */
@@ -362,6 +368,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
     fun forget(tv: SavedTv) {
         if (tv.kind == TvKind.APPLE) CompanionCredentials.delete(context, tv.id)
         store.remove(tv.id)
+        prefs.edit().remove("recents.${tv.id}").remove("launcher.${tv.id}").remove("volumeUnknown.${tv.id}").apply()
         tvs = store.all
         if (current?.id == tv.id) {
             link?.close()

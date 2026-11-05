@@ -40,6 +40,7 @@ enum CoreTests {
         ("airPlay", airPlay),
         ("certificatePin", certificatePin),
         ("launcherVolume", launcherVolume),
+        ("currentApp", currentApp),
     ]
 
     static func proto() throws {
@@ -374,6 +375,24 @@ enum CoreTests {
         try expect(RTI.state(bplist(root)) == nil, true)
         // Um inteiro negativo (8 bytes com sinal) continua a ser um valor válido.
         try expect(try BPlist.decode(bplist([[0x13] + eight])), .int(-1))
+    }
+
+    static func currentApp() throws {
+        var r = RemoteProtocol(model: "iPhone", appVersion: "1.0")
+        func report(_ app: String) throws {
+            _ = try r.handle(Proto().message(20, Proto().message(1, Proto().string(12, app))).bytes)
+        }
+        try report("com.netflix.ninja")
+        try expect(r.state.currentApp, "com.netflix.ninja")
+        // O que não é um nome de pacote, ou é grande demais, não muda nada.
+        for bad in ["", String(repeating: "a", count: 256), String(repeating: "a", count: 1 << 20), "../x", "a b", ".a", "a.", "a..b", "é.x", "a\nb", "a/b"] {
+            try report(bad)
+            try expect(r.state.currentApp, "com.netflix.ninja")
+        }
+        for good in ["android", String(repeating: "a", count: 255), "org.xbmc.kodi", "com.A_b.c9", "com.1password.tv"] {
+            try report(good)
+            try expect(r.state.currentApp, good)
+        }
     }
 
     static func launcherVolume() throws {

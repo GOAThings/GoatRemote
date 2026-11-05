@@ -171,7 +171,12 @@ final class RemoteModel {
 
     private static func loadRecents(_ id: String?) -> [String] {
         guard let id else { return [] }
-        return UserDefaults.standard.stringArray(forKey: "recents.\(id)") ?? []
+        let saved = UserDefaults.standard.stringArray(forKey: "recents.\(id)") ?? []
+        // O que não for um nome de pacote não volta a ler-se.
+        var seen = Set<String>()
+        let recents = Array(saved.filter { RemoteProtocol.isPackageName($0) && seen.insert($0).inserted }.prefix(12))
+        if recents != saved { UserDefaults.standard.set(recents, forKey: "recents.\(id)") }
+        return recents
     }
 
     static func describe(_ error: Error) -> String {
@@ -276,6 +281,7 @@ final class RemoteModel {
     func forget(_ tv: SavedTV) {
         if tv.kind == .apple { CompanionCredentials.delete(tv.id) }
         TVStore.remove(tv.id)
+        for key in ["recents", "launcher", "volumeUnknown"] { UserDefaults.standard.removeObject(forKey: "\(key).\(tv.id)") }
         tvs = TVStore.all
         if current?.id == tv.id {
             link?.close()
