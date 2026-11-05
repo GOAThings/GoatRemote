@@ -81,8 +81,7 @@ public struct ProtoMessage: Sendable, CustomStringConvertible {
             case 0:
                 fields[field, default: []].append(.number(try varint()))
             case 2:
-                let len = Int(try varint())
-                guard len >= 0, pos + len <= data.count else { throw ProtocolError.malformed("campo cortado") }
+                guard let len = Int(exactly: try varint()), len <= data.count - pos else { throw ProtocolError.malformed("campo cortado") }
                 fields[field, default: []].append(.bytes(Array(data[pos..<pos + len])))
                 pos += len
             case 1: pos += 8

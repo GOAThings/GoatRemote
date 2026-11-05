@@ -98,22 +98,39 @@ public enum BPlist {
 
     // MARK: Ler
 
+    /// O trabalho que um bplist pode pedir: 64 por objeto mais os bytes copiados (uma referência lê-se outra vez, por
+    /// isso poucos bytes podem descrever muitos objetos). Os do teclado da Apple TV ficam muito abaixo disto.
+    static let maxWork = 8 << 20
+
     public static func decode(_ bytes: [UInt8]) throws -> Plist {
         guard bytes.count >= 40, bytes.starts(with: Array("bplist00".utf8)) else { throw ProtocolError.malformed("bplist") }
         let t = Array(bytes.suffix(32))
         let offsetSize = Int(t[6]), refSize = Int(t[7])
+        guard (1...8).contains(offsetSize), (1...8).contains(refSize) else { throw ProtocolError.malformed("bplist: tabela") }
         func be(_ b: ArraySlice<UInt8>) -> Int { b.reduce(0) { $0 << 8 | Int($1) } }
-        let count = be(t[8..<16]), top = be(t[16..<24]), table = be(t[24..<32])
-        guard offsetSize > 0, refSize > 0, table + count * offsetSize <= bytes.count - 32 else { throw ProtocolError.malformed("bplist: tabela") }
+        /// Uma posição ou um tamanho: tem de caber nos dados.
+        func size(_ b: ArraySlice<UInt8>) throws -> Int {
+            let v = be(b)
+            guard b.count <= 8, v >= 0, v <= bytes.count else { throw ProtocolError.malformed("bplist: tamanho") }
+            return v
+        }
+        let count = try size(t[8..<16]), top = try size(t[16..<24]), table = try size(t[24..<32])
+        guard table + count * offsetSize <= bytes.count - 32 else { throw ProtocolError.malformed("bplist: tabela") }
         func offset(_ i: Int) throws -> Int {
-            guard i < count else { throw ProtocolError.malformed("bplist: objeto \(i)") }
-            return be(bytes[(table + i * offsetSize)..<(table + (i + 1) * offsetSize)])
+            guard i >= 0, i < count else { throw ProtocolError.malformed("bplist: objeto \(i)") }
+            return try size(bytes[(table + i * offsetSize)..<(table + (i + 1) * offsetSize)])
         }
         var depth = 0
+        var work = maxWork
+        func spend(_ n: Int) throws {
+            work -= n
+            guard work >= 0 else { throw ProtocolError.malformed("bplist: grande demais") }
+        }
         func object(_ i: Int) throws -> Plist {
             depth += 1
             defer { depth -= 1 }
             guard depth < 64 else { throw ProtocolError.malformed("bplist: fundo demais") }
+            try spend(64)
             var p = try offset(i)
             guard p < bytes.count else { throw ProtocolError.malformed("bplist: fora") }
             let marker = bytes[p]
@@ -121,13 +138,16 @@ public enum BPlist {
             func length() throws -> Int {
                 let low = Int(marker & 0x0F)
                 guard low == 0x0F else { return low }
-                let intMarker = bytes[p]
-                let size = 1 << Int(intMarker & 0x0F)
-                defer { p += 1 + size }
-                return be(bytes[(p + 1)..<(p + 1 + size)])
+                guard p < bytes.count else { throw ProtocolError.malformed("bplist: cortado") }
+                let width = 1 << Int(bytes[p] & 0x0F)
+                guard width <= 8, width < bytes.count - p else { throw ProtocolError.malformed("bplist: cortado") }
+                let n = try size(bytes[(p + 1)..<(p + 1 + width)])
+                p += 1 + width
+                return n
             }
             func take(_ n: Int) throws -> ArraySlice<UInt8> {
-                guard p + n <= bytes.count else { throw ProtocolError.malformed("bplist: cortado") }
+                guard n >= 0, n <= bytes.count - p else { throw ProtocolError.malformed("bplist: cortado") }
+                try spend(n)
                 defer { p += n }
                 return bytes[p..<p + n]
             }
@@ -169,7 +189,7 @@ public enum RTI {
     public static func state(_ tiD: [UInt8]) -> (session: [UInt8], text: String)? {
         guard let root = try? BPlist.decode(tiD), case .array(let objects)? = root["$objects"], let top = root["$top"] else { return nil }
         func resolve(_ v: Plist?) -> Plist? {
-            if case .uid(let i)? = v { return i < objects.count ? objects[i] : nil }
+            if case .uid(let i)? = v { return objects.indices.contains(i) ? objects[i] : nil }
             return v
         }
         var session: [UInt8]?

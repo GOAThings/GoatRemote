@@ -79,8 +79,7 @@ object AppleTvPairing {
                 DebugLog.add("Apple pairing: got ${AppleTvLink.keys(message)} TLV ${tlv.keys.sorted().map { "$it:${tlv[it]!!.size}" }}")
                 tlv[7]?.firstOrNull()?.let { error ->
                     if (error.toInt() == 2) throw WrongPin()
-                    // RetryDelay (tipo 8): segundos, little-endian.
-                    val delay = tlv[8]?.foldRight(0) { b, acc -> acc shl 8 or (b.toInt() and 0xFF) }
+                    val delay = tlv[8]?.let(Tlv8::retryDelay)
                     DebugLog.add("Apple pairing: refused, code ${error.toInt() and 0xFF}, retry after ${delay ?: "-"}")
                     throw Refused(error.toInt() and 0xFF, delay)
                 }
@@ -293,8 +292,8 @@ class AppleTvLink(
                 val volume = ((content["_mcF"]?.int ?: 0L) and 0x100L) != 0L
                 _state.update { it.copy(volumeControl = volume) }
                 if (volume) scope.launch {
-                    val v = runCatching { request("_mcc", mapOf("_mcc" to Opack.Int(5)))["_vol"] }.getOrNull()
-                    if (v is Opack.Double) _state.update { it.copy(volume = Math.round(v.value * 100).toInt(), maxVolume = 100, muted = false) }
+                    val v = runCatching { request("_mcc", mapOf("_mcc" to Opack.Int(5)))["_vol"]?.percent }.getOrNull()
+                    if (v != null) _state.update { it.copy(volume = v, maxVolume = 100, muted = false) }
                 }
             }
         }

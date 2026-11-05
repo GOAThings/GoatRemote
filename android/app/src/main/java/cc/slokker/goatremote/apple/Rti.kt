@@ -105,6 +105,12 @@ object BPlist {
     private fun header(marker: Int, count: Int): ByteArray =
         if (count < 15) byteArrayOf((marker or count).toByte()) else byteArrayOf((marker or 0x0F).toByte()) + int(count.toLong())
 
+    /**
+     * O trabalho que um bplist pode pedir: 64 por objeto mais os bytes copiados (uma referência lê-se outra vez, por
+     * isso poucos bytes podem descrever muitos objetos). Os do teclado da Apple TV ficam muito abaixo disto.
+     */
+    private const val MAX_WORK = 8 shl 20
+
     fun decode(bytes: ByteArray): Plist {
         if (bytes.size < 40 || !bytes.copyOf(8).contentEquals("bplist00".toByteArray())) throw ProtocolException("bplist")
         fun be(from: Int, to: Int): Long {
@@ -112,21 +118,34 @@ object BPlist {
             for (i in from until to) v = (v shl 8) or (bytes[i].toLong() and 0xFF)
             return v
         }
+        /** Uma posição ou um tamanho: tem de caber nos dados. */
+        fun size(from: Int, to: Int): Int {
+            val v = be(from, to)
+            if (to - from > 8 || v < 0 || v > bytes.size) throw ProtocolException("bplist: tamanho")
+            return v.toInt()
+        }
         val t = bytes.size - 32
         val offsetSize = bytes[t + 6].toInt()
         val refSize = bytes[t + 7].toInt()
-        val count = be(t + 8, t + 16).toInt()
-        val top = be(t + 16, t + 24).toInt()
-        val table = be(t + 24, t + 32).toInt()
-        if (offsetSize <= 0 || refSize <= 0 || table + count * offsetSize > t) throw ProtocolException("bplist: tabela")
+        if (offsetSize !in 1..8 || refSize !in 1..8) throw ProtocolException("bplist: tabela")
+        val count = size(t + 8, t + 16)
+        val top = size(t + 16, t + 24)
+        val table = size(t + 24, t + 32)
+        if (table.toLong() + count.toLong() * offsetSize > t) throw ProtocolException("bplist: tabela")
         fun offset(i: Int): Int {
             if (i !in 0 until count) throw ProtocolException("bplist: objeto $i")
-            return be(table + i * offsetSize, table + (i + 1) * offsetSize).toInt()
+            return size(table + i * offsetSize, table + (i + 1) * offsetSize)
         }
         var depth = 0
+        var work = MAX_WORK
+        fun spend(n: Int) {
+            work -= n
+            if (work < 0) throw ProtocolException("bplist: grande demais")
+        }
         fun obj(i: Int): Plist {
             if (++depth > 64) throw ProtocolException("bplist: fundo demais")
             try {
+                spend(64)
                 var p = offset(i)
                 if (p >= bytes.size) throw ProtocolException("bplist: fora")
                 val marker = bytes[p].toInt() and 0xFF
@@ -134,13 +153,16 @@ object BPlist {
                 fun length(): Int {
                     val low = marker and 0x0F
                     if (low != 0x0F) return low
-                    val size = 1 shl (bytes[p].toInt() and 0x0F)
-                    val v = be(p + 1, p + 1 + size).toInt()
-                    p += 1 + size
+                    if (p >= bytes.size) throw ProtocolException("bplist: cortado")
+                    val width = 1 shl (bytes[p].toInt() and 0x0F)
+                    if (width > 8 || width >= bytes.size - p) throw ProtocolException("bplist: cortado")
+                    val v = size(p + 1, p + 1 + width)
+                    p += 1 + width
                     return v
                 }
                 fun take(n: Int): ByteArray {
-                    if (n < 0 || p + n > bytes.size) throw ProtocolException("bplist: cortado")
+                    if (n < 0 || n > bytes.size - p) throw ProtocolException("bplist: cortado")
+                    spend(n)
                     return bytes.copyOfRange(p, p + n).also { p += n }
                 }
                 fun refsOf(r: ByteArray, j: Int): Int {

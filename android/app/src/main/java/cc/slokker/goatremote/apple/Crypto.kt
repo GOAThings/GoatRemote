@@ -123,8 +123,9 @@ class SrpClient(privateKey: ByteArray) {
         val sessionKey: ByteArray,
     )
 
-    /** Com o sal e o B da TV (M2) e o PIN; null se B não servir (B mod N = 0). */
+    /** Com o sal e o B da TV (M2) e o PIN; null se B não servir (mais comprido que N, ou B mod N = 0). */
     fun process(salt: ByteArray, serverPublicKey: ByteArray, pin: String): Result? {
+        if (serverPublicKey.size > 384) return null
         val b = BigInteger(1, serverPublicKey)
         if (b.mod(N).signum() == 0) return null
         val bigA = BigInteger(1, publicKey)

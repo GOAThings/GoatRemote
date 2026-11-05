@@ -94,7 +94,7 @@ class RemoteProtocol(private val model: String, private val appVersion: String) 
             m.has(40) -> state = state.copy(isOn = m.message(40).bool(1))
             m.has(50) -> {
                 val v = m.message(50)
-                state = state.copy(maxVolume = v.int(6), volume = v.int(7), muted = v.bool(8))
+                state = state.copy(maxVolume = volume(v.long(6)), volume = volume(v.long(7)), muted = v.bool(8))
             }
             m.has(20) -> {
                 val app = m.message(20).message(1).string(12)
@@ -152,6 +152,9 @@ class RemoteProtocol(private val model: String, private val appVersion: String) 
         const val PORT = 6466
         /** PING, KEY, IME, POWER, VOLUME, APP_LINK. */
         const val FEATURES = 1 or 2 or 4 or 32 or 64 or 512
+
+        /** Um volume da TV é um número pequeno; o que vier fora disso fica no limite. */
+        private fun volume(value: Long): Int = value.coerceIn(0L, 100_000L).toInt()
 
         /** Se a mensagem é um erro da TV, os campos do pedido que ela recusou. Não acaba com a ligação: a TV continua lá. */
         fun reportedError(frame: ByteArray): String? {

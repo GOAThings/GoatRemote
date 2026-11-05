@@ -9,6 +9,15 @@ func expect<T: Equatable>(_ got: T, _ want: T, _ line: Int = #line) throws {
     if got != want { throw Failed(description: "linha \(line): \(got) != \(want)") }
 }
 
+func expectMalformed(_ line: Int = #line, _ body: () throws -> Void) throws {
+    do {
+        try body()
+    } catch is ProtocolError {
+        return
+    }
+    throw Failed(description: "linha \(line): devia ter dado erro")
+}
+
 /// Corre com XCTest no Mac (RemoteCoreTests) e com um runner simples em Linux (sem XCTest).
 enum CoreTests {
     static let all: [(String, () throws -> Void)] = [
@@ -24,6 +33,10 @@ enum CoreTests {
         ("opack", opack),
         ("tlv8", tlv8),
         ("rti", rti),
+        ("protoBounds", protoBounds),
+        ("opackBounds", opackBounds),
+        ("bplistBounds", bplistBounds),
+        ("tvNumbers", tvNumbers),
     ]
 
     static func proto() throws {
@@ -258,5 +271,122 @@ enum CoreTests {
         try expect(pyObjects[2]["insertionText"], .uid(3))
         try expect(pyObjects[3], .string("hello"))
         try expect(pyObjects[5]["NS.uuidbytes"], .data(session))
+    }
+
+    /// Tamanhos impossíveis num campo: erro, nunca um crash.
+    static func protoBounds() throws {
+        func parse(_ bytes: [UInt8]) throws { _ = try ProtoMessage(bytes) }
+        let ones = [UInt8](repeating: 0xFF, count: 8)
+        try expectMalformed { try parse([0x0A] + ones + [0xFF, 0x01]) } // 2^64 - 1
+        try expectMalformed { try parse([0x0A] + ones + [0x7F]) } // Int.max
+        try expectMalformed { try parse([0x08, 0x01, 0x12] + ones + [0x7F]) } // Int.max, já com pos > 0
+        try expectMalformed { try parse([0x0A, 0x05, 0x01]) }
+        try expect(RemoteProtocol.reportedError([0x0A] + ones + [0xFF, 0x01]), nil)
+    }
+
+    static func opackBounds() throws {
+        // O tamanho de 8 bytes: 2^64 - 1, 2^63 e Int.max, e um Int.max que não começa no início.
+        try expectMalformed { _ = try OPACK(decoding: [0x94] + [UInt8](repeating: 0xFF, count: 8)) }
+        try expectMalformed { _ = try OPACK(decoding: [0x94, 0, 0, 0, 0, 0, 0, 0, 0x80]) }
+        try expectMalformed { _ = try OPACK(decoding: [0x94] + [UInt8](repeating: 0xFF, count: 7) + [0x7F]) }
+        try expectMalformed { _ = try OPACK(decoding: [0xD2, 0x08, 0x94] + [UInt8](repeating: 0xFF, count: 7) + [0x7F]) }
+        // Fundura: o limite passa, um a mais não, e uma trama inteira de aberturas também não.
+        func nested(_ n: Int) -> [UInt8] { [UInt8](repeating: 0xD1, count: n) + [0x08] }
+        try expect(try OPACK(decoding: nested(OPACK.maxDepth)).array?.count, 1)
+        try expectMalformed { _ = try OPACK(decoding: nested(OPACK.maxDepth + 1)) }
+        try expectMalformed { _ = try OPACK(decoding: nested(1 << 20)) }
+        try expectMalformed { _ = try OPACK(decoding: [UInt8](repeating: 0xE1, count: 1 << 20)) }
+        // Uma chave que é um contentor (referências a um texto longo), e chaves simples, que continuam a servir.
+        let long = [UInt8](repeating: 0x61, count: 200)
+        try expectMalformed { _ = try OPACK(decoding: [0xD2, 0x61, 200] + long + [0xE1, 0xD2, 0xA0, 0xA0, 0x08]) }
+        try expectMalformed { _ = try OPACK(decoding: [0xE1, 0xE1, 0x41, 0x61, 0x08, 0x08]) }
+        try expect(try OPACK(decoding: [0xE1, 0x09, 0x41, 0x61])["1"]?.string, "a")
+        // Trabalho: valores a mais numa trama, e muitos valores diferentes lêem-se depressa e referem-se bem.
+        try expectMalformed { _ = try OPACK(decoding: [0xDF] + [UInt8](repeating: 0x08, count: OPACK.maxValues) + [0x03]) }
+        var distinct: [UInt8] = [0xDF]
+        for i in 0..<20_000 { distinct += [0x32, UInt8(i & 0xFF), UInt8(i >> 8 & 0xFF), 1, 0] }
+        distinct += [0xC2, 0x01, 0x00, 0x03]
+        let read = try OPACK(decoding: distinct).array
+        try expect(read?.count, 20_001)
+        try expect(read?.last, .int(1 << 16 | 1))
+        // O SRP e o RetryDelay.
+        let client = SRPClient(privateKey: [UInt8](repeating: 0x20, count: 32))
+        try expect(client.process(salt: [1], serverPublicKey: [UInt8](repeating: 0xFF, count: 1020), pin: "1234") == nil, true)
+        try expect(client.process(salt: [1], serverPublicKey: [UInt8](repeating: 0xFF, count: 385), pin: "1234") == nil, true)
+        try expect(TLV8.retryDelay([0x2C, 0x01]), 300)
+        try expect(TLV8.retryDelay([]), 0)
+        try expect(TLV8.retryDelay([UInt8](repeating: 0xFF, count: 8)), nil)
+        try expect(TLV8.retryDelay([0xFF, 0xFF, 0xFF, 0xFF]), nil)
+    }
+
+    /// Um bplist à mão, para pôr nos campos o que o [BPlist.encode] nunca escreve.
+    static func bplist(_ objects: [[UInt8]], count: UInt64? = nil, top: UInt64 = 0, offsetSize: UInt8 = 2, refSize: UInt8 = 1) -> [UInt8] {
+        var out = Array("bplist00".utf8)
+        var offsets: [Int] = []
+        for o in objects {
+            offsets.append(out.count)
+            out += o
+        }
+        let table = out.count
+        for o in offsets { out += BPlist.bigEndian(UInt64(o), Int(offsetSize)) }
+        out += [0, 0, 0, 0, 0, 0, offsetSize, refSize]
+        return out + BPlist.bigEndian(count ?? UInt64(objects.count), 8) + BPlist.bigEndian(top, 8) + BPlist.bigEndian(UInt64(table), 8)
+    }
+
+    static func bplistBounds() throws {
+        // Referências partilhadas: cada nível aponta duas vezes para o seguinte.
+        func doubling(_ levels: Int) -> [UInt8] {
+            var objects: [[UInt8]] = (0..<levels).map { [0xA2, UInt8($0 + 1), UInt8($0 + 1)] }
+            objects.append([0x09])
+            return bplist(objects)
+        }
+        _ = try BPlist.decode(doubling(8))
+        try expectMalformed { _ = try BPlist.decode(doubling(40)) }
+        // Um texto grande referido muitas vezes também conta.
+        let text = [UInt8](repeating: 0x61, count: 200_000)
+        let refs: [UInt8] = [0xAF, 0x12, 0x00, 0x00, 0x75, 0x30] + [UInt8](repeating: 1, count: 30_000)
+        let shared: [UInt8] = [0x5F, 0x12, 0x00, 0x03, 0x0D, 0x40] + text
+        try expectMalformed { _ = try BPlist.decode(bplist([refs, shared])) }
+        // O rodapé: quantos objetos e onde.
+        try expectMalformed { _ = try BPlist.decode(bplist([[0x09]], count: UInt64(Int.max))) }
+        try expectMalformed { _ = try BPlist.decode(bplist([[0x09]], count: UInt64.max)) }
+        try expectMalformed { _ = try BPlist.decode(bplist([[0x09]], top: UInt64.max)) }
+        try expectMalformed { _ = try BPlist.decode(bplist([[0x09]], top: 1)) }
+        try expectMalformed { _ = try BPlist.decode(bplist([[0x09]], offsetSize: 9)) }
+        // Tamanhos alargados: negativos, enormes, ou que acabam fora dos dados.
+        let eight = [UInt8](repeating: 0xFF, count: 8), seven = [UInt8](repeating: 0xFF, count: 7)
+        try expectMalformed { _ = try BPlist.decode(bplist([[0x4F, 0x13] + eight])) }
+        try expectMalformed { _ = try BPlist.decode(bplist([[0x6F, 0x13, 0x7F] + seven])) }
+        try expectMalformed { _ = try BPlist.decode(bplist([[0xAF, 0x13, 0x7F] + seven])) }
+        try expectMalformed { _ = try BPlist.decode(bplist([[0x4F, 0x1F]])) }
+        // Uma referência negativa (8 bytes) e um UID negativo no RTI.
+        try expectMalformed { _ = try BPlist.decode(bplist([[0xA1] + eight], refSize: 8)) }
+        var root: [[UInt8]] = [[0xD2, 1, 2, 3, 4]]
+        root.append([0x54] + Array("$top".utf8))
+        root.append([0x58] + Array("$objects".utf8))
+        root.append([0xD1, 5, 6])
+        root.append([0xA0])
+        root.append([0x5B] + Array("sessionUUID".utf8))
+        root.append([0x87] + eight)
+        try expect(RTI.state(bplist(root)) == nil, true)
+        // Um inteiro negativo (8 bytes com sinal) continua a ser um valor válido.
+        try expect(try BPlist.decode(bplist([[0x13] + eight])), .int(-1))
+    }
+
+    static func tvNumbers() throws {
+        var r = RemoteProtocol(model: "iPhone", appVersion: "1.0")
+        _ = try r.handle(Proto().message(50, Proto().varint(6, 1).varint(7, 1 << 62).bool(8, false)).bytes)
+        try expect(r.state.maxVolume, 1)
+        try expect(r.state.volume, 100_000)
+        _ = try r.handle(Proto().message(50, Proto().varint(6, -1).varint(7, -5).bool(8, false)).bytes)
+        try expect(r.state.maxVolume, 0)
+        try expect(r.state.volume, 0)
+        try expect(OPACK.double(0.35).percent, 35)
+        try expect(OPACK.double(1).percent, 100)
+        try expect(OPACK.double(.nan).percent, nil)
+        try expect(OPACK.double(.infinity).percent, nil)
+        try expect(OPACK.double(-1).percent, nil)
+        try expect(OPACK.double(1e300).percent, nil)
+        try expect(OPACK.int(1).percent, nil)
     }
 }

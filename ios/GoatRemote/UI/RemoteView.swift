@@ -271,7 +271,7 @@ struct VolumeHUD: View {
     @ViewBuilder
     private var level: some View {
         let max = Double(model.state.maxVolume ?? 100)
-        let level = max > 0 ? Double(model.state.volume ?? 0) / max : 0
+        let level = max > 0 ? Swift.min(Swift.max(Double(model.state.volume ?? 0) / max, 0), 1) : 0
         let muted = model.state.muted == true
         HStack(spacing: 10) {
             Image(systemName: muted ? "speaker.slash.fill" : "speaker.wave.2.fill").font(.footnote)

@@ -37,10 +37,20 @@ sealed class Opack {
             else -> null
         }
 
+    /** Um volume de 0 a 1, em percentagem; null se não for um valor desses (NaN, infinito, fora do intervalo). */
+    val percent: kotlin.Int?
+        get() = (this as? Double)?.value?.takeIf { it in 0.0..1.0 }?.let { Math.round(it * 100).toInt() }
+
     val encoded: ByteArray
         get() = ByteArrayOutputStream().also { write(this, it) }.toByteArray()
 
     companion object {
+        /** O maior tamanho de uma trama (as mensagens do Companion são pequenas). */
+        const val MAX_FRAME = 1 shl 20
+        /** Os limites do que uma trama pode pedir a quem a lê. */
+        private const val MAX_DEPTH = 64
+        private const val MAX_VALUES = 100_000
+
         fun dict(vararg pairs: Pair<String, Opack>) = Dict(mapOf(*pairs))
         fun of(v: Long) = Int(v)
         fun of(v: kotlin.Int) = Int(v.toLong())
@@ -97,22 +107,38 @@ sealed class Opack {
     private class Reader(val bytes: ByteArray) {
         var pos = 0
         val table = mutableListOf<Opack>()
+        val seen = HashSet<Opack>()
+        var depth = 0
+        var values = 0
 
         fun take(n: kotlin.Int): ByteArray {
-            if (n < 0 || pos + n > bytes.size) throw ProtocolException("OPACK cortado")
+            if (n < 0 || n > bytes.size - pos) throw ProtocolException("OPACK cortado")
             return bytes.copyOfRange(pos, pos + n).also { pos += n }
         }
 
         fun le(n: kotlin.Int): Long = take(n).withIndex().fold(0L) { acc, (i, b) -> acc or ((b.toLong() and 0xFF) shl (8 * i)) }
 
+        /** Um tamanho de 1 a 8 bytes: o que não couber nos dados é erro. */
+        fun length(n: kotlin.Int): kotlin.Int {
+            val v = le(n)
+            if (v < 0 || v > bytes.size - pos) throw ProtocolException("OPACK cortado")
+            return v.toInt()
+        }
+
         fun remember(v: Opack): Opack {
-            if (v !in table) table.add(v)
+            if (seen.add(v)) table.add(v)
             return v
+        }
+
+        /** Entra num contentor: a fundura tem limite, como no bplist. */
+        fun enter() {
+            if (++depth > MAX_DEPTH) throw ProtocolException("OPACK: fundo demais")
         }
 
         fun ref(i: kotlin.Int): Opack = table.getOrNull(i) ?: throw ProtocolException("OPACK: referência $i fora da tabela")
 
         fun read(): Opack {
+            if (++values > MAX_VALUES) throw ProtocolException("OPACK: valores a mais")
             val t = take(1)[0].toInt() and 0xFF
             return when (t) {
                 0x01 -> Bool(true)
@@ -125,12 +151,13 @@ sealed class Opack {
                 0x35 -> remember(Double(java.lang.Float.intBitsToFloat(le(4).toInt()).toDouble()))
                 0x36 -> remember(Double(java.lang.Double.longBitsToDouble(le(8))))
                 in 0x40..0x60 -> remember(Str(String(take(t - 0x40), Charsets.UTF_8)))
-                in 0x61..0x64 -> remember(Str(String(take(le(t - 0x60).toInt()), Charsets.UTF_8)))
+                in 0x61..0x64 -> remember(Str(String(take(length(t - 0x60)), Charsets.UTF_8)))
                 in 0x70..0x90 -> remember(Data(take(t - 0x70)))
-                in 0x91..0x94 -> remember(Data(take(le(intArrayOf(1, 2, 4, 8)[t - 0x91]).toInt())))
+                in 0x91..0x94 -> remember(Data(take(length(intArrayOf(1, 2, 4, 8)[t - 0x91]))))
                 in 0xA0..0xC0 -> ref(t - 0xA0)
                 in 0xC1..0xC4 -> ref(le(t - 0xC0).toInt())
                 in 0xD0..0xDF -> {
+                    enter()
                     val a = mutableListOf<Opack>()
                     if (t == 0xDF) {
                         while (pos < bytes.size && bytes[pos].toInt() != 0x03) a.add(read())
@@ -138,12 +165,16 @@ sealed class Opack {
                     } else {
                         repeat(t and 0xF) { a.add(read()) }
                     }
+                    depth--
                     Arr(a)
                 }
                 in 0xE0..0xEF -> {
+                    enter()
                     val d = LinkedHashMap<String, Opack>()
                     fun pair() {
                         val key = read()
+                        // Uma chave nunca é um contentor: só as simples têm um texto de tamanho conhecido.
+                        if (key is Arr || key is Dict) throw ProtocolException("OPACK: chave inválida")
                         d[key.string ?: key.toString()] = read()
                     }
                     if (t == 0xEF) {
@@ -152,6 +183,7 @@ sealed class Opack {
                     } else {
                         repeat(t and 0xF) { pair() }
                     }
+                    depth--
                     Dict(d)
                 }
                 else -> throw ProtocolException("OPACK 0x%02x".format(t))
@@ -175,6 +207,13 @@ object Tlv8 {
             } while (offset < value.size)
         }
         return out.toByteArray()
+    }
+
+    /** O RetryDelay (tipo 8): segundos, little-endian; null se for longo demais ou mais do que um dia. */
+    fun retryDelay(bytes: ByteArray): kotlin.Int? {
+        if (bytes.size > 4) return null
+        val delay = bytes.foldRight(0L) { b, acc -> acc shl 8 or (b.toLong() and 0xFF) }
+        return if (delay <= 86_400) delay.toInt() else null
     }
 
     /** Os pedaços com o mesmo tipo juntam-se. */

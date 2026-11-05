@@ -36,8 +36,9 @@ public struct SRPClient: Sendable {
         public let sessionKey: [UInt8]
     }
 
-    /// Com o sal e o B da TV (M2) e o PIN; nil se B não servir (B mod N = 0).
+    /// Com o sal e o B da TV (M2) e o PIN; nil se B não servir (mais comprido que N, ou B mod N = 0).
     public func process(salt: [UInt8], serverPublicKey: [UInt8], pin: String) -> Result? {
+        guard serverPublicKey.count <= 384 else { return nil }
         let n = Self.prime, g = Self.generator, mont = Self.mont
         let B = BigUInt(bytes: serverPublicKey)
         guard !(BigUInt(limbs: mont.reduce(B)).isZero) else { return nil }

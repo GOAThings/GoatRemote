@@ -1,5 +1,6 @@
 package cc.slokker.goatremote.apple
 
+import cc.slokker.goatremote.tv.ProtocolException
 import cc.slokker.goatremote.tv.UnreachableException
 import java.io.DataInputStream
 import java.io.EOFException
@@ -87,6 +88,7 @@ class CompanionConnection(private val host: String, private val port: Int) {
             throw IOException("closed")
         }
         val n = (header[1].toInt() and 0xFF shl 16) or (header[2].toInt() and 0xFF shl 8) or (header[3].toInt() and 0xFF)
+        if (n > Opack.MAX_FRAME) throw ProtocolException("trama demasiado grande")
         var body = ByteArray(n).also(input::readFully)
         val key = inKey
         if (key != null && body.isNotEmpty()) {

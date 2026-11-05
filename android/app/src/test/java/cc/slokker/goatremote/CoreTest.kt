@@ -11,6 +11,7 @@ import cc.slokker.goatremote.tv.Key
 import cc.slokker.goatremote.tv.Pairing
 import cc.slokker.goatremote.tv.ProtoMessage
 import cc.slokker.goatremote.tv.ProtoWriter
+import cc.slokker.goatremote.tv.ProtocolException
 import cc.slokker.goatremote.tv.RemoteProtocol
 import cc.slokker.goatremote.tv.RsaKey
 import cc.slokker.goatremote.tv.unsignedBytes
@@ -19,6 +20,7 @@ import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -226,5 +228,128 @@ class CoreTest {
         assertEquals(Plist.Uid(3), py[2]["insertionText"])
         assertEquals(Plist.Str("hello"), py[3])
         assertEquals(Plist.Data(session), py[5]["NS.uuidbytes"])
+    }
+
+    private fun malformed(body: () -> Unit) {
+        assertThrows(ProtocolException::class.java) { body() }
+    }
+
+    private fun bytes(vararg values: Int) = ByteArray(values.size) { values[it].toByte() }
+
+    private fun repeated(value: Int, count: Int) = ByteArray(count) { value.toByte() }
+
+    /** Tamanhos impossíveis num campo: erro, nunca um crash. */
+    @Test
+    fun protoBounds() {
+        malformed { ProtoMessage.parse(bytes(0x0A) + repeated(0xFF, 9) + bytes(0x01)) } // 2^64 - 1
+        malformed { ProtoMessage.parse(bytes(0x0A) + repeated(0xFF, 8) + bytes(0x7F)) } // Long.MAX_VALUE
+        malformed { ProtoMessage.parse(bytes(0x08, 0x01, 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0x07)) } // Int.MAX_VALUE, já com pos > 0
+        malformed { ProtoMessage.parse(bytes(0x0A, 0x85, 0x80, 0x80, 0x80, 0x10, 0x01)) } // 2^32 + 5 não é 5
+        malformed { ProtoMessage.parse(bytes(0x0A, 0x05, 0x01)) }
+        assertNull(RemoteProtocol.reportedError(bytes(0x0A) + repeated(0xFF, 9) + bytes(0x01)))
+    }
+
+    @Test
+    fun opackBounds() {
+        // O tamanho de 8 bytes: 2^64 - 1, 2^63, Long.MAX_VALUE, 2^32 + 1 (não é 1), e um que não começa no início.
+        malformed { Opack.decode(bytes(0x94) + repeated(0xFF, 8)) }
+        malformed { Opack.decode(bytes(0x94, 0, 0, 0, 0, 0, 0, 0, 0x80)) }
+        malformed { Opack.decode(bytes(0x94) + repeated(0xFF, 7) + bytes(0x7F)) }
+        malformed { Opack.decode(bytes(0x94, 1, 0, 0, 0, 1, 0, 0, 0, 0x41)) }
+        malformed { Opack.decode(bytes(0xD2, 0x08, 0x94) + repeated(0xFF, 7) + bytes(0x7F)) }
+        // Fundura: o limite passa, um a mais não, e uma trama inteira de aberturas também não.
+        fun nested(n: Int) = repeated(0xD1, n) + bytes(0x08)
+        assertEquals(1, Opack.decode(nested(64)).array?.size)
+        malformed { Opack.decode(nested(65)) }
+        malformed { Opack.decode(nested(1 shl 20)) }
+        malformed { Opack.decode(repeated(0xE1, 1 shl 20)) }
+        // Uma chave que é um contentor (referências a um texto longo), e chaves simples, que continuam a servir.
+        malformed { Opack.decode(bytes(0xD2, 0x61, 200) + repeated(0x61, 200) + bytes(0xE1, 0xD2, 0xA0, 0xA0, 0x08)) }
+        malformed { Opack.decode(bytes(0xE1, 0xE1, 0x41, 0x61, 0x08, 0x08)) }
+        assertEquals(1, Opack.decode(bytes(0xE1, 0x09, 0x41, 0x61)).dict?.size)
+        // Trabalho: valores a mais numa trama, e muitos valores diferentes lêem-se depressa e referem-se bem.
+        malformed { Opack.decode(bytes(0xDF) + repeated(0x08, 100_000) + bytes(0x03)) }
+        val distinct = java.io.ByteArrayOutputStream()
+        distinct.write(0xDF)
+        for (i in 0 until 20_000) distinct.write(bytes(0x32, i and 0xFF, i shr 8 and 0xFF, 1, 0))
+        distinct.write(bytes(0xC2, 0x01, 0x00, 0x03))
+        val read = Opack.decode(distinct.toByteArray()).array!!
+        assertEquals(20_001, read.size)
+        assertEquals(Opack.Int((1L shl 16) or 1), read.last())
+        // O SRP e o RetryDelay.
+        val client = SrpClient(repeated(0x20, 32))
+        assertNull(client.process(bytes(1), repeated(0xFF, 1020), "1234"))
+        assertNull(client.process(bytes(1), repeated(0xFF, 385), "1234"))
+        assertEquals(300, Tlv8.retryDelay(bytes(0x2C, 0x01)))
+        assertEquals(0, Tlv8.retryDelay(ByteArray(0)))
+        assertNull(Tlv8.retryDelay(repeated(0xFF, 8)))
+        assertNull(Tlv8.retryDelay(repeated(0xFF, 4)))
+    }
+
+    private fun be(v: Long, size: Int) = ByteArray(size) { (v ushr (8 * (size - 1 - it))).toByte() }
+
+    /** Um bplist à mão, para pôr nos campos o que o [BPlist.encode] nunca escreve. */
+    private fun bplist(objects: List<ByteArray>, count: Long? = null, top: Long = 0, offsetSize: Int = 2, refSize: Int = 1): ByteArray {
+        var out = "bplist00".toByteArray()
+        val offsets = objects.map { o -> out.size.also { out += o } }
+        val table = out.size
+        for (o in offsets) out += be(o.toLong(), offsetSize)
+        out += bytes(0, 0, 0, 0, 0, 0, offsetSize, refSize)
+        return out + be(count ?: objects.size.toLong(), 8) + be(top, 8) + be(table.toLong(), 8)
+    }
+
+    @Test
+    fun bplistBounds() {
+        // Referências partilhadas: cada nível aponta duas vezes para o seguinte.
+        fun doubling(levels: Int) = bplist(List(levels) { bytes(0xA2, it + 1, it + 1) } + listOf(bytes(0x09)))
+        BPlist.decode(doubling(8))
+        malformed { BPlist.decode(doubling(40)) }
+        // Um texto grande referido muitas vezes também conta.
+        val refs = bytes(0xAF, 0x12, 0x00, 0x00, 0x75, 0x30) + repeated(1, 30_000)
+        val text = bytes(0x5F, 0x12, 0x00, 0x03, 0x0D, 0x40) + repeated(0x61, 200_000)
+        malformed { BPlist.decode(bplist(listOf(refs, text))) }
+        // O rodapé: quantos objetos e onde.
+        val one = listOf(bytes(0x09))
+        malformed { BPlist.decode(bplist(one, count = Long.MAX_VALUE)) }
+        malformed { BPlist.decode(bplist(one, count = -1L)) }
+        malformed { BPlist.decode(bplist(one, count = (1L shl 32) + 1)) }
+        malformed { BPlist.decode(bplist(one, top = -1L)) }
+        malformed { BPlist.decode(bplist(one, top = 1L)) }
+        malformed { BPlist.decode(bplist(one, offsetSize = 9)) }
+        // Tamanhos alargados: negativos, enormes, ou que acabam fora dos dados.
+        val eight = repeated(0xFF, 8)
+        malformed { BPlist.decode(bplist(listOf(bytes(0x4F, 0x13) + eight))) }
+        malformed { BPlist.decode(bplist(listOf(bytes(0x6F, 0x13, 0x7F) + repeated(0xFF, 7)))) }
+        malformed { BPlist.decode(bplist(listOf(bytes(0xAF, 0x13, 0x7F) + repeated(0xFF, 7)))) }
+        malformed { BPlist.decode(bplist(listOf(bytes(0x4F, 0x1F)))) }
+        // Uma referência negativa (8 bytes) e um UID negativo no RTI.
+        malformed { BPlist.decode(bplist(listOf(bytes(0xA1) + eight), refSize = 8)) }
+        val negativeUid = bplist(
+            listOf(
+                bytes(0xD2, 1, 2, 3, 4), bytes(0x54) + "\$top".toByteArray(), bytes(0x58) + "\$objects".toByteArray(),
+                bytes(0xD1, 5, 6), bytes(0xA0), bytes(0x5B) + "sessionUUID".toByteArray(), bytes(0x87) + eight,
+            ),
+        )
+        assertNull(Rti.state(negativeUid))
+        // Um inteiro negativo (8 bytes com sinal) continua a ser um valor válido.
+        assertEquals(Plist.Int(-1), BPlist.decode(bplist(listOf(bytes(0x13) + eight))))
+    }
+
+    @Test
+    fun tvNumbers() {
+        val r = RemoteProtocol("Pixel", "1.0")
+        r.handle(ProtoWriter().message(50) { varint(6, 1); varint(7, 1L shl 62); bool(8, false) }.toByteArray())
+        assertEquals(1, r.state.maxVolume)
+        assertEquals(100_000, r.state.volume)
+        r.handle(ProtoWriter().message(50) { varint(6, -1L); varint(7, -5L); bool(8, false) }.toByteArray())
+        assertEquals(0, r.state.maxVolume)
+        assertEquals(0, r.state.volume)
+        assertEquals(35, Opack.Double(0.35).percent)
+        assertEquals(100, Opack.Double(1.0).percent)
+        assertNull(Opack.Double(Double.NaN).percent)
+        assertNull(Opack.Double(Double.POSITIVE_INFINITY).percent)
+        assertNull(Opack.Double(-1.0).percent)
+        assertNull(Opack.Double(1e300).percent)
+        assertNull(Opack.Int(1).percent)
     }
 }

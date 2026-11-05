@@ -98,8 +98,7 @@ enum AppleTVPairing {
     static func check(_ tlv: [UInt8: [UInt8]]) throws -> [UInt8: [UInt8]] {
         if let error = tlv[7]?.first {
             if error == 2 { throw Failure.wrongPIN }
-            // RetryDelay (tipo 8): segundos, little-endian.
-            let delay = tlv[8].map { $0.reversed().reduce(0) { $0 << 8 | Int($1) } }
+            let delay = tlv[8].flatMap(TLV8.retryDelay)
             DebugLog.add("Apple pairing: refused, code \(error), retry after \(delay.map(String.init) ?? "-")")
             throw Failure.refused(code: Int(error), retryAfter: delay)
         }
@@ -310,12 +309,12 @@ final class AppleTVLink: TVControl, @unchecked Sendable {
     private func dispatch(_ message: OPACK) {
         switch message["_t"]?.int {
         case 3:
-            guard let x = message["_x"]?.int else { return }
+            guard let raw = message["_x"]?.int, let x = UInt64(exactly: raw) else { return }
             if let error = message["_em"]?.string {
                 DebugLog.add("Apple TV: request \(x) failed: \(error)")
-                finish(UInt64(x), .failure(CompanionConnection.Failure.tv(error)))
+                finish(x, .failure(CompanionConnection.Failure.tv(error)))
             } else {
-                finish(UInt64(x), .success(message["_c"] ?? .dict([:])))
+                finish(x, .success(message["_c"] ?? .dict([:])))
             }
         case 1:
             handleEvent(message["_i"]?.string ?? "", message["_c"] ?? .dict([:]))
@@ -340,8 +339,8 @@ final class AppleTVLink: TVControl, @unchecked Sendable {
             update { $0.volumeControl = volume }
             if volume {
                 Task { [weak self] in
-                    if let volume = try? await self?.request("_mcc", ["_mcc": .int(5)])["_vol"], case .double(let v) = volume {
-                        self?.update { $0.volume = Int((v * 100).rounded()); $0.maxVolume = 100; $0.muted = false }
+                    if let volume = try? await self?.request("_mcc", ["_mcc": .int(5)])["_vol"]?.percent {
+                        self?.update { $0.volume = volume; $0.maxVolume = 100; $0.muted = false }
                     }
                 }
             }

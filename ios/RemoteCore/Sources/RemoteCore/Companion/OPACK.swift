@@ -2,7 +2,13 @@ import Foundation
 
 /// OPACK, a serialização das mensagens da Apple TV (CoreUtils). Escreve-se sem referências (sempre válido);
 /// lê-se como o pyatv, que é o que bate certo com as TVs (tabela de valores repetidos).
-public indirect enum OPACK: Equatable, Sendable, CustomStringConvertible {
+public indirect enum OPACK: Hashable, Sendable, CustomStringConvertible {
+    /// O maior tamanho de uma trama (as mensagens do Companion são pequenas).
+    public static let maxFrame = 1 << 20
+    /// Os limites do que uma trama pode pedir a quem a lê.
+    static let maxDepth = 64
+    static let maxValues = 100_000
+
     case null
     case bool(Bool)
     case int(UInt64)
@@ -31,6 +37,12 @@ public indirect enum OPACK: Equatable, Sendable, CustomStringConvertible {
         case .bool(let b): return b ? 1 : 0
         default: return nil
         }
+    }
+
+    /// Um volume de 0 a 1, em percentagem; nil se não for um valor desses (NaN, infinito, fora do intervalo).
+    public var percent: Int? {
+        if case .double(let v) = self, (0...1).contains(v) { return Int((v * 100).rounded()) }
+        return nil
     }
 
     public var description: String {
@@ -101,9 +113,12 @@ public indirect enum OPACK: Equatable, Sendable, CustomStringConvertible {
         let bytes: [UInt8]
         var pos = 0
         var table: [OPACK] = []
+        var seen: Set<OPACK> = []
+        var depth = 0
+        var values = 0
 
         mutating func take(_ n: Int) throws -> [UInt8] {
-            guard n >= 0, pos + n <= bytes.count else { throw ProtocolError.malformed("OPACK cortado") }
+            guard n >= 0, n <= bytes.count - pos else { throw ProtocolError.malformed("OPACK cortado") }
             defer { pos += n }
             return Array(bytes[pos..<pos + n])
         }
@@ -112,12 +127,26 @@ public indirect enum OPACK: Equatable, Sendable, CustomStringConvertible {
             try take(n).enumerated().reduce(UInt64(0)) { $0 | UInt64($1.element) << UInt64(8 * $1.offset) }
         }
 
-        mutating func remember(_ v: OPACK) -> OPACK {
-            if !table.contains(v) { table.append(v) }
+        /// Um tamanho de 1 a 8 bytes: o que não couber num Int é erro.
+        mutating func length(_ n: Int) throws -> Int {
+            guard let v = Int(exactly: try le(n)) else { throw ProtocolError.malformed("OPACK cortado") }
             return v
         }
 
+        mutating func remember(_ v: OPACK) -> OPACK {
+            if seen.insert(v).inserted { table.append(v) }
+            return v
+        }
+
+        /// Entra num contentor: a fundura tem limite, como no bplist.
+        mutating func enter() throws {
+            depth += 1
+            guard depth <= OPACK.maxDepth else { throw ProtocolError.malformed("OPACK: fundo demais") }
+        }
+
         mutating func read() throws -> OPACK {
+            values += 1
+            guard values <= OPACK.maxValues else { throw ProtocolError.malformed("OPACK: valores a mais") }
             let t = try take(1)[0]
             switch t {
             case 0x01: return .bool(true)
@@ -130,12 +159,14 @@ public indirect enum OPACK: Equatable, Sendable, CustomStringConvertible {
             case 0x35: return remember(.double(Double(Float(bitPattern: UInt32(try le(4))))))
             case 0x36: return remember(.double(Double(bitPattern: try le(8))))
             case 0x40...0x60: return remember(.string(String(decoding: try take(Int(t - 0x40)), as: UTF8.self)))
-            case 0x61...0x64: return remember(.string(String(decoding: try take(Int(try le(Int(t - 0x60)))), as: UTF8.self)))
+            case 0x61...0x64: return remember(.string(String(decoding: try take(try length(Int(t - 0x60))), as: UTF8.self)))
             case 0x70...0x90: return remember(.data(try take(Int(t - 0x70))))
-            case 0x91...0x94: return remember(.data(try take(Int(try le([1, 2, 4, 8][Int(t - 0x91)])))))
+            case 0x91...0x94: return remember(.data(try take(try length([1, 2, 4, 8][Int(t - 0x91)]))))
             case 0xA0...0xC0: return try ref(Int(t - 0xA0))
-            case 0xC1...0xC4: return try ref(Int(try le(Int(t - 0xC0))))
+            case 0xC1...0xC4: return try ref(try length(Int(t - 0xC0)))
             case 0xD0...0xDF:
+                try enter()
+                defer { depth -= 1 }
                 var a: [OPACK] = []
                 if t == 0xDF {
                     while pos < bytes.count, bytes[pos] != 0x03 { a.append(try read()) }
@@ -145,6 +176,8 @@ public indirect enum OPACK: Equatable, Sendable, CustomStringConvertible {
                 }
                 return .array(a)
             case 0xE0...0xEF:
+                try enter()
+                defer { depth -= 1 }
                 var d: [String: OPACK] = [:]
                 if t == 0xEF {
                     while pos < bytes.count, bytes[pos] != 0x03 { let (k, v) = try pair(); d[k] = v }
@@ -160,7 +193,11 @@ public indirect enum OPACK: Equatable, Sendable, CustomStringConvertible {
 
         mutating func pair() throws -> (String, OPACK) {
             let key = try read()
-            return (key.string ?? key.description, try read())
+            // Uma chave nunca é um contentor: só as simples têm um texto de tamanho conhecido.
+            switch key {
+            case .array, .dict: throw ProtocolError.malformed("OPACK: chave inválida")
+            default: return (key.string ?? key.description, try read())
+            }
         }
 
         func ref(_ i: Int) throws -> OPACK {
@@ -183,6 +220,13 @@ public enum TLV8 {
             } while !rest.isEmpty
         }
         return out
+    }
+
+    /// O RetryDelay (tipo 8): segundos, little-endian; nil se for longo demais ou mais do que um dia.
+    public static func retryDelay(_ bytes: [UInt8]) -> Int? {
+        guard bytes.count <= 4 else { return nil }
+        let delay: Int = bytes.reversed().reduce(0) { $0 << 8 | Int($1) }
+        return delay <= 86_400 ? delay : nil
     }
 
     /// Os pedaços com o mesmo tipo juntam-se.

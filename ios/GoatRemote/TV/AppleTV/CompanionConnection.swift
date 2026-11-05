@@ -113,6 +113,7 @@ final class CompanionConnection: @unchecked Sendable {
         while true {
             if buffer.count >= 4 {
                 let length = Int(buffer[1]) << 16 | Int(buffer[2]) << 8 | Int(buffer[3])
+                guard length <= OPACK.maxFrame else { throw ProtocolError.malformed("trama demasiado grande") }
                 if buffer.count >= 4 + length {
                     let header = Array(buffer[0..<4])
                     var body = Array(buffer[4..<(4 + length)])

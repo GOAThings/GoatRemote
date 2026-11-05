@@ -79,8 +79,9 @@ class ProtoMessage(private val fields: Map<Int, List<Any>>) {
                 when ((tag and 7).toInt()) {
                     WIRE_VARINT -> fields.getOrPut(field) { mutableListOf() }.add(varint())
                     WIRE_LEN -> {
-                        val len = varint().toInt()
-                        if (len < 0 || pos + len > data.size) throw ProtocolException("campo cortado")
+                        val raw = varint()
+                        if (raw < 0 || raw > data.size - pos) throw ProtocolException("campo cortado")
+                        val len = raw.toInt()
                         fields.getOrPut(field) { mutableListOf() }.add(data.copyOfRange(pos, pos + len))
                         pos += len
                     }

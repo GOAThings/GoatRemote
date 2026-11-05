@@ -95,8 +95,8 @@ public struct RemoteProtocol: Sendable {
             state.isOn = m.message(40).bool(1)
         } else if m.has(50) {
             let v = m.message(50)
-            state.maxVolume = v.int(6)
-            state.volume = v.int(7)
+            state.maxVolume = Self.volume(v.int(6))
+            state.volume = Self.volume(v.int(7))
             state.muted = v.bool(8)
         } else if m.has(20) {
             let app = m.message(20).message(1).string(12)
@@ -114,6 +114,9 @@ public struct RemoteProtocol: Sendable {
         }
         return []
     }
+
+    /// Um volume da TV é um número pequeno; o que vier fora disso fica no limite.
+    static func volume(_ value: Int) -> Int { min(max(value, 0), 100_000) }
 
     /// Se a mensagem é um erro da TV, os campos do pedido que ela recusou. Não acaba com a ligação: a TV continua lá.
     public static func reportedError(_ frame: [UInt8]) -> String? {
