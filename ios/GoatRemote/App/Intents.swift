@@ -39,7 +39,7 @@ struct PressTVButton: AppIntent {
     var button: TVButton
 
     func perform() async throws -> some IntentResult {
-        try await RemoteLink.once { $0.key(button.key) }
+        try await RemoteLink.press(button.key)
         return .result()
     }
 }

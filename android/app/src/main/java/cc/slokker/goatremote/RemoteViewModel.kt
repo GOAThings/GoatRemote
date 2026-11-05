@@ -28,6 +28,7 @@ import cc.slokker.goatremote.tv.AndroidTvLink
 import cc.slokker.goatremote.tv.IdentityStore
 import cc.slokker.goatremote.tv.Key
 import cc.slokker.goatremote.tv.KeyDirection
+import cc.slokker.goatremote.tv.LauncherVolume
 import cc.slokker.goatremote.tv.NotPairedException
 import cc.slokker.goatremote.tv.Pairing
 import cc.slokker.goatremote.tv.RsaKey
@@ -416,7 +417,8 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
      * Se a TV tem o GoatLauncher (fica guardado por TV: null enquanto não se sabe). Com ele, ou sem se saber, o
      * volume nunca vai como tecla: as teclas de volume do protocolo rebentam o Android 11 da SHIELD quando o
      * GoatLauncher vê as teclas (botões a abrir apps). Só se manda tecla quando se tem a certeza de que não há
-     * launcher (404, ou ligação recusada na porta dele).
+     * launcher: 404, ou ligação recusada na porta dele, numa TV onde nunca se viu nenhum. Onde já se viu, isso é só não
+     * ter respondido; esquecer a TV limpa o que se sabe, se o launcher saiu mesmo de lá.
      */
     private fun hasLauncher(tvId: String): Boolean? =
         if (prefs.contains("launcher.$tvId")) prefs.getBoolean("launcher.$tvId", false) else null
@@ -443,12 +445,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
     /** O volume pelo GoatLauncher (POST /volume/…) em vez de tecla; false se esta TV não tem launcher (tecla). */
     private fun volumeViaLauncher(key: Key): Boolean {
         val tv = current ?: return false
-        val what = when (key) {
-            Key.VOLUME_UP -> "up"
-            Key.VOLUME_DOWN -> "down"
-            Key.MUTE -> "mute"
-            else -> return false
-        }
+        val what = LauncherVolume.path(key) ?: return false
         if (tv.kind != TvKind.ANDROID || hasLauncher(tv.id) == false) return false
         val beforeVolume = state.volume
         val beforeMuted = state.muted
@@ -473,8 +470,8 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
                     0
                 }
             }
-            when {
-                status == 200 -> {
+            when (LauncherVolume.outcome(hasLauncher(tv.id), status, refused)) {
+                LauncherVolume.Outcome.DONE -> {
                     setLauncher(tv.id, true)
                     volumeProblem = null
                     delay(800)
@@ -485,16 +482,15 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
                         if (unknown) volumeChanged++
                     }
                 }
-                status == 404 || refused -> {
-                    // Não há launcher nesta TV: a tecla é segura.
+                LauncherVolume.Outcome.NO_LAUNCHER -> {
                     DebugLog.add("Volume: no launcher on ${tv.name} (${if (refused) "refused" else "404"}), using keys")
                     setLauncher(tv.id, false)
                     if (current?.id == tv.id) link?.key(key)
                 }
-                current?.id == tv.id -> {
-                    // Pode haver launcher e ele não respondeu (TV ocupada): nunca a tecla, que podia reiniciar a TV.
+                LauncherVolume.Outcome.DIDNT_ANSWER -> if (current?.id == tv.id) {
                     DebugLog.add("Volume: launcher on ${tv.name} didn't answer (HTTP $status), not sending the key")
-                    volumeProblem = L("The TV's launcher didn't answer. Try again", "O launcher da TV não respondeu. Tenta outra vez")
+                    volumeProblem = L("The TV's launcher didn't answer. Try again. If you removed it from the TV, forget this TV and pair it again",
+                        "O launcher da TV não respondeu. Tenta outra vez. Se o tiraste da TV, esquece esta TV e emparelha-a outra vez")
                     volumeChanged++
                 }
             }

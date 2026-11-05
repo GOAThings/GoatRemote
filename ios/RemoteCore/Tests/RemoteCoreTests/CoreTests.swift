@@ -39,6 +39,7 @@ enum CoreTests {
         ("tvNumbers", tvNumbers),
         ("airPlay", airPlay),
         ("certificatePin", certificatePin),
+        ("launcherVolume", launcherVolume),
     ]
 
     static func proto() throws {
@@ -373,6 +374,24 @@ enum CoreTests {
         try expect(RTI.state(bplist(root)) == nil, true)
         // Um inteiro negativo (8 bytes com sinal) continua a ser um valor válido.
         try expect(try BPlist.decode(bplist([[0x13] + eight])), .int(-1))
+    }
+
+    static func launcherVolume() throws {
+        try expect(LauncherVolume.path(.volumeUp), "up")
+        try expect(LauncherVolume.path(.volumeDown), "down")
+        try expect(LauncherVolume.path(.mute), "mute")
+        try expect(LauncherVolume.path(.home), nil)
+        for known: Bool? in [true, false, nil] {
+            try expect(LauncherVolume.outcome(known: known, status: 200, refused: false), .done)
+            try expect(LauncherVolume.outcome(known: known, status: 503, refused: false), .didntAnswer)
+            try expect(LauncherVolume.outcome(known: known, status: 0, refused: false), .didntAnswer)
+        }
+        // Um launcher já visto nesta TV: um 404 ou uma recusa é só não ter respondido.
+        try expect(LauncherVolume.outcome(known: true, status: 404, refused: false), .didntAnswer)
+        try expect(LauncherVolume.outcome(known: true, status: 0, refused: true), .didntAnswer)
+        // Sem nunca se ter visto um: a tecla continua a servir.
+        try expect(LauncherVolume.outcome(known: nil, status: 404, refused: false), .noLauncher)
+        try expect(LauncherVolume.outcome(known: nil, status: 0, refused: true), .noLauncher)
     }
 
     static func certificatePin() throws {

@@ -8,6 +8,7 @@ import cc.slokker.goatremote.apple.Rti
 import cc.slokker.goatremote.apple.SrpClient
 import cc.slokker.goatremote.apple.Tlv8
 import cc.slokker.goatremote.tv.Key
+import cc.slokker.goatremote.tv.LauncherVolume
 import cc.slokker.goatremote.tv.Pairing
 import cc.slokker.goatremote.tv.ProtoMessage
 import cc.slokker.goatremote.tv.ProtoWriter
@@ -334,6 +335,25 @@ class CoreTest {
         assertNull(Rti.state(negativeUid))
         // Um inteiro negativo (8 bytes com sinal) continua a ser um valor válido.
         assertEquals(Plist.Int(-1), BPlist.decode(bplist(listOf(bytes(0x13) + eight))))
+    }
+
+    @Test
+    fun launcherVolume() {
+        assertEquals("up", LauncherVolume.path(Key.VOLUME_UP))
+        assertEquals("down", LauncherVolume.path(Key.VOLUME_DOWN))
+        assertEquals("mute", LauncherVolume.path(Key.MUTE))
+        assertNull(LauncherVolume.path(Key.HOME))
+        for (known in listOf(true, false, null)) {
+            assertEquals(LauncherVolume.Outcome.DONE, LauncherVolume.outcome(known, 200, false))
+            assertEquals(LauncherVolume.Outcome.DIDNT_ANSWER, LauncherVolume.outcome(known, 503, false))
+            assertEquals(LauncherVolume.Outcome.DIDNT_ANSWER, LauncherVolume.outcome(known, 0, false))
+        }
+        // Um launcher já visto nesta TV: um 404 ou uma recusa é só não ter respondido.
+        assertEquals(LauncherVolume.Outcome.DIDNT_ANSWER, LauncherVolume.outcome(true, 404, false))
+        assertEquals(LauncherVolume.Outcome.DIDNT_ANSWER, LauncherVolume.outcome(true, 0, true))
+        // Sem nunca se ter visto um: a tecla continua a servir.
+        assertEquals(LauncherVolume.Outcome.NO_LAUNCHER, LauncherVolume.outcome(null, 404, false))
+        assertEquals(LauncherVolume.Outcome.NO_LAUNCHER, LauncherVolume.outcome(null, 0, true))
     }
 
     @Test

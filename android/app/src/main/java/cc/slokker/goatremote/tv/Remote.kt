@@ -21,6 +21,35 @@ enum class Key(val code: Int) {
 /** Carregar e largar, ou carregar e manter (início e fim do toque longo). */
 enum class KeyDirection(val code: Int) { START_LONG(1), END_LONG(2), SHORT(3) }
 
+/** O volume pelo GoatLauncher (POST /volume/…). */
+object LauncherVolume {
+    enum class Outcome {
+        DONE,
+        /** Não há launcher nesta TV: a tecla é segura. */
+        NO_LAUNCHER,
+        /** Pode haver launcher e ele não respondeu: nunca a tecla, que podia reiniciar a TV. */
+        DIDNT_ANSWER,
+    }
+
+    /** O fim do caminho no launcher para uma tecla de volume; null nas outras. */
+    fun path(key: Key): String? = when (key) {
+        Key.VOLUME_UP -> "up"
+        Key.VOLUME_DOWN -> "down"
+        Key.MUTE -> "mute"
+        else -> null
+    }
+
+    /**
+     * O que fazer com a resposta, sabendo o que está guardado sobre o launcher. Um 404 ou uma recusa só querem dizer
+     * que não há launcher numa TV onde nunca se viu nenhum.
+     */
+    fun outcome(known: Boolean?, status: Int, refused: Boolean): Outcome = when {
+        status == 200 -> Outcome.DONE
+        (status == 404 || refused) && known != true -> Outcome.NO_LAUNCHER
+        else -> Outcome.DIDNT_ANSWER
+    }
+}
+
 /** O que a TV conta: ligada ou não, volume, app aberta. */
 data class TvState(
     val isOn: Boolean? = null,

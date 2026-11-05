@@ -159,6 +159,34 @@ public struct RemoteProtocol: Sendable {
     }
 }
 
+/// O volume pelo GoatLauncher (POST /volume/…): as mesmas regras no comando e nos Atalhos.
+public enum LauncherVolume {
+    public enum Outcome: Equatable, Sendable {
+        case done
+        /// Não há launcher nesta TV: a tecla é segura.
+        case noLauncher
+        /// Pode haver launcher e ele não respondeu: nunca a tecla, que podia reiniciar a TV.
+        case didntAnswer
+    }
+
+    /// O fim do caminho no launcher para uma tecla de volume; nil nas outras.
+    public static func path(_ key: Key) -> String? {
+        switch key {
+        case .volumeUp: return "up"
+        case .volumeDown: return "down"
+        case .mute: return "mute"
+        default: return nil
+        }
+    }
+
+    /// O que fazer com a resposta, sabendo o que está guardado sobre o launcher. Um 404 ou uma recusa só querem dizer
+    /// que não há launcher numa TV onde nunca se viu nenhum.
+    public static func outcome(known: Bool?, status: Int, refused: Bool) -> Outcome {
+        if status == 200 { return .done }
+        return (status == 404 || refused) && known != true ? .noLauncher : .didntAnswer
+    }
+}
+
 /// Como as TVs se anunciam na rede (Bonjour).
 public enum Discovery {
     public static let serviceType = "_androidtvremote2._tcp"

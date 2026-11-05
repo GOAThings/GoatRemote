@@ -349,7 +349,8 @@ final class RemoteModel {
     /// Se a TV tem o GoatLauncher (fica guardado por TV: nil enquanto não se sabe). Com ele, ou sem se saber, o
     /// volume nunca vai como tecla: as teclas de volume do protocolo rebentam o Android 11 da SHIELD quando o
     /// GoatLauncher vê as teclas (botões a abrir apps). Só se manda tecla quando se tem a certeza de que não há
-    /// launcher (404, ou ligação recusada na porta dele).
+    /// launcher: 404, ou ligação recusada na porta dele, numa TV onde nunca se viu nenhum. Onde já se viu, isso é só não
+    /// ter respondido; esquecer a TV limpa o que se sabe, se o launcher saiu mesmo de lá.
     static func hasLauncher(_ tvID: String) -> Bool? {
         UserDefaults.standard.object(forKey: "launcher.\(tvID)") as? Bool
     }
@@ -372,30 +373,12 @@ final class RemoteModel {
 
     /// O volume pelo GoatLauncher (POST /volume/…) em vez de tecla; false se esta TV não tem launcher (tecla).
     private func volumeViaLauncher(_ key: Key) -> Bool {
-        let what: String
-        switch key {
-        case .volumeUp: what = "up"
-        case .volumeDown: what = "down"
-        case .mute: what = "mute"
-        default: return false
-        }
-        guard let tv = current, tv.kind == .android, Self.hasLauncher(tv.id) != false,
-              let url = URL(string: "http://\(tv.host):\(Self.launcherPort)/volume/\(what)") else { return false }
+        guard let what = LauncherVolume.path(key), let tv = current, tv.kind == .android, Self.hasLauncher(tv.id) != false else { return false }
         let before = (state.volume, state.muted)
         Task {
-            var request = URLRequest(url: url)
-            request.httpMethod = "POST"
-            request.timeoutInterval = 3
-            var status = 0
-            var refused = false
-            do {
-                status = ((try await URLSession.shared.data(for: request)).1 as? HTTPURLResponse)?.statusCode ?? 0
-            } catch let error as URLError where error.code == .cannotConnectToHost || error.code == .networkConnectionLost {
-                refused = true
-            } catch {
-                DebugLog.add("Volume via launcher failed: \(error)")
-            }
-            if status == 200 {
+            let (status, refused) = await Self.launcherVolume(tv, what)
+            switch LauncherVolume.outcome(known: Self.hasLauncher(tv.id), status: status, refused: refused) {
+            case .done:
                 Self.setLauncher(tv.id, true)
                 volumeProblem = nil
                 try? await Task.sleep(for: .milliseconds(800))
@@ -404,19 +387,36 @@ final class RemoteModel {
                 UserDefaults.standard.set(unknown, forKey: "volumeUnknown.\(tv.id)")
                 volumePressed = unknown ? key : nil
                 if unknown { volumeChanged += 1 }
-            } else if status == 404 || refused {
-                // Não há launcher nesta TV: a tecla é segura.
+            case .noLauncher:
                 DebugLog.add("Volume: no launcher on \(tv.name) (\(refused ? "refused" : "404")), using keys")
                 Self.setLauncher(tv.id, false)
                 if current?.id == tv.id { link?.key(key) }
-            } else if current?.id == tv.id {
-                // Pode haver launcher e ele não respondeu (TV ocupada): nunca a tecla, que podia reiniciar a TV.
+            case .didntAnswer:
+                guard current?.id == tv.id else { return }
                 DebugLog.add("Volume: launcher on \(tv.name) didn't answer (HTTP \(status)), not sending the key")
-                volumeProblem = L("The TV's launcher didn't answer. Try again", "O launcher da TV não respondeu. Tenta outra vez")
+                volumeProblem = L("The TV's launcher didn't answer. Try again. If you removed it from the TV, forget this TV and pair it again",
+                                  "O launcher da TV não respondeu. Tenta outra vez. Se o tiraste da TV, esquece esta TV e emparelha-a outra vez")
                 volumeChanged += 1
             }
         }
         return true
+    }
+
+    /// POST /volume/… no GoatLauncher da TV: o estado HTTP e se a ligação foi recusada. Um endereço que não dá um URL
+    /// conta como recusa (o launcher não se alcança).
+    static func launcherVolume(_ tv: SavedTV, _ what: String) async -> (status: Int, refused: Bool) {
+        guard let url = URL(string: "http://\(tv.host):\(launcherPort)/volume/\(what)") else { return (0, true) }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 3
+        do {
+            return (((try await URLSession.shared.data(for: request)).1 as? HTTPURLResponse)?.statusCode ?? 0, false)
+        } catch let error as URLError where error.code == .cannotConnectToHost {
+            return (0, true)
+        } catch {
+            DebugLog.add("Volume via launcher failed: \(error)")
+            return (0, false)
+        }
     }
 
     /// Volume numa TV que não o controla: em vez de não fazer nada, o indicador explica porquê.

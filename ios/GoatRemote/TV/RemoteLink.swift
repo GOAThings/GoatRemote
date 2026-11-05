@@ -256,6 +256,26 @@ final class RemoteLink: @unchecked Sendable {
         connection?.close()
     }
 
+    /// Para os Atalhos e a Siri: uma tecla, e o volume pelo mesmo caminho que no comando (ver RemoteModel.hasLauncher).
+    @MainActor
+    static func press(_ key: Key) async throws {
+        if let what = LauncherVolume.path(key), let tv = TVStore.current, tv.kind == .android, RemoteModel.hasLauncher(tv.id) != false {
+            let (status, refused) = await RemoteModel.launcherVolume(tv, what)
+            switch LauncherVolume.outcome(known: RemoteModel.hasLauncher(tv.id), status: status, refused: refused) {
+            case .done:
+                RemoteModel.setLauncher(tv.id, true)
+                return
+            case .noLauncher:
+                DebugLog.add("Volume: no launcher on \(tv.name) (\(refused ? "refused" : "404")), using keys")
+                RemoteModel.setLauncher(tv.id, false)
+            case .didntAnswer:
+                DebugLog.add("Volume: launcher on \(tv.name) didn't answer (HTTP \(status)), not sending the key")
+                throw Failure.unreachable(L("The TV's launcher didn't answer", "O launcher da TV não respondeu"))
+            }
+        }
+        try await once { $0.key(key) }
+    }
+
     /// Para os Atalhos: liga, manda e desliga.
     @MainActor
     static func once(_ action: (TVControl) -> Void) async throws {
