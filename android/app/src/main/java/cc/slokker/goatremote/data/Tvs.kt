@@ -218,6 +218,13 @@ object AppCatalog {
     fun isLauncher(pkg: String) = pkg.lowercase().contains("launcher") || pkg == "com.google.android.apps.tv.launcherx"
 }
 
+/** O inSampleSize para uma imagem [width] × [height] ficar com [max] píxeis de lado, no máximo. */
+fun imageSampleSize(width: Int, height: Int, max: Int): Int {
+    var sample = 1
+    while (width / sample > max || height / sample > max) sample *= 2
+    return sample
+}
+
 /** Uma app instalada na TV, como o GoatLauncher a dá (ou a Apple TV, sem banner nem cor). */
 data class TvApp(
     val pkg: String,

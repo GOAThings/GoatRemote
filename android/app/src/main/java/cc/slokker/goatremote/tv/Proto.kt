@@ -136,6 +136,20 @@ fun InputStream.readFrame(): ByteArray {
 
 private const val MAX_FRAME = 1 shl 20
 
+/** Lê até ao fim, com limites de bytes e de tempo: uma resposta que passe deles é erro, não fica em memória. */
+fun InputStream.readLimited(limit: Int, timeoutMillis: Long = 20_000): ByteArray {
+    val deadline = System.currentTimeMillis() + timeoutMillis
+    val out = ByteArrayOutputStream()
+    val buffer = ByteArray(8192)
+    while (true) {
+        val n = read(buffer)
+        if (n < 0) return out.toByteArray()
+        if (n > limit - out.size()) throw ProtocolException("resposta demasiado grande")
+        if (System.currentTimeMillis() > deadline) throw ProtocolException("resposta demorada demais")
+        out.write(buffer, 0, n)
+    }
+}
+
 private fun writeVarint(out: OutputStream, value: Long) {
     var v = value
     while (true) {

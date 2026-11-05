@@ -1,3 +1,4 @@
+import ImageIO
 import OSLog
 import RemoteCore
 import SwiftUI
@@ -569,13 +570,13 @@ struct RemoteImage<Content: View>: View {
                 var request = URLRequest(url: url)
                 request.timeoutInterval = 10
                 do {
-                    let (data, response) = try await URLSession.shared.data(for: request)
-                    let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-                    guard status == 200, let loaded = UIImage(data: data) else {
+                    let (data, status) = try await BoundedHTTP.get(request, limit: 4 << 20)
+                    let decoded = await Task.detached(priority: .userInitiated) { ImageCache.decode(data) }.value
+                    guard status == 200, let loaded = decoded else {
                         imageLog.error("\(url.absoluteString, privacy: .public): \(status) \(data.count) bytes")
                         return
                     }
-                    Self.cache.setObject(loaded, forKey: url as NSURL)
+                    Self.cache.setObject(loaded, forKey: url as NSURL, cost: Int(loaded.size.width * loaded.size.height) * 4)
                     image = loaded
                 } catch {
                     imageLog.error("\(url.absoluteString, privacy: .public): \(error.localizedDescription, privacy: .public)")
@@ -591,7 +592,24 @@ private let imageLog = Logger(subsystem: "cc.slokker.goatremote", category: "ima
 private enum ImageCache {
     nonisolated(unsafe) static let shared: NSCache<NSURL, UIImage> = {
         let cache = NSCache<NSURL, UIImage>()
-        cache.countLimit = 64
+        cache.totalCostLimit = 32 << 20
         return cache
     }()
+
+    /// Lê primeiro o tamanho e reduz o que for maior do que alguma vez se mostra.
+    static func decode(_ data: Data) -> UIImage? {
+        let sourceOptions: [CFString: Any] = [kCGImageSourceShouldCache: false]
+        guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions as CFDictionary),
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, sourceOptions as CFDictionary) as? [CFString: Any],
+              let width = properties[kCGImagePropertyPixelWidth] as? Int,
+              let height = properties[kCGImagePropertyPixelHeight] as? Int,
+              width > 0, height > 0, width <= 8192, height <= 8192 else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: 1024,
+        ]
+        return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary).map { UIImage(cgImage: $0) }
+    }
 }

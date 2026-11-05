@@ -241,12 +241,12 @@ final class RemoteModel {
         Task {
             var request = URLRequest(url: url)
             request.timeoutInterval = 4
-            guard let (data, response) = try? await URLSession.shared.data(for: request),
-                  (response as? HTTPURLResponse)?.statusCode == 200,
+            guard let (data, status) = try? await BoundedHTTP.get(request, limit: 2 << 20), status == 200,
                   let apps = try? JSONDecoder().decode([TVApp].self, from: data) else { return }
             Self.setLauncher(tv.id, true)
             guard current?.id == tv.id else { return }
-            installedApps = apps
+            var seen = Set<String>()
+            installedApps = apps.filter { seen.insert($0.package).inserted }
         }
     }
 
@@ -672,6 +672,25 @@ final class PairingModel: Identifiable {
         default:
             return RemoteModel.describe(error)
         }
+    }
+}
+
+/// Um GET com limites de bytes e de tempo: uma resposta que passe deles é erro, não fica em memória.
+enum BoundedHTTP {
+    static func get(_ request: URLRequest, limit: Int) async throws -> (data: Data, status: Int) {
+        let (stream, response) = try await URLSession.shared.bytes(for: request)
+        defer { stream.task.cancel() }
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard status == 200 else { return (Data(), status) }
+        guard response.expectedContentLength <= Int64(limit) else { throw URLError(.dataLengthExceedsMaximum) }
+        let deadline = Date().addingTimeInterval(20)
+        var data = Data()
+        for try await byte in stream {
+            guard data.count < limit else { throw URLError(.dataLengthExceedsMaximum) }
+            guard Date() < deadline else { throw URLError(.timedOut) }
+            data.append(byte)
+        }
+        return (data, status)
     }
 }
 

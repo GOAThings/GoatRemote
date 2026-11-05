@@ -1,5 +1,6 @@
 package cc.slokker.goatremote.ui
 
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Log
 import android.util.LruCache
@@ -44,6 +45,8 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import cc.slokker.goatremote.data.imageSampleSize
+import cc.slokker.goatremote.tv.readLimited
 import java.net.HttpURLConnection
 import java.net.URL
 import kotlinx.coroutines.Dispatchers
@@ -159,7 +162,12 @@ fun GlassKey(
 
 /** Imagens da rede (banners do GoatLauncher, ícones da App Store), guardadas em memória. */
 object Images {
-    private val cache = LruCache<String, ImageBitmap>(64)
+    private const val MAX_BYTES = 4 shl 20
+    private const val MAX_SIDE = 1024
+
+    private val cache = object : LruCache<String, ImageBitmap>(32 shl 20) {
+        override fun sizeOf(key: String, value: ImageBitmap) = value.width * value.height * 4
+    }
 
     suspend fun load(url: String): ImageBitmap? {
         cache.get(url)?.let { return it }
@@ -170,12 +178,21 @@ object Images {
                 c.readTimeout = 6000
                 try {
                     if (c.responseCode != 200) return@runCatching null
-                    BitmapFactory.decodeStream(c.inputStream)?.asImageBitmap()
+                    decode(c.inputStream.readLimited(MAX_BYTES))?.asImageBitmap()
                 } finally {
                     c.disconnect()
                 }
             }.onFailure { Log.w("GoatRemote", "imagem $url", it) }.getOrNull()
         }?.also { cache.put(url, it) }
+    }
+
+    /** Lê primeiro o tamanho e reduz o que for maior do que alguma vez se mostra. */
+    private fun decode(data: ByteArray): Bitmap? {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(data, 0, data.size, bounds)
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+        val options = BitmapFactory.Options().apply { inSampleSize = imageSampleSize(bounds.outWidth, bounds.outHeight, MAX_SIDE) }
+        return BitmapFactory.decodeByteArray(data, 0, data.size, options)
     }
 }
 

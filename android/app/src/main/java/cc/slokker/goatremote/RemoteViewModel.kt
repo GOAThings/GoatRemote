@@ -36,6 +36,7 @@ import cc.slokker.goatremote.tv.TvControl
 import cc.slokker.goatremote.tv.TvSocket
 import cc.slokker.goatremote.tv.TvState
 import cc.slokker.goatremote.tv.UnreachableException
+import cc.slokker.goatremote.tv.readLimited
 import cc.slokker.goatremote.tv.sha256
 import java.io.File
 import java.net.HttpURLConnection
@@ -319,11 +320,11 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
                     c.readTimeout = 4000
                     try {
                         if (c.responseCode != 200) return@runCatching null
-                        val array = JSONArray(c.inputStream.bufferedReader().readText())
+                        val array = JSONArray(String(c.inputStream.readLimited(MAX_APPS_BYTES), Charsets.UTF_8))
                         (0 until array.length()).map { i ->
                             val o = array.getJSONObject(i)
                             TvApp(o.getString("package"), o.getString("label"), o.optBoolean("banner"), o.optString("color").ifEmpty { null })
-                        }
+                        }.distinctBy { it.pkg }
                     } finally {
                         c.disconnect()
                     }
@@ -556,6 +557,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
 
     companion object {
         const val LAUNCHER_PORT = 6470
+        private const val MAX_APPS_BYTES = 2 shl 20
     }
 }
 

@@ -7,6 +7,7 @@ import cc.slokker.goatremote.apple.Plist
 import cc.slokker.goatremote.apple.Rti
 import cc.slokker.goatremote.apple.SrpClient
 import cc.slokker.goatremote.apple.Tlv8
+import cc.slokker.goatremote.data.imageSampleSize
 import cc.slokker.goatremote.tv.Key
 import cc.slokker.goatremote.tv.LauncherVolume
 import cc.slokker.goatremote.tv.Pairing
@@ -16,6 +17,7 @@ import cc.slokker.goatremote.tv.ProtocolException
 import cc.slokker.goatremote.tv.RemoteProtocol
 import cc.slokker.goatremote.tv.RsaKey
 import cc.slokker.goatremote.tv.certificateMatches
+import cc.slokker.goatremote.tv.readLimited
 import cc.slokker.goatremote.tv.unsignedBytes
 import java.math.BigInteger
 import org.junit.Assert.assertArrayEquals
@@ -335,6 +337,18 @@ class CoreTest {
         assertNull(Rti.state(negativeUid))
         // Um inteiro negativo (8 bytes com sinal) continua a ser um valor válido.
         assertEquals(Plist.Int(-1), BPlist.decode(bplist(listOf(bytes(0x13) + eight))))
+    }
+
+    @Test
+    fun launcherLimits() {
+        val body = ByteArray(10_000) { it.toByte() }
+        assertArrayEquals(body, body.inputStream().readLimited(10_000))
+        malformed { body.inputStream().readLimited(9_999) }
+        assertEquals(1, imageSampleSize(480, 270, 1024))
+        assertEquals(1, imageSampleSize(1024, 1024, 1024))
+        assertEquals(2, imageSampleSize(1025, 10, 1024))
+        assertEquals(8, imageSampleSize(6000, 6000, 1024))
+        assertEquals(64, imageSampleSize(10, 65_000, 1024))
     }
 
     @Test
