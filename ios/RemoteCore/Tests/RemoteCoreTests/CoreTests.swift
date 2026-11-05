@@ -38,6 +38,7 @@ enum CoreTests {
         ("bplistBounds", bplistBounds),
         ("tvNumbers", tvNumbers),
         ("airPlay", airPlay),
+        ("certificatePin", certificatePin),
     ]
 
     static func proto() throws {
@@ -372,6 +373,16 @@ enum CoreTests {
         try expect(RTI.state(bplist(root)) == nil, true)
         // Um inteiro negativo (8 bytes com sinal) continua a ser um valor válido.
         try expect(try BPlist.decode(bplist([[0x13] + eight])), .int(-1))
+    }
+
+    static func certificatePin() throws {
+        try expect(Certificate.fingerprint(Array("abc".utf8)), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
+        try expect(Certificate.matches(pinned: "aa", seen: "aa"), true)
+        try expect(Certificate.matches(pinned: "aa", seen: "bb"), false)
+        try expect(Certificate.matches(pinned: "aa", seen: nil), false)
+        // Emparelhada antes de se guardar: ainda não há com que comparar.
+        try expect(Certificate.matches(pinned: nil, seen: "bb"), true)
+        try expect(Certificate.matches(pinned: nil, seen: nil), true)
     }
 
     static func airPlay() throws {

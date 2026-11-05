@@ -97,6 +97,9 @@ class IdentityStore(private val file: File) {
 fun X509Certificate.sha256(): String =
     MessageDigest.getInstance("SHA-256").digest(encoded).joinToString("") { "%02x".format(it) }
 
+/** Se o certificado visto é o da TV emparelhada. Sem nenhum guardado (emparelhada antes de se guardar), ainda não há com que comparar. */
+fun certificateMatches(pinned: String?, seen: String?): Boolean = pinned == null || pinned == seen
+
 // ---- DER mínimo: só o que um certificado auto-assinado precisa ----
 
 private fun der(tag: Int, content: ByteArray): ByteArray {

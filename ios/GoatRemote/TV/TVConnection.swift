@@ -3,7 +3,7 @@ import Network
 import RemoteCore
 
 /// Uma ligação TLS a uma porta da TV (6467 emparelhar, 6466 comando), às mensagens inteiras. A TV tem um certificado
-/// auto-assinado: aceita-se qualquer um e guarda-se, porque o que dá segurança é o emparelhamento.
+/// auto-assinado: o TLS aceita qualquer um, o emparelhamento prova o da TV, e o comando compara-o a cada ligação.
 final class TVConnection: @unchecked Sendable {
     enum Failure: Error {
         /// Não chegou à TV (desligada da rede, IP errado).
@@ -32,6 +32,8 @@ final class TVConnection: @unchecked Sendable {
         let sec = tls.securityProtocolOptions
         if let id = sec_identity_create(identity) { sec_protocol_options_set_local_identity(sec, id) }
         sec_protocol_options_set_min_tls_protocol_version(sec, .TLSv12)
+        // Cada ligação faz o TLS todo, para o certificado da TV ser sempre visto.
+        sec_protocol_options_set_tls_resumption_enabled(sec, false)
         let box = CertificateBox()
         sec_protocol_options_set_verify_block(sec, { _, trust, complete in
             let ref = sec_trust_copy_ref(trust).takeRetainedValue()

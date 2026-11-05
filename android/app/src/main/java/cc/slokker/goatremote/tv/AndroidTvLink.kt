@@ -50,7 +50,7 @@ class UnreachableException(message: String) : Exception(message)
 
 /**
  * Uma ligação TLS a uma porta da TV (6467 emparelhar, 6466 comando), às mensagens inteiras. A TV tem um certificado
- * auto-assinado: aceita-se qualquer um, porque o que dá segurança é o emparelhamento.
+ * auto-assinado: o TLS aceita qualquer um, o emparelhamento prova o da TV, e o comando compara-o a cada ligação.
  */
 class TvSocket private constructor(private val socket: SSLSocket) {
     private val input = socket.inputStream.buffered()
@@ -124,7 +124,18 @@ class TvSocket private constructor(private val socket: SSLSocket) {
 }
 
 /** O comando ligado a uma Android TV (porta 6466): negocia, responde aos pings e conta o estado da TV. */
-class AndroidTvLink(private val host: String, private val identity: () -> Identity, appVersion: String, model: String) : TvControl {
+class AndroidTvLink(
+    private val host: String,
+    private val identity: () -> Identity,
+    appVersion: String,
+    model: String,
+    /** O SHA-256 do certificado guardado desta TV; null se foi emparelhada antes de se guardar. */
+    private val pinned: String? = null,
+) : TvControl {
+    /** O SHA-256 do certificado visto nesta ligação. */
+    var certificate: String? = null
+        private set
+
     private val proto = RemoteProtocol(model, appVersion)
     private val _state = MutableStateFlow(TvState())
     override val state: StateFlow<TvState> = _state
@@ -136,6 +147,14 @@ class AndroidTvLink(private val host: String, private val identity: () -> Identi
 
     override suspend fun connect() {
         val socket = TvSocket.open(host, RemoteProtocol.PORT, identity())
+        // Tem de ser a TV emparelhada, antes de ler ou mandar o que quer que seja.
+        val seen = socket.serverCertificate?.sha256()
+        if (!certificateMatches(pinned, seen)) {
+            DebugLog.add("Android TV: not the certificate seen when pairing")
+            socket.close()
+            throw NotPairedException()
+        }
+        certificate = seen
         this.socket = socket
         // Até a TV mandar set_active (se fechar antes, não estamos emparelhados).
         try {

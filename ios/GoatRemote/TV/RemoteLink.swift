@@ -17,13 +17,16 @@ struct SavedTV: Codable, Identifiable, Hashable, Sendable {
     var kind: TVKind = .android
     /// A porta do comando, se não for a de sempre (a Apple TV escolhe uma).
     var port: UInt16?
+    /// O SHA-256 do certificado da TV (Android TV), visto ao emparelhar; nil se foi emparelhada antes de se guardar.
+    var certificate: String?
 
-    init(id: String, name: String, host: String, kind: TVKind = .android, port: UInt16? = nil) {
+    init(id: String, name: String, host: String, kind: TVKind = .android, port: UInt16? = nil, certificate: String? = nil) {
         self.id = id
         self.name = name
         self.host = host
         self.kind = kind
         self.port = port
+        self.certificate = certificate
     }
 
     // As TVs guardadas antes de haver Apple TV não têm "kind".
@@ -34,6 +37,7 @@ struct SavedTV: Codable, Identifiable, Hashable, Sendable {
         host = try c.decode(String.self, forKey: .host)
         kind = try c.decodeIfPresent(TVKind.self, forKey: .kind) ?? .android
         port = try c.decodeIfPresent(UInt16.self, forKey: .port)
+        certificate = try c.decodeIfPresent(String.self, forKey: .certificate)
     }
 }
 
@@ -63,6 +67,19 @@ enum TVStore {
     static func save(_ tv: SavedTV) {
         var tvs = all
         if let i = tvs.firstIndex(where: { $0.id == tv.id }) { tvs[i] = tv } else { tvs.append(tv) }
+        all = tvs
+    }
+
+    /// O certificado guardado de uma TV (sempre o do que está guardado, não o de uma cópia em memória).
+    static func certificate(of id: String) -> String? {
+        all.first { $0.id == id }?.certificate
+    }
+
+    /// Uma TV emparelhada antes de se guardar o certificado: fica o que se viu na primeira ligação bem sucedida.
+    static func pinCertificate(_ id: String, _ certificate: String) {
+        var tvs = all
+        guard let i = tvs.firstIndex(where: { $0.id == id }), tvs[i].certificate == nil else { return }
+        tvs[i].certificate = certificate
         all = tvs
     }
 
@@ -114,6 +131,14 @@ final class RemoteLink: @unchecked Sendable {
         } catch TVConnection.Failure.unreachable(let why) {
             throw Failure.unreachable(why)
         }
+        // Tem de ser a TV emparelhada, antes de ler ou mandar o que quer que seja.
+        let seen = connection.serverCertificate.map(Certificate.fingerprint)
+        let pinned = TVStore.certificate(of: tv.id)
+        guard Certificate.matches(pinned: pinned, seen: seen) else {
+            DebugLog.add("Android TV: not the certificate seen when pairing")
+            connection.close()
+            throw Failure.notPaired
+        }
         self.connection = connection
         // Até a TV mandar set_active (com um limite: se fechar antes, não estamos emparelhados).
         let ready: Bool = await withTaskGroup(of: Bool.self) { group in
@@ -138,6 +163,7 @@ final class RemoteLink: @unchecked Sendable {
             connection.close()
             throw Failure.notPaired
         }
+        if pinned == nil, let seen { TVStore.pinCertificate(tv.id, seen) }
         loop = Task { [weak self] in
             while let self, !Task.isCancelled {
                 do {

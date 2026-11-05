@@ -52,7 +52,16 @@ final class RemoteModel {
         didSet { UserDefaults.standard.set(dpadTaps, forKey: "dpadTaps") }
     }
 
-    @ObservationIgnored private var link: TVControl?
+    @ObservationIgnored private var link: TVControl? {
+        didSet {
+            // A ligação mudou: o teclado fecha-se e o que lá estava escrito não passa para a próxima.
+            guard link !== oldValue else { return }
+            showKeyboard = false
+            state.textValue = ""
+            state.textLabel = nil
+            state.keyboardRequests = 0
+        }
+    }
     @ObservationIgnored private var autoReconnect: Task<Void, Never>?
     @ObservationIgnored private var lastAutoReconnect = Date.distantPast
     /// Ícones das apps da Apple TV (da App Store, por bundle id).
@@ -521,7 +530,7 @@ final class PairingModel: Identifiable {
             )
             connection.close()
             phase = .done
-            onPaired(SavedTV(id: tvID, name: name, host: host))
+            onPaired(SavedTV(id: tvID, name: name, host: host, certificate: Certificate.fingerprint(der)))
         } catch is CancellationError {
             opened?.close()
         } catch {

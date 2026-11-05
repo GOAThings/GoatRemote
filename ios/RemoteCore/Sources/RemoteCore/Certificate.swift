@@ -34,6 +34,10 @@ public enum Certificate {
 
     /// SHA-256 do certificado, em hexadecimal: reconhece a mesma TV mais tarde.
     public static func fingerprint(_ der: [UInt8]) -> String { SHA.hex(SHA.sha256(der)) }
+
+    /// Se o certificado visto é o da TV emparelhada. Sem nenhum guardado (emparelhada antes de se guardar), ainda não há
+    /// com que comparar.
+    public static func matches(pinned: String?, seen: String?) -> Bool { pinned == nil || pinned == seen }
 }
 
 /// Módulo e expoente de uma chave RSA, sem zeros à esquerda (como entram no segredo).

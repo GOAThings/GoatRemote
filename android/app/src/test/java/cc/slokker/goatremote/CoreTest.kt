@@ -14,6 +14,7 @@ import cc.slokker.goatremote.tv.ProtoWriter
 import cc.slokker.goatremote.tv.ProtocolException
 import cc.slokker.goatremote.tv.RemoteProtocol
 import cc.slokker.goatremote.tv.RsaKey
+import cc.slokker.goatremote.tv.certificateMatches
 import cc.slokker.goatremote.tv.unsignedBytes
 import java.math.BigInteger
 import org.junit.Assert.assertArrayEquals
@@ -333,6 +334,16 @@ class CoreTest {
         assertNull(Rti.state(negativeUid))
         // Um inteiro negativo (8 bytes com sinal) continua a ser um valor válido.
         assertEquals(Plist.Int(-1), BPlist.decode(bplist(listOf(bytes(0x13) + eight))))
+    }
+
+    @Test
+    fun certificatePin() {
+        assertTrue(certificateMatches("aa", "aa"))
+        assertEquals(false, certificateMatches("aa", "bb"))
+        assertEquals(false, certificateMatches("aa", null))
+        // Emparelhada antes de se guardar: ainda não há com que comparar.
+        assertTrue(certificateMatches(null, "bb"))
+        assertTrue(certificateMatches(null, null))
     }
 
     @Test

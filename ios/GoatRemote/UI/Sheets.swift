@@ -8,6 +8,8 @@ struct KeyboardSheet: View {
     @Environment(RemoteModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State private var text = ""
+    /// O que a TV já tem na caixa: põe-se no campo mas não se manda de volta.
+    @State private var seeded: String?
     @FocusState private var focused: Bool
 
     var body: some View {
@@ -21,7 +23,10 @@ struct KeyboardSheet: View {
                 .liquidGlass(RoundedRectangle(cornerRadius: 14, style: .continuous), interactive: false)
                 .submitLabel(.send)
                 .onSubmit(send)
-                .onChange(of: text) { _, new in model.type(new) }
+                .onChange(of: text) { _, new in
+                    defer { seeded = nil }
+                    if new != seeded { model.type(new) }
+                }
                 .accessibilityIdentifier("keyboard-field")
             HStack {
                 Button(L("Clear", "Limpar")) { text = "" }
@@ -35,6 +40,7 @@ struct KeyboardSheet: View {
         }
         .padding(20)
         .onAppear {
+            seeded = model.state.textValue
             text = model.state.textValue
             focused = true
         }

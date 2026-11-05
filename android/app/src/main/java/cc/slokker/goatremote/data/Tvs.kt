@@ -28,9 +28,14 @@ data class SavedTv(
     val kind: TvKind = TvKind.ANDROID,
     /** A porta do comando, se não for a de sempre (a Apple TV escolhe uma). */
     val port: Int? = null,
+    /** O SHA-256 do certificado da TV (Android TV), visto ao emparelhar; null se foi emparelhada antes de se guardar. */
+    val certSha256: String? = null,
 ) {
     fun toJson(): JSONObject = JSONObject().put("id", id).put("name", name).put("host", host)
-        .put("kind", kind.name.lowercase()).apply { port?.let { put("port", it) } }
+        .put("kind", kind.name.lowercase()).apply {
+            port?.let { put("port", it) }
+            certSha256?.let { put("cert", it) }
+        }
 
     companion object {
         fun fromJson(o: JSONObject) = SavedTv(
@@ -39,6 +44,7 @@ data class SavedTv(
             host = o.getString("host"),
             kind = if (o.optString("kind") == "apple") TvKind.APPLE else TvKind.ANDROID,
             port = if (o.has("port")) o.getInt("port") else null,
+            certSha256 = o.optString("cert").ifEmpty { null },
         )
     }
 }
@@ -67,6 +73,16 @@ class TvStore(context: Context) {
 
     fun save(tv: SavedTv) {
         all = all.filterNot { it.id == tv.id } + tv
+    }
+
+    /** O certificado guardado de uma TV (sempre o do que está guardado, não o de uma cópia em memória). */
+    fun certificate(id: String): String? = all.firstOrNull { it.id == id }?.certSha256
+
+    /** Uma TV emparelhada antes de se guardar o certificado: fica o que se viu na primeira ligação bem sucedida. */
+    fun pinCertificate(id: String, sha256: String) {
+        val tvs = all
+        if (tvs.none { it.id == id && it.certSha256 == null }) return
+        all = tvs.map { if (it.id == id) it.copy(certSha256 = sha256) else it }
     }
 
     fun remove(id: String) {

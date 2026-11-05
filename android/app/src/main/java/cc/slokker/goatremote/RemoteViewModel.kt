@@ -35,6 +35,7 @@ import cc.slokker.goatremote.tv.TvControl
 import cc.slokker.goatremote.tv.TvSocket
 import cc.slokker.goatremote.tv.TvState
 import cc.slokker.goatremote.tv.UnreachableException
+import cc.slokker.goatremote.tv.sha256
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
@@ -125,6 +126,14 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
     fun changeDpadTaps(on: Boolean) { dpadTaps = on; prefs.edit().putBoolean("dpadTaps", on).apply() }
 
     private var link: TvControl? = null
+        set(value) {
+            // A ligação mudou: o teclado fecha-se e o que lá estava escrito não passa para a próxima.
+            if (value !== field) {
+                showKeyboard = false
+                state = state.copy(textValue = "", textLabel = null, keyboardRequests = 0)
+            }
+            field = value
+        }
     private var stateJob: Job? = null
     private var autoReconnect: Job? = null
     private var lastAutoReconnect = 0L
@@ -176,6 +185,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 link.connect()
                 if (this@RemoteViewModel.link !== link) return@launch
+                (link as? AndroidTvLink)?.certificate?.let { store.pinCertificate(tv.id, it) }
                 status = Status.Connected
                 update(link.state.value)
                 refreshApps()
@@ -238,7 +248,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
     private fun makeLink(tv: SavedTv): TvControl = when (tv.kind) {
         TvKind.APPLE -> AppleTvLink(tv.host, tv.port ?: AppleTvLink.DEFAULT_PORT, { CompanionCredentials.load(context, tv.id) },
             deviceName, stableId())
-        TvKind.ANDROID -> AndroidTvLink(tv.host, identities::get, BuildConfig.VERSION_NAME, Build.MODEL)
+        TvKind.ANDROID -> AndroidTvLink(tv.host, identities::get, BuildConfig.VERSION_NAME, Build.MODEL, store.certificate(tv.id))
     }
 
     private fun stableId(): String = prefs.getString("companion.id", null) ?: (0 until 6)
@@ -583,7 +593,8 @@ class PairingModel(private val vm: RemoteViewModel, val name: String, private va
             val socket = TvSocket.open(host, Pairing.PORT, identity)
             DebugLog.add("Pairing: TLS open")
             this.socket = socket
-            val server = socket.serverCertificate?.let(RsaKey::of)
+            val certificate = socket.serverCertificate
+            val server = certificate?.let(RsaKey::of)
                 ?: throw UnreachableException(L("The TV's certificate is unreadable", "O certificado da TV não se lê"))
             val client = RsaKey.of(identity.certificate)!!
             Pairing.run(
@@ -596,7 +607,7 @@ class PairingModel(private val vm: RemoteViewModel, val name: String, private va
             )
             socket.close()
             phase = Phase.Done
-            vm.paired(SavedTv(tvId, name, host))
+            vm.paired(SavedTv(tvId, name, host, certSha256 = certificate.sha256()))
             delay(700)
             if (vm.pairing === this) vm.pairing = null
         } catch (e: kotlinx.coroutines.CancellationException) {
