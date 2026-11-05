@@ -400,8 +400,14 @@ final class RemoteModel {
             case .didntAnswer:
                 guard current?.id == tv.id else { return }
                 DebugLog.add("Volume: launcher on \(tv.name) didn't answer (HTTP \(status)), not sending the key")
-                volumeProblem = L("The TV's launcher didn't answer. Try again. If you removed it from the TV, forget this TV and pair it again",
-                                  "O launcher da TV não respondeu. Tenta outra vez. Se o tiraste da TV, esquece esta TV e emparelha-a outra vez")
+                if status == 404 {
+                    volumeProblem = L("Update GoatLauncher on the TV to change the volume from here", "Atualiza o GoatLauncher na TV para mudares o volume daqui")
+                } else if refused {
+                    volumeProblem = L("GoatLauncher isn't running on the TV. Open it. If you removed it, forget this TV and pair it again",
+                                      "O GoatLauncher não está a correr na TV. Abre-o. Se o tiraste, esquece esta TV e emparelha-a outra vez")
+                } else {
+                    volumeProblem = L("The TV's launcher didn't answer. Try again", "O launcher da TV não respondeu. Tenta outra vez")
+                }
                 volumeChanged += 1
             }
         }
