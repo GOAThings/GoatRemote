@@ -41,6 +41,8 @@ enum CoreTests {
         ("certificatePin", certificatePin),
         ("launcherVolume", launcherVolume),
         ("currentApp", currentApp),
+        ("goatTVChannels", goatTVChannels),
+        ("goatTVKeys", goatTVKeys),
     ]
 
     static func proto() throws {
@@ -459,5 +461,87 @@ enum CoreTests {
         try expect(OPACK.double(-1).percent, nil)
         try expect(OPACK.double(1e300).percent, nil)
         try expect(OPACK.int(1).percent, nil)
+    }
+
+    static func goatTVChannels() throws {
+        let long = String(repeating: "x", count: 300)
+        let list = try GoatTVChannels.parse(Data("""
+            {"playlist": {"id": "p", "name": "My list"}, "current": "k2",
+             "groups": [{"id": "g1", "name": "News"}, {"id": "g2", "name": "Sport"}, {"id": "g1", "name": "Again"}, {"name": "No id"}, 7],
+             "channels": [
+               {"key": "k1", "num": 1, "name": "One", "group": "g1", "logo": true, "favorite": true},
+               {"key": "k2", "num": 2.0, "name": "Two", "group": "g2", "logo": false},
+               {"key": "k1", "num": 3, "name": "Repeated"},
+               {"key": "", "name": "Empty key"},
+               {"key": "k4", "name": 4},
+               {"name": "No key"},
+               {"key": "k5", "num": -1, "name": "\(long)", "group": 5, "logo": "yes", "favorite": 1},
+               {"key": "k6", "num": 1.5, "name": "Six"},
+               "nope"
+             ]}
+            """.utf8))
+        try expect(list.playlist, "My list")
+        try expect(list.current, "k2")
+        try expect(list.groups.map { "\($0.id)=\($0.name)" }, ["g1=News", "g2=Sport"])
+        try expect(list.channels.map(\.key), ["k1", "k2", "k5", "k6"])
+        let one = list.channels[0]
+        try expect(one.num, 1)
+        try expect(one.name, "One")
+        try expect(one.group, "g1")
+        try expect(one.logo && one.favorite, true)
+        try expect(list.channels[1].num, 2)
+        try expect(list.channels[1].favorite, false)
+        let five = list.channels[2]
+        try expect(five.num, nil)
+        try expect(five.name.count, GoatTVChannels.maxName)
+        try expect(five.group, nil)
+        try expect(five.logo, false)
+        try expect(five.favorite, false)
+        try expect(list.channels[3].num, nil)
+        try expect(list.truncated, false)
+
+        // Um "current" que não está na lista (canal escondido ou bloqueado) não se mostra.
+        let bare = try GoatTVChannels.parse(Data(#"{"current": "hidden", "channels": [{"key": "a", "name": "A"}], "truncated": true}"#.utf8))
+        try expect(bare.current, nil)
+        try expect(bare.playlist, nil)
+        try expect(bare.groups.isEmpty, true)
+        try expect(bare.truncated, true)
+        try expect(try GoatTVChannels.parse(Data("{}".utf8)).channels.isEmpty, true)
+        for bad in ["[]", "not json"] {
+            if (try? GoatTVChannels.parse(Data(bad.utf8))) != nil { throw Failed(description: "devia ter dado erro: \(bad)") }
+        }
+
+        // Chaves grandes demais ficam de fora; a lista corta-se no limite de canais.
+        let longKey = String(repeating: "k", count: GoatTVChannels.maxKey + 1)
+        try expect(try GoatTVChannels.parse(Data(#"{"channels": [{"key": "\#(longKey)", "name": "Long"}]}"#.utf8)).channels.isEmpty, true)
+        let many = "{\"channels\": [" + (0...GoatTVChannels.maxChannels).map { "{\"key\": \"c\($0)\", \"name\": \"C\"}" }.joined(separator: ",") + "]}"
+        let cut = try GoatTVChannels.parse(Data(many.utf8))
+        try expect(cut.channels.count, GoatTVChannels.maxChannels)
+        try expect(cut.truncated, true)
+    }
+
+    static func goatTVKeys() throws {
+        try expect(GoatTVChannels.encodeKey("k1"), "k1")
+        try expect(GoatTVChannels.encodeKey("AZaz09-_~"), "AZaz09-_~")
+        try expect(GoatTVChannels.encodeKey("news 24/hd"), "news%2024%2Fhd")
+        try expect(GoatTVChannels.encodeKey(".."), "%2E%2E")
+        try expect(GoatTVChannels.encodeKey("a?b#c%d+e&f"), "a%3Fb%23c%25d%2Be%26f")
+        try expect(GoatTVChannels.encodeKey("ção"), "%C3%A7%C3%A3o")
+        try expect(GoatTVChannels.encodeKey("\u{1F4FA}"), "%F0%9F%93%BA")
+        try expect(GoatTVChannels.url(host: "192.168.1.5", "play", key: "a/b"), "http://192.168.1.5:6471/play/a%2Fb")
+        try expect(GoatTVChannels.url(host: "tv.local", "channels"), "http://tv.local:6471/channels")
+
+        try expect(GoatTVChannels.playOutcome(status: 200, refused: false), .done)
+        try expect(GoatTVChannels.playOutcome(status: 404, refused: false), .notFound)
+        try expect(GoatTVChannels.playOutcome(status: 409, refused: false), .retry)
+        try expect(GoatTVChannels.playOutcome(status: 503, refused: false), .retry)
+        try expect(GoatTVChannels.playOutcome(status: 0, refused: true), .retry)
+        try expect(GoatTVChannels.playOutcome(status: 0, refused: false), .failed)
+        try expect(GoatTVChannels.playOutcome(status: 500, refused: false), .failed)
+
+        // Na Apple TV: pelo bundle id, senão pelo nome (IPA assinada com outro id).
+        try expect(GoatTVChannels.appleApp(["x.goattv": "GoatTV", "cc.slokker.goattv": "GoatTV"]), "cc.slokker.goattv")
+        try expect(GoatTVChannels.appleApp(["com.netflix": "Netflix", "x.goattv": "GoatTV"]), "x.goattv")
+        try expect(GoatTVChannels.appleApp(["com.netflix": "Netflix"]), nil)
     }
 }

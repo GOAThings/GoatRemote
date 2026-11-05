@@ -29,6 +29,16 @@ final class RemoteModel {
     /// As apps instaladas na TV, se ela tiver o GoatLauncher (que as dá na rede de casa); vazio sem ele.
     private(set) var installedApps: [TVApp] = []
 
+    /// A TV tem o GoatTV com os canais para o telemóvel (já respondeu a /channels): mostra-se o botão Canais.
+    private(set) var hasChannels = false
+    /// A lista de canais do GoatTV (nil enquanto não veio, ou com o GoatTV fechado).
+    private(set) var channels: ChannelList?
+    private(set) var channelsStatus: ChannelsStatus = .unknown
+    /// A abrir o GoatTV na TV, à espera de que dê os canais.
+    private(set) var openingGoatTV = false
+    /// Porque é que o último canal não mudou (nil: nada a dizer).
+    private(set) var playProblem: String?
+
     /// O emparelhamento em curso (a folha mostra-o).
     var pairing: PairingModel?
     /// A TV abriu uma caixa de texto: mostra-se o teclado.
@@ -79,6 +89,7 @@ final class RemoteModel {
         tvs = TVStore.all
         current = TVStore.current
         recentApps = Self.loadRecents(current?.id)
+        hasChannels = Self.hasGoatTV(current?.id)
     }
 
     // MARK: Ligação
@@ -125,6 +136,7 @@ final class RemoteModel {
                 self.status = .connected
                 self.update(link.state)
                 self.refreshApps()
+                self.refreshChannels()
             } catch let error where Self.isNotPaired(error) {
                 DebugLog.add("Connect: not paired (\(error))")
                 guard self.link === link else { return }
@@ -220,13 +232,13 @@ final class RemoteModel {
     }
 
     /// Abre uma app da lista (Android: pelo pacote; Apple TV: pelo bundle id).
-    func launch(_ app: TVApp) {
+    func launch(_ app: TVApp, haptic: Bool = true) {
         guard let tv = current, tv.kind == .android, Self.hasLauncher(tv.id) != false,
               let url = URL(string: "http://\(tv.host):\(Self.launcherPort)/open/\(app.package)") else {
-            return open(current?.kind == .apple ? app.package : app.link)
+            return open(current?.kind == .apple ? app.package : app.link, haptic: haptic)
         }
         // Pelo GoatLauncher: a SHIELD recusa o link do comando e fecha a ligação.
-        if haptics { lightHaptics.impactOccurred() }
+        if haptic, haptics { lightHaptics.impactOccurred() }
         DebugLog.add("Open app via launcher: \(app.package)")
         Task {
             var request = URLRequest(url: url)
@@ -235,7 +247,7 @@ final class RemoteModel {
             let status = (try? await URLSession.shared.data(for: request))?.1 as? HTTPURLResponse
             if status?.statusCode == 200 { return }
             DebugLog.add("Launcher didn't open it (HTTP \(status?.statusCode ?? 0)), using the remote's link")
-            if current?.id == tv.id { open(app.link) }
+            if current?.id == tv.id { open(app.link, haptic: false) }
         }
     }
 
@@ -264,6 +276,187 @@ final class RemoteModel {
 
     static let launcherPort = 6470
 
+    // MARK: Canais do GoatTV (porta 6471)
+
+    enum ChannelsStatus: Equatable {
+        case unknown
+        case ready
+        /// Ligação recusada ou 503: o GoatTV não está aberto (ou ainda não carregou a lista).
+        case closed
+        case failed
+    }
+
+    @ObservationIgnored private var channelsLoading = false
+    @ObservationIgnored private var playTask: Task<Void, Never>?
+
+    private static func hasGoatTV(_ tvID: String?) -> Bool {
+        tvID.map { UserDefaults.standard.bool(forKey: "goattv.\($0)") } ?? false
+    }
+
+    /// Pede a lista ao GoatTV da TV. Ao ligar e ao abrir a folha.
+    func refreshChannels() {
+        guard let tv = current, !channelsLoading else { return }
+        channelsLoading = true
+        Task {
+            defer { channelsLoading = false }
+            await loadChannels(tv)
+        }
+    }
+
+    /// true se veio a lista.
+    @discardableResult
+    private func loadChannels(_ tv: SavedTV) async -> Bool {
+        guard let url = URL(string: GoatTVChannels.url(host: tv.host, "channels")) else { return false }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 8
+        var outcome = ChannelsStatus.failed
+        var list: ChannelList?
+        do {
+            let (data, status) = try await BoundedHTTP.get(request, limit: GoatTVChannels.maxBytes)
+            if status == 200 {
+                // Até 8 MiB de JSON: lê-se fora da thread principal.
+                list = try await Task.detached(priority: .userInitiated) { try GoatTVChannels.parse(data) }.value
+                outcome = .ready
+            } else if status == 503 {
+                outcome = .closed
+            }
+        } catch let error as URLError where error.code == .cannotConnectToHost {
+            outcome = .closed
+        } catch {
+            DebugLog.add("Channels: \(error)")
+        }
+        guard current?.id == tv.id else { return false }
+        switch outcome {
+        case .ready:
+            if let list {
+                if !hasChannels { DebugLog.add("GoatTV channels on \(tv.name): \(list.channels.count)") }
+                channels = list
+            }
+            channelsStatus = .ready
+            hasChannels = true
+            UserDefaults.standard.set(true, forKey: "goattv.\(tv.id)")
+        case .closed:
+            channels = nil
+            channelsStatus = .closed
+        case .failed, .unknown:
+            // Outra resposta (ou nenhuma): fica a lista que já havia.
+            if channels == nil { channelsStatus = .failed }
+        }
+        return outcome == .ready
+    }
+
+    /// Como abrir o GoatTV nesta TV: na Android TV pelo GoatLauncher (só se se sabe que o tem); na Apple TV pela
+    /// própria ligação, se ele estiver na lista de apps dela. nil: só se pode pedir para o abrirem na TV.
+    var goatTVApp: TVApp? {
+        guard let tv = current else { return nil }
+        switch tv.kind {
+        case .android:
+            return Self.hasLauncher(tv.id) == true ? Self.androidGoatTV : nil
+        case .apple:
+            let apps = Dictionary(installedApps.map { ($0.package, $0.label) }, uniquingKeysWith: { a, _ in a })
+            return GoatTVChannels.appleApp(apps).map { TVApp(package: $0, label: "GoatTV", banner: false, color: nil) }
+        }
+    }
+
+    private static let androidGoatTV = TVApp(package: GoatTVChannels.androidPackage, label: "GoatTV", banner: false, color: nil)
+
+    var goatTVClosedLine: String { L("GoatTV has to be open on the TV", "O GoatTV tem de estar aberto na TV") }
+
+    /// "Abrir o GoatTV" na folha dos canais: abre-o e espera (até 10 s) que dê a lista.
+    func openGoatTV() {
+        guard let tv = current, let app = goatTVApp else { return }
+        DebugLog.add("Opening GoatTV for the channels")
+        launch(app)
+        openingGoatTV = true
+        Task {
+            defer { if current?.id == tv.id { openingGoatTV = false } }
+            for _ in 0..<10 {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                guard current?.id == tv.id else { return }
+                if await loadChannels(tv) { return }
+            }
+        }
+    }
+
+    func channelLogoURL(_ channel: TVChannel) -> URL? {
+        guard let tv = current, channel.logo else { return nil }
+        return URL(string: GoatTVChannels.url(host: tv.host, "logo", key: channel.key))
+    }
+
+    /// Muda de canal no GoatTV. Se ele não estiver à frente (409, 503 ou ligação recusada), abre-se e tenta-se outra
+    /// vez a cada segundo, até 10 s. Um toque novo cancela o anterior (para fazer zapping).
+    func play(_ channel: TVChannel) {
+        guard let tv = current else { return }
+        if haptics { lightHaptics.impactOccurred() }
+        playProblem = nil
+        let number = channel.num.map { String($0) } ?? "-"
+        DebugLog.add("Play channel \(number) via GoatTV")
+        playTask?.cancel()
+        playTask = Task {
+            var deadline: Date?
+            while !Task.isCancelled {
+                let (status, refused) = await Self.postPlay(tv, channel.key)
+                guard !Task.isCancelled, current?.id == tv.id else { return }
+                switch GoatTVChannels.playOutcome(status: status, refused: refused) {
+                case .done:
+                    channels?.current = channel.key
+                    return
+                case .notFound:
+                    playProblem = L("This channel isn't available on the TV", "Este canal não está disponível na TV")
+                    refreshChannels()
+                    return
+                case .failed:
+                    DebugLog.add("Play: GoatTV answered HTTP \(status)")
+                    playProblem = L("GoatTV didn't answer. Try again", "O GoatTV não respondeu. Tenta outra vez")
+                    return
+                case .retry:
+                    if let deadline {
+                        if Date() >= deadline {
+                            playProblem = L("GoatTV didn't switch channels. Check the TV and try again",
+                                            "O GoatTV não mudou de canal. Vê a TV e tenta outra vez")
+                            return
+                        }
+                    } else {
+                        guard let app = goatTVApp ?? (tv.kind == .android ? Self.androidGoatTV : nil) else {
+                            playProblem = goatTVClosedLine
+                            return
+                        }
+                        DebugLog.add("Play: GoatTV isn't in front (\(refused ? "refused" : "HTTP \(status)")), opening it")
+                        launch(app, haptic: false)
+                        deadline = Date().addingTimeInterval(10)
+                    }
+                    try? await Task.sleep(nanoseconds: 1_000_000_000)
+                }
+            }
+        }
+    }
+
+    /// POST /play/<key> no GoatTV da TV: o estado HTTP e se a ligação foi recusada.
+    static func postPlay(_ tv: SavedTV, _ key: String) async -> (status: Int, refused: Bool) {
+        guard let url = URL(string: GoatTVChannels.url(host: tv.host, "play", key: key)) else { return (0, false) }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 4
+        do {
+            return (((try await URLSession.shared.data(for: request)).1 as? HTTPURLResponse)?.statusCode ?? 0, false)
+        } catch let error as URLError where error.code == .cannotConnectToHost {
+            return (0, true)
+        } catch {
+            DebugLog.add("Play failed: \(error)")
+            return (0, false)
+        }
+    }
+
+    /// O que se sabe dos canais volta ao início (outra TV, ou esta esquecida).
+    private func resetChannels(_ tv: SavedTV?) {
+        playTask?.cancel()
+        hasChannels = Self.hasGoatTV(tv?.id)
+        channels = nil
+        channelsStatus = .unknown
+        openingGoatTV = false
+        playProblem = nil
+    }
+
     // MARK: TVs
 
     func select(_ tv: SavedTV) {
@@ -275,13 +468,14 @@ final class RemoteModel {
         state = TVState()
         recentApps = Self.loadRecents(tv.id)
         installedApps = []
+        resetChannels(tv)
         connect()
     }
 
     func forget(_ tv: SavedTV) {
         if tv.kind == .apple { CompanionCredentials.delete(tv.id) }
         TVStore.remove(tv.id)
-        for key in ["recents", "launcher", "volumeUnknown"] { UserDefaults.standard.removeObject(forKey: "\(key).\(tv.id)") }
+        for key in ["recents", "launcher", "volumeUnknown", "goattv"] { UserDefaults.standard.removeObject(forKey: "\(key).\(tv.id)") }
         tvs = TVStore.all
         if current?.id == tv.id {
             link?.close()
@@ -290,6 +484,7 @@ final class RemoteModel {
             state = TVState()
             recentApps = Self.loadRecents(current?.id)
             installedApps = []
+            resetChannels(current)
             status = current == nil ? .noTV : .connecting
             connect()
         }
@@ -339,6 +534,7 @@ final class RemoteModel {
         state = TVState()
         recentApps = Self.loadRecents(tv.id)
         installedApps = []
+        resetChannels(tv)
         status = .connecting
         connect()
     }
@@ -456,8 +652,8 @@ final class RemoteModel {
         link.text(text)
     }
 
-    func open(_ link: String) {
-        if haptics { lightHaptics.impactOccurred() }
+    func open(_ link: String, haptic: Bool = true) {
+        if haptic, haptics { lightHaptics.impactOccurred() }
         guard let remote = self.link, status == .connected else { return reconnectIfNeeded() }
         DebugLog.add("Open app: \(link)")
         remote.openApp(link)

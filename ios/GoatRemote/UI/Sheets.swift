@@ -174,6 +174,172 @@ struct AppsSheet: View {
     }
 }
 
+/// Os canais do GoatTV: o que está a dar, os favoritos, a pesquisa e os grupos, e a lista. Tocar muda de canal e a folha
+/// fica aberta, para fazer zapping.
+struct ChannelsSheet: View {
+    @Environment(RemoteModel.self) private var model
+    @State private var query = ""
+    @State private var group: String?
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 4) {
+                    if let problem = model.playProblem {
+                        Text(problem).font(.footnote).foregroundStyle(.orange).padding(.bottom, 6)
+                            .accessibilityIdentifier("channels-problem")
+                    }
+                    if let list = model.channels {
+                        content(list)
+                    } else {
+                        state
+                    }
+                }
+                .padding(18)
+            }
+            .scrollDismissesKeyboard(.interactively)
+            .navigationTitle(L("Channels", "Canais"))
+            .navigationBarTitleDisplayMode(.inline)
+        }
+        .onAppear { model.refreshChannels() }
+    }
+
+    @ViewBuilder
+    private func content(_ list: ChannelList) -> some View {
+        if let current = list.channels.first(where: { $0.key == list.current }) {
+            section(L("Now playing", "A dar agora"))
+            row(current, current: true)
+        }
+        let favorites = list.channels.filter(\.favorite)
+        if !favorites.isEmpty {
+            section(L("Favourites", "Favoritos")).padding(.top, 6)
+            ForEach(favorites) { row($0, current: $0.key == list.current) }
+        }
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass").foregroundStyle(Theme.dim)
+            TextField(L("Search channels", "Procurar canais"), text: $query)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .submitLabel(.search)
+                .accessibilityIdentifier("channels-search")
+        }
+        .padding(12)
+        .liquidGlass(RoundedRectangle(cornerRadius: 14, style: .continuous), interactive: false)
+        .padding(.top, 10)
+        if !list.groups.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    chip(L("All", "Todos"), selected: group == nil, id: "group:*") { group = nil }
+                    ForEach(list.groups) { g in
+                        chip(g.name, selected: group == g.id, id: "group:\(g.name)") { group = g.id }
+                    }
+                }
+            }
+            .padding(.vertical, 6)
+        }
+        let shown = filtered(list)
+        if shown.isEmpty {
+            Text(list.channels.isEmpty ? L("There are no channels in GoatTV's list", "A lista do GoatTV não tem canais")
+                                       : L("No channels found", "Nenhum canal encontrado"))
+                .font(.subheadline).foregroundStyle(Theme.dim).padding(.vertical, 12)
+        }
+        ForEach(shown) { row($0, current: $0.key == list.current) }
+        if list.truncated {
+            Text(L("The list is too long: only part of it is shown here.", "A lista é longa demais: aqui só aparece uma parte."))
+                .font(.caption).foregroundStyle(Theme.dim).padding(.vertical, 8)
+        }
+    }
+
+    private func filtered(_ list: ChannelList) -> [TVChannel] {
+        let q = query.trimmingCharacters(in: .whitespaces)
+        return list.channels.filter { ch in
+            (group == nil || ch.group == group) &&
+                (q.isEmpty || ch.name.localizedCaseInsensitiveContains(q) || (ch.num.map { String($0).hasPrefix(q) } ?? false))
+        }
+    }
+
+    /// Sem lista: a carregar, o GoatTV fechado (com "Abrir o GoatTV" se der para o abrir daqui) ou uma falha.
+    @ViewBuilder
+    private var state: some View {
+        VStack(spacing: 10) {
+            if model.openingGoatTV || model.channelsStatus == .unknown {
+                ProgressView().tint(Theme.dim)
+            } else if model.channelsStatus == .closed {
+                if model.goatTVApp != nil {
+                    Text(L("GoatTV isn't open on the TV.", "O GoatTV não está aberto na TV.")).font(.subheadline).foregroundStyle(Theme.dim)
+                    Button(L("Open GoatTV", "Abrir o GoatTV")) { model.openGoatTV() }
+                        .buttonStyle(.borderedProminent)
+                        .tint(Theme.accent)
+                        .accessibilityIdentifier("open-goattv")
+                } else {
+                    Text(model.goatTVClosedLine).font(.subheadline).foregroundStyle(Theme.dim)
+                        .accessibilityIdentifier("goattv-closed")
+                }
+            } else {
+                Text(L("Couldn't get the channels from GoatTV.", "Não deu para ter os canais do GoatTV.")).font(.subheadline).foregroundStyle(Theme.dim)
+                Button(L("Try again", "Tentar outra vez")) { model.refreshChannels() }
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity)
+        .liquidGlass(RoundedRectangle(cornerRadius: 18, style: .continuous), interactive: false)
+    }
+
+    private func section(_ title: String) -> some View {
+        Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.dim)
+    }
+
+    private func chip(_ title: String, selected: Bool, id: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title).font(.subheadline).lineLimit(1)
+                .foregroundStyle(selected ? Color.black : Color.white)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(Capsule().fill(selected ? Theme.accent : Theme.surfaceHigh))
+                .overlay(Capsule().strokeBorder(Theme.rim, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(id)
+    }
+
+    private func row(_ channel: TVChannel, current: Bool) -> some View {
+        Button {
+            model.play(channel)
+        } label: {
+            HStack(spacing: 12) {
+                Text(channel.num.map { String($0) } ?? "")
+                    .font(.subheadline.monospacedDigit()).foregroundStyle(Theme.dim)
+                    .frame(width: 40, alignment: .leading)
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Theme.surfaceHigh)
+                    if let url = model.channelLogoURL(channel) {
+                        RemoteImage(url: url, limit: GoatTVChannels.maxLogoBytes, maxPixelSize: GoatTVChannels.logoSide) { image in
+                            if let image {
+                                image.resizable().scaledToFit().accessibilityIdentifier("logo")
+                            } else {
+                                Image(systemName: "tv").foregroundStyle(Theme.dim)
+                            }
+                        }
+                    } else {
+                        Image(systemName: "tv").foregroundStyle(Theme.dim)
+                    }
+                }
+                .frame(width: 40, height: 40)
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                Text(channel.name).foregroundStyle(current ? Theme.accent : .white).lineLimit(1)
+                Spacer(minLength: 0)
+                if current { Image(systemName: "play.fill").foregroundStyle(Theme.accent) }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(current ? Theme.accent.opacity(0.18) : .clear))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("channel:\(channel.name)")
+    }
+}
+
 /// As teclas que não cabem no comando, os números e as opções.
 /// A versão instalada e, se houver outra mais recente, tocar para descarregar a IPA e passá-la à app que a assina.
 struct UpdateRow: View {
@@ -553,10 +719,13 @@ struct FoundTVRow: View {
     }
 }
 
-/// Uma imagem da rede (banners do GoatLauncher, ícones da App Store), guardada em memória. O AsyncImage cancelava
-/// os pedidos dentro da grelha das apps e ficava sem imagem.
+/// Uma imagem da rede (banners do GoatLauncher, ícones da App Store, logótipos do GoatTV), guardada em memória. O
+/// AsyncImage cancelava os pedidos dentro da grelha das apps e ficava sem imagem.
 struct RemoteImage<Content: View>: View {
     let url: URL
+    /// Os logótipos dos canais têm limites mais pequenos do que os banners.
+    var limit = 4 << 20
+    var maxPixelSize = 1024
     @ViewBuilder let content: (Image?) -> Content
     @State private var image: UIImage?
 
@@ -569,9 +738,10 @@ struct RemoteImage<Content: View>: View {
                 }
                 var request = URLRequest(url: url)
                 request.timeoutInterval = 10
+                let side = maxPixelSize
                 do {
-                    let (data, status) = try await BoundedHTTP.get(request, limit: 4 << 20)
-                    let decoded = await Task.detached(priority: .userInitiated) { ImageCache.decode(data) }.value
+                    let (data, status) = try await BoundedHTTP.get(request, limit: limit)
+                    let decoded = await Task.detached(priority: .userInitiated) { ImageCache.decode(data, maxPixelSize: side) }.value
                     guard status == 200, let loaded = decoded else {
                         imageLog.error("\(url.absoluteString, privacy: .public): \(status) \(data.count) bytes")
                         return
@@ -597,7 +767,7 @@ private enum ImageCache {
     }()
 
     /// Lê primeiro o tamanho e reduz o que for maior do que alguma vez se mostra.
-    static func decode(_ data: Data) -> UIImage? {
+    static func decode(_ data: Data, maxPixelSize: Int = 1024) -> UIImage? {
         let sourceOptions: [CFString: Any] = [kCGImageSourceShouldCache: false]
         guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions as CFDictionary),
               let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, sourceOptions as CFDictionary) as? [CFString: Any],
@@ -608,7 +778,7 @@ private enum ImageCache {
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceCreateThumbnailWithTransform: true,
             kCGImageSourceShouldCacheImmediately: true,
-            kCGImageSourceThumbnailMaxPixelSize: 1024,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
         ]
         return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary).map { UIImage(cgImage: $0) }
     }

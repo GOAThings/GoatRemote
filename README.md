@@ -28,6 +28,8 @@ iPhone screenshots against the fake TV used in the tests. The Android app looks 
 - **Apps**: with [GoatLauncher](https://github.com/GOAThings/GoatLauncher) on the TV, all its apps show
   up with their banners; without it, the apps you've opened on that TV. On Apple TV, the TV's own app list, with
   App Store icons.
+- **Channels**: with GoatTV on the TV, its channel list (current, favourites, search and groups) with logos; tap a
+  channel to switch to it, opening GoatTV first if needed.
 - **Several TVs**, and on the iPhone, Siri and Shortcuts ("press a TV button").
 - **Quick access**: a home screen widget and, on Android, Quick Settings tiles.
 - English and Portuguese.

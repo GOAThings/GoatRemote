@@ -1,7 +1,8 @@
 import XCTest
 
 /// Emparelha com a TV falsa (tools/AtvTool.java, anunciada como "Living Room TV") e usa o comando, com um screenshot a cada
-/// passo. No fim confere no registo da TV falsa (http://127.0.0.1:7000/log) que as teclas, o texto e a app chegaram.
+/// passo. No fim confere no registo da TV falsa (http://127.0.0.1:7000/log) que as teclas, o texto e a app chegaram, e
+/// que o canal mudou.
 final class GoatRemoteUITests: XCTestCase {
     private let app = XCUIApplication()
     private var step = 0
@@ -104,6 +105,28 @@ final class GoatRemoteUITests: XCTestCase {
         pause(1.5)
         shot("after-app")
 
+        // Os canais vêm do "GoatTV" da TV falsa (porta 6471). O primeiro /play dá 409: abre-se o GoatTV pelo launcher e
+        // tenta-se outra vez. A chave do canal ("news 24/hd") vai codificada no caminho.
+        let channelsKey = app.buttons["channels"]
+        XCTAssertTrue(channelsKey.waitForExistence(timeout: 10), "O botão dos canais não apareceu")
+        channelsKey.tap()
+        XCTAssertTrue(app.buttons["channel:RTP 1"].firstMatch.waitForExistence(timeout: 8), "A lista do GoatTV não apareceu")
+        app.swipeUp() // a folha abre a meio: assim cabe a lista toda
+        pause(1)
+        shot("channels")
+        let news = app.buttons["group:News"]
+        XCTAssertTrue(news.waitForExistence(timeout: 5))
+        news.tap()
+        let channel = app.buttons["channel:News 24"].firstMatch
+        XCTAssertTrue(channel.waitForExistence(timeout: 5))
+        channel.tap()
+        // Espera pela segunda tentativa (a seguir a abrir o GoatTV); a folha fica aberta.
+        let until = Date().addingTimeInterval(15)
+        while Date() < until, !(fetch("log") ?? "").components(separatedBy: "\n").contains("goattv /play/news 24/hd") { pause(0.5) }
+        XCTAssertTrue(app.buttons["channel:News 24"].firstMatch.exists, "A folha dos canais fechou-se")
+        pause(0.5)
+        shot("channel-played")
+
         // O que a TV falsa recebeu.
         let log = fetch("log") ?? ""
         let attachment = XCTAttachment(string: log)
@@ -115,6 +138,16 @@ final class GoatRemoteUITests: XCTestCase {
                          "launcher /volume/mute", "launcher /volume/up", "tecla SEARCH", "texto hello", "tecla ENTER",
                          "launcher /open/com.google.android.youtube.tv", "launcher /apps", "launcher /icon/cc.slokker.itv"] {
             XCTAssertTrue(log.contains(expected), "Falta no registo da TV: \(expected)")
+        }
+        // Linhas inteiras: o primeiro /play deu 409, o launcher abriu o GoatTV e o segundo mudou de canal.
+        let lines = log.components(separatedBy: "\n")
+        for expected in ["goattv /channels", "goattv /logo/rtp1", "goattv /play/news 24/hd 409", "launcher /open/cc.slokker.itv",
+                         "goattv /play/news 24/hd"] {
+            XCTAssertTrue(lines.contains(expected), "Falta no registo da TV: \(expected)")
+        }
+        if let refused = lines.firstIndex(of: "goattv /play/news 24/hd 409"), let opened = lines.firstIndex(of: "launcher /open/cc.slokker.itv"),
+           let played = lines.lastIndex(of: "goattv /play/news 24/hd") {
+            XCTAssertTrue(refused < opened && opened < played, "O GoatTV não se abriu antes de tentar outra vez")
         }
     }
 

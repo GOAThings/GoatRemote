@@ -6,6 +6,7 @@ import SwiftUI
 struct RemoteView: View {
     @Environment(RemoteModel.self) private var model
     @State private var showApps = false
+    @State private var showChannels = false
     @State private var showMore = false
     @State private var showTVs = false
     @State private var volumeVisible = false
@@ -29,6 +30,11 @@ struct RemoteView: View {
                 Spacer()
                 GlassKey(symbol: "square.grid.2x2", size: 48, tint: .white.opacity(0.8), id: "apps") { showApps = true }
                 Spacer()
+                // Só com o GoatTV na TV a dar os canais.
+                if model.hasChannels {
+                    GlassKey(symbol: "play.tv", size: 48, tint: .white.opacity(0.8), id: "channels") { showChannels = true }
+                    Spacer()
+                }
                 GlassKey(symbol: "backward.fill", size: 48, tint: .white.opacity(0.8), id: "key:rewind") { model.press(.rewind) } onHold: { model.hold(.rewind, down: $0) }
                 Spacer()
                 GlassKey(symbol: "forward.fill", size: 48, tint: .white.opacity(0.8), id: "key:fastForward") { model.press(.fastForward) } onHold: { model.hold(.fastForward, down: $0) }
@@ -59,15 +65,17 @@ struct RemoteView: View {
         .onChange(of: model.volumeChanged) { _, _ in showVolume() }
         .onChange(of: model.closeSheets) { _, _ in
             showApps = false
+            showChannels = false
             showMore = false
             showTVs = false
             model.showKeyboard = false
         }
         .onChange(of: model.showKeyboard) { _, show in
             // A TV pediu o teclado com outra folha aberta: fecha-se essa e abre-se o teclado a seguir.
-            guard show, showApps || showMore || showTVs else { return }
+            guard show, showApps || showChannels || showMore || showTVs else { return }
             model.showKeyboard = false
             showApps = false
+            showChannels = false
             showMore = false
             showTVs = false
             Task {
@@ -77,6 +85,7 @@ struct RemoteView: View {
         }
         .sheet(isPresented: $model.showKeyboard) { KeyboardSheet().presentationDetents([.height(250)]) }
         .sheet(isPresented: $showApps) { AppsSheet().presentationDetents([.medium, .large]) }
+        .sheet(isPresented: $showChannels) { ChannelsSheet().presentationDetents([.medium, .large]) }
         .sheet(isPresented: $showMore) { MoreSheet().presentationDetents([.medium, .large]) }
         .sheet(isPresented: $showTVs) { TVsSheet().presentationDetents([.medium, .large]) }
     }
