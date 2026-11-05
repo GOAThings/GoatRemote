@@ -548,6 +548,7 @@ final class PairingModel: Identifiable {
                 return try await self.askCode(retry: false)
             }
             if usingAirPlay {
+                let previous = CompanionCredentials.load(tvID)
                 let creds = try await AirPlayPairing.pair(host: host, name: UIDevice.current.name, askPIN: askPIN)
                 creds.save(tvID)
                 // A experiência: a chave do AirPlay serve no Companion (o comando)? Liga-se já para saber.
@@ -559,7 +560,8 @@ final class PairingModel: Identifiable {
                     DebugLog.add("AirPlay pairing: the Apple TV accepts the AirPlay key for the remote")
                 } catch {
                     link.close()
-                    CompanionCredentials.delete(tvID)
+                    // Uma tentativa falhada não estraga um emparelhamento que já funcionava.
+                    if let previous { previous.save(tvID) } else { CompanionCredentials.delete(tvID) }
                     DebugLog.add("AirPlay pairing: the Apple TV doesn't accept the AirPlay key for the remote: \(error)")
                     throw AirPlayPairing.NotForRemote()
                 }

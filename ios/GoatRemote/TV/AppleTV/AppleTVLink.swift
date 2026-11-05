@@ -199,12 +199,13 @@ final class AppleTVLink: TVControl, @unchecked Sendable {
                                                                               ciphertext: encrypted.dropLast(16), tag: encrypted.suffix(16)), using: pvKey)))
         guard let id = inner[1], let signature = inner[10] else { throw Failure.notPaired }
         let tvKey = try? Curve25519.Signing.PublicKey(rawRepresentation: creds.tvPublicKey)
-        if Data(id) != creds.tvID || tvKey?.isValidSignature(signature, for: tvEph + id + epk) != true {
-            // Emparelhada pelo AirPlay: a identidade da TV no Companion pode ser outra. Segue-se na mesma, para ver
-            // se a TV aceita a nossa chave (responde sem erro à M3).
-            guard creds.viaAirPlay == true else { throw Failure.notPaired }
-            DebugLog.add("Apple TV: Companion identity differs from AirPlay's (same id: \(Data(id) == creds.tvID)), trying the AirPlay key")
-        }
+        let proven = Data(id) == creds.tvID && tvKey?.isValidSignature(signature, for: tvEph + id + epk) == true
+        // Emparelhada pelo AirPlay, a identidade da TV no Companion pode ser outra, e a M2 não traz a chave dela: fica o
+        // id da primeira verificação, e um id diferente daí em diante obriga a emparelhar outra vez.
+        let identity = CompanionIdentity.check(id: id, provenByKey: proven, viaAirPlay: creds.viaAirPlay == true,
+                                               pinned: creds.companionID.map { Array($0) })
+        guard identity != .rejected else { throw Failure.notPaired }
+        if !proven { DebugLog.add("Apple TV: Companion identity differs from AirPlay's (\(identity)), trying the AirPlay key") }
         let signing = try Curve25519.Signing.PrivateKey(rawRepresentation: creds.privateKey)
         let clientID = Array(creds.clientID)
         let mySignature = Array(try signing.signature(for: epk + clientID + tvEph))
@@ -213,6 +214,19 @@ final class AppleTVLink: TVControl, @unchecked Sendable {
         let m4 = TLV8.decode(try await conn.receive().1["_pd"]?.data ?? [])
         if let error = m4[7]?.first { DebugLog.add("Apple TV: verify M4 refused, code \(error)") }
         guard m4[7] == nil else { throw Failure.notPaired }
+        var updated = creds
+        switch identity {
+        case .verified where creds.viaAirPlay == true:
+            // A identidade do AirPlay serve no Companion: daqui em diante é tão estrito como o emparelhamento normal.
+            updated.viaAirPlay = nil
+            updated.companionID = nil
+            updated.save(tv.id)
+        case .firstSeen:
+            updated.companionID = Data(id)
+            updated.save(tv.id)
+        default:
+            break
+        }
         conn.encrypt(out: SymmetricKey(data: SHA512.hkdf(salt: "", info: "ClientEncrypt-main", key: secret)),
                      in: SymmetricKey(data: SHA512.hkdf(salt: "", info: "ServerEncrypt-main", key: secret)))
     }

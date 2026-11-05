@@ -37,6 +37,7 @@ enum CoreTests {
         ("opackBounds", opackBounds),
         ("bplistBounds", bplistBounds),
         ("tvNumbers", tvNumbers),
+        ("airPlay", airPlay),
     ]
 
     static func proto() throws {
@@ -371,6 +372,27 @@ enum CoreTests {
         try expect(RTI.state(bplist(root)) == nil, true)
         // Um inteiro negativo (8 bytes com sinal) continua a ser um valor válido.
         try expect(try BPlist.decode(bplist([[0x13] + eight])), .int(-1))
+    }
+
+    static func airPlay() throws {
+        func head(_ length: String) throws -> (status: Int, length: Int) {
+            try AirPlayHead.parse(Array("HTTP/1.1 200 OK\r\nCONTENT-length: \(length)\r\nX: y".utf8))
+        }
+        try expect(try head("12").status, 200)
+        try expect(try head(" 12 ").length, 12)
+        try expect(try AirPlayHead.parse(Array("HTTP/1.1 404 Not Found".utf8)).length, 0)
+        try expectMalformed { _ = try head("-1") }
+        try expectMalformed { _ = try head("\(Int.max)") }
+        try expectMalformed { _ = try head("\(AirPlayHead.maxBody + 1)") }
+        try expectMalformed { _ = try head("99999999999999999999999") }
+        // A identidade: a chave guardada basta; só o AirPlay tolera outra, e só até ver a primeira.
+        try expect(CompanionIdentity.check(id: [1], provenByKey: true, viaAirPlay: false, pinned: nil), .verified)
+        try expect(CompanionIdentity.check(id: [1], provenByKey: true, viaAirPlay: true, pinned: [2]), .verified)
+        try expect(CompanionIdentity.check(id: [1], provenByKey: false, viaAirPlay: false, pinned: nil), .rejected)
+        try expect(CompanionIdentity.check(id: [1], provenByKey: false, viaAirPlay: false, pinned: [1]), .rejected)
+        try expect(CompanionIdentity.check(id: [1], provenByKey: false, viaAirPlay: true, pinned: nil), .firstSeen)
+        try expect(CompanionIdentity.check(id: [1], provenByKey: false, viaAirPlay: true, pinned: [1]), .pinned)
+        try expect(CompanionIdentity.check(id: [1], provenByKey: false, viaAirPlay: true, pinned: [2]), .rejected)
     }
 
     static func tvNumbers() throws {

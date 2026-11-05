@@ -6,7 +6,7 @@ import RemoteCore
 /// 3.ª geração entra em modo de PIN no Companion mas não o mostra (pyatv #2837); no AirPlay, o PIN aparece com o
 /// pedido `/pair-pin-start` e o nome do cliente no cabeçalho `X-Apple-Client-Name` (Home Assistant #173352).
 /// O emparelhamento é o mesmo (SRP com o PIN e as identidades Ed25519): a chave que fica usa-se no Companion, se a
-/// TV a aceitar lá (ver AppleTVLink.verify).
+/// TV a aceitar lá. A identidade da TV guardada aqui é a do AirPlay: no Companion pode ser outra (ver AppleTVLink.verify).
 enum AirPlayPairing {
     static let port: UInt16 = 7000
 
@@ -97,30 +97,43 @@ final class RawHTTP: @unchecked Sendable {
         var head = "POST \(path) HTTP/1.1\r\nHost: \(host):\(port)\r\nContent-Length: \(body.count)\r\n"
         for (name, value) in headers.sorted(by: { $0.key < $1.key }) { head += "\(name): \(value)\r\n" }
         head += "\r\n"
-        try await send(Array(head.utf8) + body)
-        // Cabeçalhos até à linha vazia; depois o Content-Length.
+        let request = Array(head.utf8) + body
+        // Cada pedido tem um limite de tempo, e cancelar o emparelhamento fecha a ligação.
+        let deadline = Task { [self] in
+            try? await Task.sleep(nanoseconds: 30_000_000_000)
+            if !Task.isCancelled { connection.cancel() }
+        }
+        defer { deadline.cancel() }
+        return try await withTaskCancellationHandler {
+            try await exchange(request)
+        } onCancel: { [self] in
+            close()
+        }
+    }
+
+    private func exchange(_ request: [UInt8]) async throws -> Response {
+        try await send(request)
+        // Cabeçalhos até à linha vazia; depois o Content-Length. A cabeça e o corpo têm tamanho máximo.
+        var scanned = 0
         while true {
-            if let end = find([13, 10, 13, 10]) {
-                let text = String(decoding: buffer[..<end], as: UTF8.self)
-                let lines = text.components(separatedBy: "\r\n")
-                let status = lines.first.flatMap { Int($0.split(separator: " ").dropFirst().first ?? "") } ?? 0
-                let length = lines.dropFirst().compactMap { line -> Int? in
-                    let parts = line.split(separator: ":", maxSplits: 1)
-                    guard parts.count == 2, parts[0].lowercased() == "content-length" else { return nil }
-                    return Int(parts[1].trimmingCharacters(in: .whitespaces))
-                }.first ?? 0
-                while buffer.count < end + 4 + length { try await receiveMore() }
-                let bodyBytes = Array(buffer[(end + 4)..<(end + 4 + length)])
-                buffer.removeFirst(end + 4 + length)
-                return Response(status: status, body: bodyBytes)
+            if let end = find([13, 10, 13, 10], from: scanned) {
+                guard end <= AirPlayHead.maxHead else { throw AppleTVPairing.Failure.tv("resposta HTTP demasiado grande") }
+                let head = try AirPlayHead.parse(Array(buffer[..<end]))
+                let total = end + 4 + head.length
+                while buffer.count < total { try await receiveMore() }
+                let bodyBytes = Array(buffer[(end + 4)..<total])
+                buffer.removeFirst(total)
+                return Response(status: head.status, body: bodyBytes)
             }
+            guard buffer.count <= AirPlayHead.maxHead else { throw AppleTVPairing.Failure.tv("resposta HTTP demasiado grande") }
+            scanned = max(buffer.count - 3, 0)
             try await receiveMore()
         }
     }
 
-    private func find(_ pattern: [UInt8]) -> Int? {
-        guard buffer.count >= pattern.count else { return nil }
-        for i in 0...(buffer.count - pattern.count) where Array(buffer[i..<(i + pattern.count)]) == pattern { return i }
+    private func find(_ pattern: [UInt8], from start: Int) -> Int? {
+        guard buffer.count - pattern.count >= start else { return nil }
+        for i in start...(buffer.count - pattern.count) where buffer[i..<(i + pattern.count)].elementsEqual(pattern) { return i }
         return nil
     }
 
