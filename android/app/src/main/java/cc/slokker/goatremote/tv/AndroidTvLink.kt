@@ -156,6 +156,11 @@ class AndroidTvLink(
         }
         certificate = seen
         this.socket = socket
+        // Fechada enquanto abria: esta ligação não faz mais nada.
+        if (closed) {
+            socket.close()
+            throw NotPairedException()
+        }
         // Até a TV mandar set_active (se fechar antes, não estamos emparelhados).
         try {
             withContext(Dispatchers.IO) {

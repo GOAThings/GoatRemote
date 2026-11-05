@@ -106,6 +106,8 @@ final class RemoteLink: @unchecked Sendable {
     private var proto: RemoteProtocol
     private let lock = NSLock()
     private var loop: Task<Void, Never>?
+    /// Depois de close() esta ligação não faz mais nada, mesmo que ainda estivesse a abrir.
+    private var closed = false
 
     init(tv: SavedTV) {
         self.tv = tv
@@ -139,13 +141,16 @@ final class RemoteLink: @unchecked Sendable {
             connection.close()
             throw Failure.notPaired
         }
-        self.connection = connection
+        guard attach(connection) else {
+            connection.close()
+            throw Failure.unreachable("closed")
+        }
         // Até a TV mandar set_active (com um limite: se fechar antes, não estamos emparelhados).
         let ready: Bool = await withTaskGroup(of: Bool.self) { group in
             group.addTask { [self] in
                 do {
-                    while !isReady { try await handle(try await connection.receive()) }
-                    return true
+                    while !isReady, !isClosed { try await handle(try await connection.receive()) }
+                    return !isClosed
                 } catch {
                     return false
                 }
@@ -156,6 +161,8 @@ final class RemoteLink: @unchecked Sendable {
             }
             let first = await group.next() ?? false
             group.cancelAll()
+            // A leitura à espera só acaba com a ligação fechada, e o grupo espera por ela.
+            if !first { connection.close() }
             return first
         }
         guard ready else {
@@ -184,7 +191,23 @@ final class RemoteLink: @unchecked Sendable {
         return proto.ready
     }
 
+    private var isClosed: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return closed
+    }
+
+    /// Fica com a ligação aberta; false se close() já foi chamado.
+    private func attach(_ connection: TVConnection) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        if closed { return false }
+        self.connection = connection
+        return true
+    }
+
     private func handle(_ frame: [UInt8]) async throws {
+        guard !isClosed else { return }
         if let refused = RemoteProtocol.reportedError(frame) { DebugLog.add("Android TV: the TV reported an error about \(refused)") }
         lock.lock()
         let before = proto.state
@@ -200,7 +223,7 @@ final class RemoteLink: @unchecked Sendable {
         let after = proto.state
         lock.unlock()
         for reply in replies { try await connection?.send(reply) }
-        if after != before, let onState { await onState(after) }
+        if after != before, !isClosed, let onState { await onState(after) }
     }
 
     private func send(_ build: (RemoteProtocol) -> Data) {
@@ -224,9 +247,13 @@ final class RemoteLink: @unchecked Sendable {
     func openApp(_ link: String) { send { $0.appLink(link) } }
 
     func close() {
+        lock.lock()
+        closed = true
+        let connection = self.connection
+        self.connection = nil
+        lock.unlock()
         loop?.cancel()
         connection?.close()
-        connection = nil
     }
 
     /// Para os Atalhos: liga, manda e desliga.

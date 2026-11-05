@@ -130,6 +130,8 @@ final class AppleTVLink: TVControl, @unchecked Sendable {
     /// A sessão de texto aberta na TV (do _tiStart ou do _tiStarted), para onde vai o que se escreve.
     private var textSession: [UInt8]?
     private var typing: Task<Void, Never>?
+    /// Depois de close() esta ligação não faz mais nada, mesmo que ainda estivesse a abrir.
+    private var closed = false
 
     init(tv: SavedTV) {
         self.tv = tv
@@ -139,6 +141,21 @@ final class AppleTVLink: TVControl, @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         return _state
+    }
+
+    private var isClosed: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return closed
+    }
+
+    /// Fica com a ligação aberta; false se close() já foi chamado.
+    private func attach(_ conn: CompanionConnection) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        if closed { return false }
+        self.conn = conn
+        return true
     }
 
     private func update(_ change: (inout TVState) -> Void) {
@@ -160,7 +177,10 @@ final class AppleTVLink: TVControl, @unchecked Sendable {
             DebugLog.add("Apple TV: can't connect to \(tv.host):\(tv.port ?? 49_153): \(why)")
             throw RemoteLink.Failure.unreachable(why)
         }
-        self.conn = conn
+        guard attach(conn) else {
+            conn.close()
+            throw CompanionConnection.Failure.closed
+        }
         do {
             try await verify(conn, creds)
             DebugLog.add("Apple TV: verified")
@@ -169,6 +189,7 @@ final class AppleTVLink: TVControl, @unchecked Sendable {
             conn.close()
             throw Failure.notPaired
         }
+        guard !isClosed else { throw CompanionConnection.Failure.closed }
         loop = Task { [weak self] in
             while let self, !Task.isCancelled {
                 do {
@@ -465,9 +486,13 @@ final class AppleTVLink: TVControl, @unchecked Sendable {
     }
 
     func close() {
-        loop?.cancel()
-        guard let conn = self.conn else { return }
+        lock.lock()
+        closed = true
+        let conn = self.conn
         self.conn = nil
+        lock.unlock()
+        loop?.cancel()
+        guard let conn else { return }
         failPending()
         Task {
             // Larga os eventos e o texto (senão a próxima ligação pode ficar sem resposta ao _tiStart).

@@ -94,7 +94,11 @@ final class RemoteModel {
         DebugLog.add("Connecting to \(tv.name) (\(tv.kind), \(tv.host)\(tv.port.map { ":\($0)" } ?? ""))")
         status = .connecting
         let link = Self.makeLink(tv)
-        link.onState = { [weak self] state in self?.update(state) }
+        // Só a ligação atual conta: uma antiga que ainda fale não mexe no estado da TV escolhida agora.
+        link.onState = { [weak self, weak link] state in
+            guard let self, let link, self.link === link else { return }
+            self.update(state)
+        }
         (link as? AppleTVLink)?.onApps = { [weak self] apps in self?.appleApps(apps, for: tv) }
         link.onClose = { [weak self, weak link] in
             guard let self, let link, self.link === link else { return }

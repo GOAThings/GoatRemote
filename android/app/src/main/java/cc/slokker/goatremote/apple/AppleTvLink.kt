@@ -169,6 +169,11 @@ class AppleTvLink(
             throw e
         }
         this.conn = conn
+        // Fechada enquanto abria: esta ligação não faz mais nada.
+        if (closed) {
+            conn.close()
+            throw NotPairedException()
+        }
         try {
             verify(conn, creds)
             DebugLog.add("Apple TV: verified")
