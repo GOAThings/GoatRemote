@@ -50,6 +50,7 @@ import cc.slokker.goatremote.tv.readLimited
 import java.net.HttpURLConnection
 import java.net.URL
 import kotlinx.coroutines.Dispatchers
+import android.os.SystemClock
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -127,9 +128,13 @@ fun Modifier.pressable(onTap: () -> Unit, onHold: ((Boolean) -> Unit)? = null, p
     val tap by rememberUpdatedState(onTap)
     val hold by rememberUpdatedState(onHold)
     val press by rememberUpdatedState(pressed)
+    // Num toque rápido a tecla acendia e apagava entre dois frames: fica acesa pelo menos PRESSED_MIN_MS.
+    val release = remember { arrayOfNulls<Job>(1) }
     return pointerInput(Unit) {
         awaitEachGesture {
             awaitFirstDown()
+            val downAt = SystemClock.uptimeMillis()
+            release[0]?.cancel()
             press(true)
             var holding = false
             val timer: Job? = hold?.let { h ->
@@ -142,10 +147,15 @@ fun Modifier.pressable(onTap: () -> Unit, onHold: ((Boolean) -> Unit)? = null, p
             val up = waitForUpOrCancellation()
             timer?.cancel()
             if (holding) hold?.invoke(false) else if (up != null) tap()
-            press(false)
+            release[0] = scope.launch {
+                delay((PRESSED_MIN_MS - (SystemClock.uptimeMillis() - downAt)).coerceAtLeast(0))
+                press(false)
+            }
         }
     }
 }
+
+private const val PRESSED_MIN_MS = 120L
 
 /** Botão redondo com um símbolo. [filled]: branco com o símbolo a preto (o botão principal, voltar). */
 @Composable

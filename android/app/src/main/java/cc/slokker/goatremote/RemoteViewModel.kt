@@ -727,8 +727,9 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---- Comando ----
 
-    fun press(key: Key) {
-        if (haptics) vibrate(false)
+    /** [haptic] false nas repetições de uma tecla mantida: vibrava a cada passo, mais do que a TV avançava. */
+    fun press(key: Key, haptic: Boolean = true) {
+        if (haptic && haptics) vibrate(false)
         val link = link
         if (link == null || status != Status.Connected) return reconnectIfNeeded()
         if (noVolume(key) || volumeViaLauncher(key)) return
@@ -834,7 +835,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Carregar e manter: início e fim. */
     fun hold(key: Key, down: Boolean) {
-        if (down && haptics) vibrate(true)
+        if (down) repeatStarted()
         val link = link
         if (link == null || status != Status.Connected) return reconnectIfNeeded()
         if (down && noVolume(key)) return
@@ -862,6 +863,11 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun reconnectIfNeeded() {
         if (status is Status.Unreachable) connect()
+    }
+
+    /** Começou a manter uma tecla (o OK longo, ou uma seta a repetir): uma vibração forte, só esta. */
+    fun repeatStarted() {
+        if (haptics) vibrate(true)
     }
 
     private fun vibrate(strong: Boolean) {

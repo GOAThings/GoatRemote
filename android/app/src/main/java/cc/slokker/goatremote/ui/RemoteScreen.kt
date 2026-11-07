@@ -1,5 +1,6 @@
 package cc.slokker.goatremote.ui
 
+import android.os.SystemClock
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -525,9 +526,10 @@ private fun TouchSurface(vm: RemoteViewModel) {
                             val position = change.position
                             repeating = scope.launch {
                                 delay(350)
+                                vm.repeatStarted()
                                 var interval = 220L
                                 while (true) {
-                                    vm.press(direction)
+                                    vm.press(direction, haptic = false)
                                     addRipple(position)
                                     delay(interval)
                                     interval = (interval - 20).coerceAtLeast(80)
@@ -556,7 +558,11 @@ private fun TouchSurface(vm: RemoteViewModel) {
  */
 @Composable
 private fun Dpad(vm: RemoteViewModel, ready: Boolean) {
-    var pressed by remember { mutableStateOf<Key?>(null) }
+    // A tecla acesa e o brilho dela: acende ao tocar e apaga devagar ao largar, nunca antes de LIT_MIN_MS (num toque
+    // rápido, só enquanto o dedo estava em cima, mal se via).
+    var lit by remember { mutableStateOf<Key?>(null) }
+    val glow = remember { Animatable(0f) }
+    var fade by remember { mutableStateOf<Job?>(null) }
     val scope = rememberCoroutineScope()
     BoxWithConstraints(Modifier.fillMaxSize().hero(RoundedCornerShape(28.dp), glow = 0.16f).padding(20.dp), contentAlignment = Alignment.Center) {
         val side = minOf(maxWidth, maxHeight, 320.dp)
@@ -582,7 +588,10 @@ private fun Dpad(vm: RemoteViewModel, ready: Boolean) {
                         val down = awaitFirstDown()
                         val key = keyAt(down.position) ?: return@awaitEachGesture
                         down.consume()
-                        pressed = key
+                        val downAt = SystemClock.uptimeMillis()
+                        fade?.cancel()
+                        lit = key
+                        scope.launch { glow.snapTo(1f) }
                         var held = false
                         val timer = scope.launch {
                             if (key == Key.CENTER) {
@@ -592,9 +601,10 @@ private fun Dpad(vm: RemoteViewModel, ready: Boolean) {
                             } else {
                                 delay(400)
                                 held = true
+                                vm.repeatStarted()
                                 var interval = 180L
                                 while (true) {
-                                    vm.press(key)
+                                    vm.press(key, haptic = false)
                                     delay(interval)
                                     interval = (interval - 15).coerceAtLeast(70)
                                 }
@@ -603,7 +613,11 @@ private fun Dpad(vm: RemoteViewModel, ready: Boolean) {
                         waitForUpOrCancellation()
                         timer.cancel()
                         if (!held) vm.press(key) else if (key == Key.CENTER) vm.hold(Key.CENTER, false)
-                        pressed = null
+                        fade = scope.launch {
+                            delay((LIT_MIN_MS - (SystemClock.uptimeMillis() - downAt)).coerceAtLeast(0))
+                            glow.animateTo(0f, tween(LIT_FADE_MS))
+                            lit = null
+                        }
                     }
                 },
         ) {
@@ -612,7 +626,7 @@ private fun Dpad(vm: RemoteViewModel, ready: Boolean) {
                 val inner = radius * DPAD_INNER
                 val line = 1.5.dp.toPx()
                 drawCircle(Color.White.copy(alpha = 0.04f), radius)
-                val sector = when (pressed) {
+                val sector = when (lit) {
                     Key.RIGHT -> -45f
                     Key.DOWN -> 45f
                     Key.LEFT -> 135f
@@ -622,14 +636,14 @@ private fun Dpad(vm: RemoteViewModel, ready: Boolean) {
                 if (sector != null) {
                     // Só o anel: o OK é transparente e não pode acender com a seta.
                     val hole = Path().apply { addOval(Rect(center, inner)) }
-                    clipPath(hole, ClipOp.Difference) { drawArc(Color.White.copy(alpha = 0.10f), sector, 90f, useCenter = true) }
+                    clipPath(hole, ClipOp.Difference) { drawArc(Color.White.copy(alpha = 0.14f * glow.value), sector, 90f, useCenter = true) }
                 }
                 for (angle in listOf(45.0, 135.0, 225.0, 315.0)) {
                     val a = Math.toRadians(angle)
                     val dir = Offset(kotlin.math.cos(a).toFloat(), kotlin.math.sin(a).toFloat())
                     drawLine(WHEEL_LINE, center + dir * inner, center + dir * radius, strokeWidth = line)
                 }
-                drawCircle(Color.White.copy(alpha = if (pressed == Key.CENTER) 0.14f else 0.05f), inner)
+                drawCircle(Color.White.copy(alpha = 0.05f + if (lit == Key.CENTER) 0.10f * glow.value else 0f), inner)
                 drawCircle(WHEEL_LINE, inner, style = Stroke(line))
                 drawCircle(WHEEL_LINE, radius - line / 2, style = Stroke(line))
             }
@@ -646,6 +660,10 @@ private fun Dpad(vm: RemoteViewModel, ready: Boolean) {
 
 /** O raio do OK, em fração do raio das setas. */
 private const val DPAD_INNER = 0.43f
+
+/** Uma tecla tocada fica acesa pelo menos este tempo, e depois apaga-se neste. */
+private const val LIT_MIN_MS = 120L
+private const val LIT_FADE_MS = 180
 
 /** O contorno da roda e as divisões entre as setas. */
 private val WHEEL_LINE = Color.White.copy(alpha = 0.16f)

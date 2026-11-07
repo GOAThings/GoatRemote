@@ -649,8 +649,9 @@ final class RemoteModel {
 
     // MARK: Comando
 
-    func press(_ key: Key) {
-        if haptics { lightHaptics.impactOccurred() }
+    /// [haptic] false nas repetições de uma tecla mantida: vibrava a cada passo, mais do que a TV avançava.
+    func press(_ key: Key, haptic: Bool = true) {
+        if haptic, haptics { lightHaptics.impactOccurred() }
         guard let link, status == .connected else { return reconnectIfNeeded() }
         if noVolume(key) || volumeViaLauncher(key) { return }
         link.key(key)
@@ -744,7 +745,7 @@ final class RemoteModel {
 
     /// Carregar e manter: início e fim.
     func hold(_ key: Key, down: Bool) {
-        if down, haptics { heavyHaptics.impactOccurred() }
+        if down { repeatStarted() }
         guard let link, status == .connected else { return reconnectIfNeeded() }
         if down, noVolume(key) { return }
         if [.volumeUp, .volumeDown, .mute].contains(key), let tv = current, tv.kind == .android, Self.hasLauncher(tv.id) != false {
@@ -765,6 +766,11 @@ final class RemoteModel {
         guard let remote = self.link, status == .connected else { return reconnectIfNeeded() }
         DebugLog.add("Open app: \(link)")
         remote.openApp(link)
+    }
+
+    /// Começou a manter uma tecla (o OK longo, ou uma seta a repetir): uma vibração forte, só esta.
+    func repeatStarted() {
+        if haptics { heavyHaptics.impactOccurred() }
     }
 
     private func reconnectIfNeeded() {

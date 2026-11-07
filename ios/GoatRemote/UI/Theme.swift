@@ -71,6 +71,10 @@ struct PressArea<Label: View>: View {
     @State private var pressed = false
     @State private var holding = false
     @State private var holdTask: Task<Void, Never>?
+    /// O que se desenha: num toque rápido o botão acendia e apagava antes de se ver; fica aceso pelo menos 0,12 s.
+    @State private var lit = false
+    @State private var downAt = Date()
+    @State private var release: Task<Void, Never>?
 
     init(onTap: @escaping () -> Void, onHold: ((Bool) -> Void)? = nil, @ViewBuilder label: @escaping (_ pressed: Bool) -> Label) {
         self.onTap = onTap
@@ -79,13 +83,16 @@ struct PressArea<Label: View>: View {
     }
 
     var body: some View {
-        label(pressed)
+        label(lit)
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { _ in
                         guard !pressed else { return }
                         pressed = true
+                        release?.cancel()
+                        lit = true
+                        downAt = Date()
                         guard let onHold else { return }
                         holdTask = Task { @MainActor in
                             try? await Task.sleep(nanoseconds: 450_000_000)
@@ -99,9 +106,15 @@ struct PressArea<Label: View>: View {
                         if holding { onHold?(false) } else { onTap() }
                         holding = false
                         pressed = false
+                        let wait = max(0, 0.12 - Date().timeIntervalSince(downAt))
+                        release = Task { @MainActor in
+                            try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
+                            guard !Task.isCancelled else { return }
+                            lit = false
+                        }
                     }
             )
-            .animation(.spring(response: 0.22, dampingFraction: 0.6), value: pressed)
+            .animation(.spring(response: 0.22, dampingFraction: 0.6), value: lit)
     }
 }
 

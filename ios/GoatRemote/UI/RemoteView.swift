@@ -367,9 +367,11 @@ struct TouchSurface: View {
                     let location = value.location
                     repeatTask = Task { @MainActor in
                         try? await Task.sleep(nanoseconds: 350_000_000)
+                        guard !Task.isCancelled else { return }
+                        model.repeatStarted()
                         var interval: UInt64 = 220
                         while !Task.isCancelled {
-                            model.press(direction)
+                            model.press(direction, haptic: false)
                             addRipple(location)
                             try? await Task.sleep(nanoseconds: interval * 1_000_000)
                             interval = max(80, interval - 20)
@@ -554,6 +556,12 @@ struct DPad: View {
     @State private var pressed: Key?
     @State private var held = false
     @State private var task: Task<Void, Never>?
+    /// A tecla acesa e o brilho dela: acende ao tocar e apaga devagar ao largar, nunca antes de 0,12 s (num toque
+    /// rápido, só enquanto o dedo estava em cima, mal se via).
+    @State private var lit: Key?
+    @State private var glow = 0.0
+    @State private var fade: Task<Void, Never>?
+    @State private var downAt = Date()
     /// false enquanto liga: a roda fica esbatida.
     var ready = true
     /// O raio do OK, em fração do raio das setas.
@@ -567,7 +575,7 @@ struct DPad: View {
             ZStack {
                 Circle().fill(.white.opacity(0.04))
                 if let start = sectorStart {
-                    Sector(start: .degrees(start), inner: Self.inner).fill(.white.opacity(0.10))
+                    Sector(start: .degrees(start), inner: Self.inner).fill(.white.opacity(0.14 * glow))
                 }
                 ForEach([45.0, 135.0, 225.0, 315.0], id: \.self) { angle in
                     Path { p in
@@ -579,7 +587,7 @@ struct DPad: View {
                     .stroke(Self.line, lineWidth: 1.5)
                 }
                 Circle().strokeBorder(Self.line, lineWidth: 1.5)
-                Circle().fill(.white.opacity(pressed == .center ? 0.14 : 0.05))
+                Circle().fill(.white.opacity(0.05 + (lit == .center ? 0.10 * glow : 0)))
                     .overlay(Circle().strokeBorder(Self.line, lineWidth: 1.5))
                     .frame(width: side * Self.inner, height: side * Self.inner)
                 Text("OK").font(.system(size: 19, weight: .bold)).foregroundStyle(Theme.text)
@@ -607,7 +615,7 @@ struct DPad: View {
     }
 
     private var sectorStart: Double? {
-        switch pressed {
+        switch lit {
         case .right: return -45
         case .down: return 45
         case .left: return 135
@@ -633,6 +641,10 @@ struct DPad: View {
                 guard pressed == nil, let key = keyAt(value.startLocation, side: side) else { return }
                 pressed = key
                 held = false
+                fade?.cancel()
+                lit = key
+                glow = 1
+                downAt = Date()
                 task = Task { @MainActor in
                     if key == .center {
                         try? await Task.sleep(nanoseconds: 500_000_000)
@@ -641,10 +653,12 @@ struct DPad: View {
                         model.hold(.center, down: true)
                     } else {
                         try? await Task.sleep(nanoseconds: 400_000_000)
+                        guard !Task.isCancelled else { return }
+                        held = true
+                        model.repeatStarted()
                         var interval: UInt64 = 180
                         while !Task.isCancelled {
-                            held = true
-                            model.press(key)
+                            model.press(key, haptic: false)
                             try? await Task.sleep(nanoseconds: interval * 1_000_000)
                             interval = max(70, interval - 15)
                         }
@@ -659,6 +673,12 @@ struct DPad: View {
                 }
                 pressed = nil
                 held = false
+                let wait = max(0, 0.12 - Date().timeIntervalSince(downAt))
+                fade = Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
+                    guard !Task.isCancelled else { return }
+                    withAnimation(.easeOut(duration: 0.18)) { glow = 0 }
+                }
             }
     }
 }
