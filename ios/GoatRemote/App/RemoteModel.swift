@@ -518,6 +518,11 @@ final class RemoteModel {
                                             "O GoatTV não mudou de canal. Vê a TV e tenta outra vez")
                             return
                         }
+                    } else if tv.kind == .android, state.currentApp == GoatTVChannels.androidPackage {
+                        // Já está à frente, só ainda não pode (a meio de mudar de canal): abri-lo outra vez não ajuda,
+                        // e o link pelo comando faz a SHIELD fechar a ligação.
+                        DebugLog.add("Play: GoatTV is in front but answered \(refused ? "refused" : "HTTP \(status)"), waiting")
+                        deadline = Date().addingTimeInterval(10)
                     } else {
                         guard let app = goatTVApp ?? (tv.kind == .android ? Self.androidGoatTV : nil) else {
                             playProblem = goatTVClosedLine

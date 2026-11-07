@@ -610,7 +610,12 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
                         return@launch
                     }
                     GoatTvChannels.Play.RETRY -> {
-                        if (deadline == 0L) {
+                        if (deadline == 0L && tv.kind == TvKind.ANDROID && state.currentApp == GoatTvChannels.ANDROID_PACKAGE) {
+                            // Já está à frente, só ainda não pode (a meio de mudar de canal): abri-lo outra vez não
+                            // ajuda, e o link pelo comando faz a SHIELD fechar a ligação.
+                            DebugLog.add("Play: GoatTV is in front but answered ${if (refused) "refused" else "HTTP $status"}, waiting")
+                            deadline = System.currentTimeMillis() + 10_000
+                        } else if (deadline == 0L) {
                             val app = goatTvApp ?: if (tv.kind == TvKind.ANDROID) TvApp(GoatTvChannels.ANDROID_PACKAGE, "GoatTV") else null
                             if (app == null) {
                                 playProblem = goatTvClosedLine()
