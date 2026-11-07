@@ -122,6 +122,15 @@ final class GoatRemoteUITests: XCTestCase {
         pause(0.5)
         shot("channel-played")
 
+        // Fechada a folha, o comando mostra o canal do GoatTV (com o programa do /now) por cima das setas.
+        app.swipeDown()
+        pause(0.6)
+        if app.buttons["channel:News 24"].firstMatch.exists { app.swipeDown() }
+        XCTAssertTrue(app.descendants(matching: .any)["now-card"].waitForExistence(timeout: 10), "O cartão do canal não apareceu")
+        app.buttons["layout:dpad"].tap()
+        pause(1.5)
+        shot("now-dpad")
+
         // O que a TV falsa recebeu.
         let log = fetch("log") ?? ""
         let attachment = XCTAttachment(string: log)
