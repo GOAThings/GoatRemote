@@ -142,13 +142,15 @@ fun RemoteScreen(vm: RemoteViewModel) {
         Spacer(Modifier.height(12.dp))
         Box(Modifier.weight(1f).fillMaxWidth()) {
             val connected = vm.status == Status.Connected
-            if (connected && vm.layout == RemoteLayout.DPAD) {
-                Dpad(vm)
+            // A ligar (a abrir a app, a voltar de segundo plano) fica o comando escolhido, esbatido até a TV responder.
+            val live = connected || vm.status == Status.Connecting
+            if (live && vm.layout == RemoteLayout.DPAD) {
+                Dpad(vm, ready = connected)
             } else {
                 TouchSurface(vm)
                 SurfaceInfo(vm)
             }
-            if (connected) LayoutSwitch(vm, Modifier.align(Alignment.TopEnd).padding(12.dp))
+            if (live) LayoutSwitch(vm, Modifier.align(Alignment.TopEnd).padding(12.dp))
             androidx.compose.animation.AnimatedVisibility(
                 visible = volumeVisible,
                 modifier = Modifier.align(Alignment.TopCenter).padding(top = 60.dp),
@@ -553,13 +555,14 @@ private fun TouchSurface(vm: RemoteViewModel) {
  * As setas e o OK, como num comando físico. Manter uma seta repete-a, cada vez mais depressa; manter o OK é o OK longo.
  */
 @Composable
-private fun Dpad(vm: RemoteViewModel) {
+private fun Dpad(vm: RemoteViewModel, ready: Boolean) {
     var pressed by remember { mutableStateOf<Key?>(null) }
     val scope = rememberCoroutineScope()
     BoxWithConstraints(Modifier.fillMaxSize().hero(RoundedCornerShape(28.dp), glow = 0.16f).padding(20.dp), contentAlignment = Alignment.Center) {
         val side = minOf(maxWidth, maxHeight, 320.dp)
         Box(
             Modifier.size(side)
+                .alpha(if (ready) 1f else 0.4f)
                 .semantics { contentDescription = L("Arrows", "Setas") }
                 .testTag("dpad")
                 .pointerInput(Unit) {

@@ -17,6 +17,7 @@ struct RemoteView: View {
         @Bindable var model = model
         let now = model.nowPlaying
         let connected = model.status == .connected
+        let live = connected || model.status == .connecting
         VStack(spacing: 0) {
             header
                 .padding(.bottom, now == nil ? 12 : 14)
@@ -25,14 +26,15 @@ struct RemoteView: View {
                     .padding(.bottom, 12)
             }
             Group {
-                if connected, model.layout == .dpad {
-                    DPad()
+                // A ligar (a abrir a app, a voltar de segundo plano) fica o comando escolhido, esbatido até a TV responder.
+                if live, model.layout == .dpad {
+                    DPad(ready: connected)
                 } else {
                     TouchSurface().overlay { SurfaceInfo() }
                 }
             }
             .overlay(alignment: .topTrailing) {
-                if connected { LayoutSwitch().padding(12) }
+                if live { LayoutSwitch().padding(12) }
             }
             .overlay(alignment: .top) {
                 if volumeVisible {
@@ -552,6 +554,8 @@ struct DPad: View {
     @State private var pressed: Key?
     @State private var held = false
     @State private var task: Task<Void, Never>?
+    /// false enquanto liga: a roda fica esbatida.
+    var ready = true
     /// O raio do OK, em fração do raio das setas.
     private static let inner: CGFloat = 0.43
     /// O contorno da roda e as divisões entre as setas.
@@ -589,6 +593,7 @@ struct DPad: View {
                 .foregroundStyle(Theme.text)
             }
             .frame(width: side, height: side)
+            .opacity(ready ? 1 : 0.4)
             .contentShape(Circle())
             .gesture(drag(side))
             .position(x: geo.size.width / 2, y: geo.size.height / 2)
