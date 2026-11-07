@@ -76,21 +76,16 @@ final class GoatRemoteUITests: XCTestCase {
         app.buttons["send-text"].tap()
         pause(0.8)
 
-        // Ligar as setas nas bordas (em Mais) e fechar a folha.
-        app.buttons["more"].tap()
-        let dpadSwitch = app.switches["opt:dpad"]
-        XCTAssertTrue(dpadSwitch.waitForExistence(timeout: 5))
-        dpadSwitch.switches.firstMatch.tap()
-        pause(0.4)
-        shot("options")
-        app.swipeDown(velocity: .fast)
-        pause(0.8)
-
-        // Setas nas bordas: tocar em cima e à direita.
-        pad.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.05)).tap()
-        pad.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+        // As setas: em cima e à direita, e de volta à superfície de toque.
+        app.buttons["layout:dpad"].tap()
+        let dpad = app.descendants(matching: .any)["dpad"]
+        XCTAssertTrue(dpad.waitForExistence(timeout: 5), "As setas não apareceram")
+        dpad.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.05)).tap()
+        dpad.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
         pause(0.4)
         shot("dpad")
+        app.buttons["layout:touch"].tap()
+        pause(0.4)
 
         app.buttons["apps"].tap()
         // A lista vem do "GoatLauncher" da TV falsa (porta 6470): também tem apps que o comando nunca viu abertas.

@@ -649,6 +649,13 @@ public class AtvTool {
                             if (remote != null) react(remote, key);
                             body = "ok".getBytes(StandardCharsets.UTF_8);
                             type = "text/plain";
+                        } else if (path.startsWith("/open/")) {
+                            // A app abre-se e a TV conta ao comando qual é (o cartão do canal precisa do GoatTV à frente).
+                            app = path.substring(6);
+                            OutputStream remote = remoteOut;
+                            if (remote != null) sendApp(remote);
+                            body = "ok".getBytes(StandardCharsets.UTF_8);
+                            type = "text/plain";
                         } else {
                             body = "GoatLauncher".getBytes(StandardCharsets.UTF_8);
                             type = "text/plain";

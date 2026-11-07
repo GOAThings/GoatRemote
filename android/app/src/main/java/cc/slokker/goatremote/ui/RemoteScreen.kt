@@ -9,6 +9,15 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.material.icons.automirrored.rounded.List
+import androidx.compose.material.icons.rounded.Gamepad
+import androidx.compose.material.icons.rounded.TouchApp
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.semantics.selected
+import cc.slokker.goatremote.RemoteLayout
+import cc.slokker.goatremote.data.TvChannel
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
@@ -101,8 +110,9 @@ import kotlinx.coroutines.launch
 enum class Sheet { APPS, CHANNELS, MORE, TVS, ADD }
 
 /**
- * O comando, ao jeito do da Apple TV: em cima som, a TV e ligar; ao meio uma superfície de toque; em baixo
- * play/pausa, voltar e início. Por cima destes, uma fila discreta com teclado, apps, recuar/avançar e mais.
+ * O comando, com o visual do GoatTV: em cima o nome da TV (tocar escolhe outra), som e ligar; o canal do GoatTV quando
+ * ele está a dar; ao meio a superfície de toque ou as setas; em baixo play/pausa, voltar e início, e por cima destes uma
+ * fila com teclado, apps, recuar/avançar e mais.
  */
 @Composable
 fun RemoteScreen(vm: RemoteViewModel) {
@@ -119,36 +129,49 @@ fun RemoteScreen(vm: RemoteViewModel) {
     LaunchedEffect(vm.showKeyboard) { if (vm.showKeyboard) sheet = null }
 
     Column(Modifier.fillMaxSize().padding(horizontal = 18.dp).padding(top = 8.dp, bottom = 12.dp)) {
-        TopBar(vm) { sheet = Sheet.TVS }
-        Spacer(Modifier.height(16.dp))
+        Header(vm) { sheet = Sheet.TVS }
+        val now = vm.nowPlaying
+        if (now != null) {
+            Spacer(Modifier.height(14.dp))
+            NowCard(vm, now) { sheet = Sheet.CHANNELS }
+        }
+        Spacer(Modifier.height(12.dp))
         Box(Modifier.weight(1f).fillMaxWidth()) {
-            TouchSurface(vm)
-            SurfaceInfo(vm)
+            val connected = vm.status == Status.Connected
+            if (connected && vm.layout == RemoteLayout.DPAD) {
+                Dpad(vm)
+            } else {
+                TouchSurface(vm)
+                SurfaceInfo(vm)
+            }
+            if (connected) LayoutSwitch(vm, Modifier.align(Alignment.TopEnd).padding(12.dp))
             androidx.compose.animation.AnimatedVisibility(
                 visible = volumeVisible,
-                modifier = Modifier.align(Alignment.TopCenter).padding(top = 16.dp),
+                modifier = Modifier.align(Alignment.TopCenter).padding(top = 60.dp),
                 enter = slideInVertically { -it } + fadeIn(),
                 exit = slideOutVertically { -it } + fadeOut(),
             ) { VolumeHud(vm) }
         }
         Spacer(Modifier.height(18.dp))
-        val small = Color.White.copy(alpha = 0.8f)
+        val small = Theme.dim
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            GlassKey(Icons.Rounded.Keyboard, L("Keyboard", "Teclado"), "keyboard", 48.dp, small) { vm.showKeyboard = true }
-            GlassKey(Icons.Rounded.Apps, "Apps", "apps", 48.dp, small) { sheet = Sheet.APPS }
-            // Só com o GoatTV na TV a dar os canais.
-            if (vm.hasChannels) GlassKey(Icons.Rounded.LiveTv, L("Channels", "Canais"), "channels", 48.dp, small) { sheet = Sheet.CHANNELS }
-            GlassKey(Icons.Rounded.FastRewind, L("Rewind", "Recuar"), "key:rewind", 48.dp, small, onHold = { vm.hold(Key.REWIND, it) }) { vm.press(Key.REWIND) }
-            GlassKey(Icons.Rounded.FastForward, L("Forward", "Avançar"), "key:fastForward", 48.dp, small, onHold = { vm.hold(Key.FAST_FORWARD, it) }) {
+            GlassKey(Icons.Rounded.Keyboard, L("Keyboard", "Teclado"), "keyboard", 52.dp, small) { vm.showKeyboard = true }
+            GlassKey(Icons.Rounded.Apps, "Apps", "apps", 52.dp, small) { sheet = Sheet.APPS }
+            // Com o GoatTV a dar um canal, a lista abre-se no cartão dele.
+            if (vm.hasChannels && now == null) GlassKey(Icons.Rounded.LiveTv, L("Channels", "Canais"), "channels", 52.dp, small) { sheet = Sheet.CHANNELS }
+            GlassKey(Icons.Rounded.FastRewind, L("Rewind", "Recuar"), "key:rewind", 52.dp, small, onHold = { vm.hold(Key.REWIND, it) }) { vm.press(Key.REWIND) }
+            GlassKey(Icons.Rounded.FastForward, L("Forward", "Avançar"), "key:fastForward", 52.dp, small, onHold = { vm.hold(Key.FAST_FORWARD, it) }) {
                 vm.press(Key.FAST_FORWARD)
             }
-            GlassKey(Icons.Rounded.MoreHoriz, L("More", "Mais"), "more", 48.dp, small) { sheet = Sheet.MORE }
+            GlassKey(Icons.Rounded.MoreHoriz, L("More", "Mais"), "more", 52.dp, small) { sheet = Sheet.MORE }
         }
         Spacer(Modifier.height(22.dp))
         Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween) {
             PlayPauseKey { vm.press(Key.PLAY_PAUSE) }
-            GlassKey(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, L("Back", "Voltar"), "key:back", 96.dp, onHold = { vm.hold(Key.BACK, it) }) { vm.press(Key.BACK) }
+            GlassKey(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, L("Back", "Voltar"), "key:back", 96.dp, filled = true, onHold = { vm.hold(Key.BACK, it) }) {
+                vm.press(Key.BACK)
+            }
             GlassKey(Icons.Rounded.Tv, L("Home", "Início"), "key:home", 74.dp, onHold = { vm.hold(Key.HOME, it) }) { vm.press(Key.HOME) }
         }
     }
@@ -179,47 +202,93 @@ private fun PlayPauseKey(onTap: () -> Unit) {
     }
 }
 
+/** O nome da TV em grande (tocar abre as TVs), com o estado por baixo; à direita, som e ligar. */
 @Composable
-private fun TopBar(vm: RemoteViewModel, onTvs: () -> Unit) {
+private fun Header(vm: RemoteViewModel, onTvs: () -> Unit) {
     val muted = vm.state.muted == true
     Row(verticalAlignment = Alignment.CenterVertically) {
-        GlassKey(Icons.Rounded.VolumeOff, L("Mute", "Silenciar"), "key:mute", 58.dp, if (muted) Theme.accent else Theme.dim) { vm.press(Key.MUTE) }
-        Spacer(Modifier.width(12.dp))
-        var pressed by remember { mutableStateOf(false) }
-        Row(
-            Modifier.weight(1f).heightIn(min = 58.dp).glass(RoundedCornerShape(50), pressed).pressable(onTvs) { pressed = it }
-                .padding(horizontal = 18.dp)
+        Column(
+            Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).clickable(onClick = onTvs)
                 .semantics { contentDescription = L("TVs", "TVs") }
                 .testTag("tv-menu"),
-            verticalAlignment = Alignment.CenterVertically,
         ) {
-            // A TV num círculo de vidro, com o estado da ligação num ponto ao canto.
-            Box(Modifier.size(36.dp)) {
-                Box(
-                    Modifier.size(34.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.08f))
-                        .border(0.5.dp, Color.White.copy(alpha = 0.14f), CircleShape),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(if (vm.current?.kind == TvKind.APPLE) Icons.Outlined.LiveTv else Icons.Outlined.Tv, null,
-                        tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(18.dp))
-                }
-                Box(
-                    Modifier.align(Alignment.BottomEnd).size(11.dp).clip(CircleShape).background(Theme.surfaceTop).padding(2.dp)
-                        .clip(CircleShape).background(statusColor(vm)),
-                )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(vm.current?.name ?: "GoatRemote", color = Theme.text, fontSize = 30.sp, fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = (-0.5).sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                Icon(Icons.Rounded.KeyboardArrowDown, null, tint = Theme.faint, modifier = Modifier.padding(start = 2.dp).size(26.dp))
             }
-            Spacer(Modifier.width(11.dp))
-            Column(Modifier.weight(1f)) {
-                Text(vm.current?.name ?: "GoatRemote", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(subtitle(vm), color = Theme.dim, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1,
-                    overflow = TextOverflow.Ellipsis)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(7.dp).clip(CircleShape).background(statusColor(vm)))
+                Spacer(Modifier.width(7.dp))
+                Text(subtitle(vm), color = Theme.dim, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Theme.dim, modifier = Modifier.size(20.dp))
         }
-        Spacer(Modifier.width(12.dp))
-        GlassKey(Icons.Rounded.PowerSettingsNew, L("Power", "Ligar"), "key:power", 58.dp, if (vm.state.isOn == false) Theme.dim else Color.White) {
+        Spacer(Modifier.width(10.dp))
+        GlassKey(Icons.Rounded.VolumeOff, L("Mute", "Silenciar"), "key:mute", 42.dp, if (muted) Theme.accent else Theme.dim) { vm.press(Key.MUTE) }
+        Spacer(Modifier.width(8.dp))
+        GlassKey(Icons.Rounded.PowerSettingsNew, L("Power", "Ligar"), "key:power", 42.dp, if (vm.state.isOn == false) Theme.dim else Theme.power) {
             vm.press(Key.POWER)
+        }
+    }
+}
+
+/** O canal que o GoatTV está a dar: canal anterior/seguinte e a lista. */
+@Composable
+private fun NowCard(vm: RemoteViewModel, channel: TvChannel, onList: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().hero(RoundedCornerShape(20.dp)).padding(14.dp).testTag("now-card"),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        ChannelLogo(vm, channel, 62.dp, 42.dp, Color.Black.copy(alpha = 0.35f))
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(("GoatTV" + (channel.num?.let { " · $it" } ?: "")).uppercase(), color = Theme.faint, fontSize = 11.sp,
+                fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp, maxLines = 1)
+            Text(channel.name, color = Theme.text, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Spacer(Modifier.width(8.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            ZapKey(Icons.Rounded.KeyboardArrowUp, L("Next channel", "Canal seguinte"), "zap:next") { vm.zap(1) }
+            ZapKey(Icons.Rounded.KeyboardArrowDown, L("Previous channel", "Canal anterior"), "zap:previous") { vm.zap(-1) }
+        }
+        Spacer(Modifier.width(10.dp))
+        Box(
+            Modifier.size(44.dp).clip(CircleShape).background(Color.White).clickable(onClick = onList)
+                .semantics { contentDescription = L("Channels", "Canais") }
+                .testTag("channels"),
+            contentAlignment = Alignment.Center,
+        ) { Icon(Icons.AutoMirrored.Rounded.List, null, tint = Color.Black, modifier = Modifier.size(22.dp)) }
+    }
+}
+
+@Composable
+private fun ZapKey(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, tag: String, onTap: () -> Unit) {
+    var pressed by remember { mutableStateOf(false) }
+    Box(
+        Modifier.size(34.dp, 30.dp).clip(RoundedCornerShape(10.dp)).background(Color.White.copy(alpha = if (pressed) 0.18f else 0.08f))
+            .pressable(onTap) { pressed = it }
+            .semantics { contentDescription = label }
+            .testTag(tag),
+        contentAlignment = Alignment.Center,
+    ) { Icon(icon, null, tint = Theme.text, modifier = Modifier.size(18.dp)) }
+}
+
+/** Superfície de toque ou setas; a escolha fica guardada. */
+@Composable
+private fun LayoutSwitch(vm: RemoteViewModel, modifier: Modifier) {
+    Row(modifier.clip(RoundedCornerShape(50)).background(Color.Black.copy(alpha = 0.35f)).padding(3.dp)) {
+        for ((layout, icon, label) in listOf(
+            Triple(RemoteLayout.TOUCH, Icons.Rounded.TouchApp, L("Touch surface", "Superfície de toque")),
+            Triple(RemoteLayout.DPAD, Icons.Rounded.Gamepad, L("Arrows", "Setas")),
+        )) {
+            val on = vm.layout == layout
+            Box(
+                Modifier.size(38.dp, 30.dp).clip(RoundedCornerShape(50)).background(if (on) Color.White else Color.Transparent)
+                    .clickable { vm.changeLayout(layout) }
+                    .semantics { contentDescription = label; selected = on }
+                    .testTag("layout:" + layout.name.lowercase()),
+                contentAlignment = Alignment.Center,
+            ) { Icon(icon, null, tint = if (on) Color.Black else Theme.faint, modifier = Modifier.size(17.dp)) }
         }
     }
 }
@@ -277,14 +346,11 @@ private fun SurfaceInfo(vm: RemoteViewModel) {
                         color = watermark, fontSize = 19.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
                     )
                 }
-                // Com as setas nas bordas, as próprias setas já dizem o que fazer.
-                if (!vm.dpadTaps) {
-                    Text(
-                        L("Swipe to move · tap to select · hold for more", "Desliza para andar · toca para escolher · mantém para mais"),
-                        color = watermark.copy(alpha = 0.1f), fontSize = 11.sp, textAlign = TextAlign.Center,
-                        modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp, start = 20.dp, end = 20.dp),
-                    )
-                }
+                Text(
+                    L("Swipe to move · tap to select", "Desliza para andar · toca para escolher"),
+                    color = Theme.faint.copy(alpha = 0.25f), fontSize = 12.sp, textAlign = TextAlign.Center,
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp, start = 20.dp, end = 20.dp),
+                )
             }
             Status.Connecting -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 CircularProgressIndicator(color = Theme.dim, strokeWidth = 2.dp, modifier = Modifier.size(28.dp))
@@ -373,13 +439,10 @@ private fun VolumeHud(vm: RemoteViewModel) {
 
 private class Ripple(val id: Int, val point: Offset, val strong: Boolean)
 
-/**
- * A superfície de toque. Deslizar anda (um passo por cada bocado de dedo), tocar é OK, manter é OK longo.
- * Com "setas nas bordas", tocar perto de uma borda carrega nessa seta.
- */
+/** A superfície de toque. Deslizar anda (um passo por cada bocado de dedo), tocar é OK, manter é OK longo. */
 @Composable
 private fun TouchSurface(vm: RemoteViewModel) {
-    val shape = RoundedCornerShape(40.dp)
+    val shape = RoundedCornerShape(28.dp)
     val ripples = remember { mutableStateListOf<Ripple>() }
     var nextRipple by remember { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
@@ -395,21 +458,10 @@ private fun TouchSurface(vm: RemoteViewModel) {
     }
 
     BoxWithConstraints(
-        Modifier.fillMaxSize().glass(shape)
+        Modifier.fillMaxSize().hero(shape, glow = 0.16f)
             .semantics { contentDescription = L("Touch surface", "Superfície de toque") }
             .testTag("touchpad")
-            .pointerInput(vm.dpadTaps) {
-                fun centerRadius() = min(size.width, size.height) * 0.26f
-                fun target(p: Offset): Key {
-                    if (!vm.dpadTaps) return Key.CENTER
-                    val dx = p.x - size.width / 2f
-                    val dy = p.y - size.height / 2f
-                    if (hypot(dx, dy) < centerRadius()) return Key.CENTER
-                    // Normaliza pela forma (a superfície é mais alta do que larga).
-                    val nx = dx / (size.width / 2f)
-                    val ny = dy / (size.height / 2f)
-                    return if (abs(nx) > abs(ny)) (if (nx > 0) Key.RIGHT else Key.LEFT) else (if (ny > 0) Key.DOWN else Key.UP)
-                }
+            .pointerInput(Unit) {
                 awaitEachGesture {
                     val start = awaitFirstDown().position
                     var anchor = start
@@ -417,7 +469,7 @@ private fun TouchSurface(vm: RemoteViewModel) {
                     var holding: Key? = null
                     // Dedo parado depois de deslizar: a mesma direção repete-se, cada vez mais depressa.
                     var repeating: Job? = null
-                    val key = target(start)
+                    val key = Key.CENTER
                     val timer: Job = scope.launch {
                         delay(500)
                         if (!moved) {
@@ -467,25 +519,100 @@ private fun TouchSurface(vm: RemoteViewModel) {
                 }
             },
     ) {
-        if (vm.dpadTaps) DpadHints()
         ripples.forEach { RippleView(it) }
     }
 }
 
+/**
+ * As setas e o OK, como num comando físico. Manter uma seta repete-a, cada vez mais depressa; manter o OK é o OK longo.
+ */
 @Composable
-private fun DpadHints() {
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val radius = min(maxWidth.value, maxHeight.value) * 0.26f
-        Canvas(Modifier.fillMaxSize()) {
-            drawCircle(Theme.faint, radius = radius.dp.toPx(), style = Stroke(1.dp.toPx()))
+private fun Dpad(vm: RemoteViewModel) {
+    var pressed by remember { mutableStateOf<Key?>(null) }
+    val scope = rememberCoroutineScope()
+    BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        val side = minOf(maxWidth, maxHeight, 320.dp)
+        Box(
+            Modifier.size(side)
+                .semantics { contentDescription = L("Arrows", "Setas") }
+                .testTag("dpad")
+                .pointerInput(Unit) {
+                    fun keyAt(p: Offset): Key? {
+                        val half = size.width / 2f
+                        val dx = p.x - half
+                        val dy = p.y - half
+                        val r = hypot(dx, dy)
+                        return when {
+                            r > half -> null
+                            r < half * DPAD_INNER -> Key.CENTER
+                            abs(dx) > abs(dy) -> if (dx > 0) Key.RIGHT else Key.LEFT
+                            else -> if (dy > 0) Key.DOWN else Key.UP
+                        }
+                    }
+                    awaitEachGesture {
+                        val down = awaitFirstDown()
+                        val key = keyAt(down.position) ?: return@awaitEachGesture
+                        down.consume()
+                        pressed = key
+                        var held = false
+                        val timer = scope.launch {
+                            if (key == Key.CENTER) {
+                                delay(500)
+                                held = true
+                                vm.hold(Key.CENTER, true)
+                            } else {
+                                delay(400)
+                                held = true
+                                var interval = 180L
+                                while (true) {
+                                    vm.press(key)
+                                    delay(interval)
+                                    interval = (interval - 15).coerceAtLeast(70)
+                                }
+                            }
+                        }
+                        waitForUpOrCancellation()
+                        timer.cancel()
+                        if (!held) vm.press(key) else if (key == Key.CENTER) vm.hold(Key.CENTER, false)
+                        pressed = null
+                    }
+                },
+        ) {
+            Canvas(Modifier.fillMaxSize()) {
+                val radius = size.minDimension / 2f
+                val inner = radius * DPAD_INNER
+                drawCircle(Brush.radialGradient(listOf(Color(0xFF1E2538), Color(0xFF121621)),
+                    center = Offset(size.width * 0.7f, size.height * 0.2f), radius = radius * 1.8f), radius)
+                val sector = when (pressed) {
+                    Key.RIGHT -> -45f
+                    Key.DOWN -> 45f
+                    Key.LEFT -> 135f
+                    Key.UP -> 225f
+                    else -> null
+                }
+                if (sector != null) drawArc(Theme.surfacePressed, sector, 90f, useCenter = true)
+                val gap = 3.dp.toPx()
+                for (angle in listOf(45.0, 135.0, 225.0, 315.0)) {
+                    val a = Math.toRadians(angle)
+                    val dir = Offset(kotlin.math.cos(a).toFloat(), kotlin.math.sin(a).toFloat())
+                    drawLine(Theme.background, center + dir * inner, center + dir * radius, strokeWidth = gap)
+                }
+                drawCircle(if (pressed == Key.CENTER) Theme.surfacePressed else Color(0xFF232A3D), inner)
+                drawCircle(Theme.background, inner, style = Stroke(gap))
+            }
+            val edge = side * 0.07f
+            val arrow = Modifier.size(34.dp)
+            Icon(Icons.Rounded.KeyboardArrowUp, null, tint = Theme.text, modifier = Modifier.align(Alignment.TopCenter).padding(top = edge).then(arrow))
+            Icon(Icons.Rounded.KeyboardArrowDown, null, tint = Theme.text, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = edge).then(arrow))
+            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, null, tint = Theme.text, modifier = Modifier.align(Alignment.CenterStart).padding(start = edge).then(arrow))
+            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Theme.text, modifier = Modifier.align(Alignment.CenterEnd).padding(end = edge).then(arrow))
+            Text("OK", color = Theme.text, fontSize = 19.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.Center))
         }
-        val tint = Theme.faint
-        Icon(Icons.Rounded.KeyboardArrowUp, null, tint = tint, modifier = Modifier.align(Alignment.TopCenter).padding(top = 18.dp).size(26.dp))
-        Icon(Icons.Rounded.KeyboardArrowDown, null, tint = tint, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 18.dp).size(26.dp))
-        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, null, tint = tint, modifier = Modifier.align(Alignment.CenterStart).padding(start = 16.dp).size(26.dp))
-        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = tint, modifier = Modifier.align(Alignment.CenterEnd).padding(end = 16.dp).size(26.dp))
     }
 }
+
+/** O raio do OK, em fração do raio das setas. */
+private const val DPAD_INNER = 0.43f
 
 /** O círculo que se expande e desvanece onde se tocou. */
 @Composable

@@ -1,8 +1,9 @@
 import RemoteCore
 import SwiftUI
 
-/// O comando, ao jeito do da Apple TV: em cima som, a TV e ligar; ao meio uma superfície de toque; em baixo
-/// play/pausa, voltar e início. Por cima destes, uma fila discreta com teclado, apps, recuar/avançar e mais.
+/// O comando, com o visual do GoatTV: em cima o nome da TV (tocar escolhe outra), som e ligar; o canal do GoatTV quando
+/// ele está a dar; ao meio a superfície de toque ou as setas; em baixo play/pausa, voltar e início, e por cima destes
+/// uma fila com teclado, apps, recuar/avançar e mais.
 struct RemoteView: View {
     @Environment(RemoteModel.self) private var model
     @State private var showApps = false
@@ -14,39 +15,53 @@ struct RemoteView: View {
 
     var body: some View {
         @Bindable var model = model
+        let now = model.nowPlaying
+        let connected = model.status == .connected
         VStack(spacing: 0) {
-            topBar
-                .padding(.bottom, 16)
-            TouchSurface()
-                .overlay { SurfaceInfo() }
-                .overlay(alignment: .top) {
-                    if volumeVisible {
-                        VolumeHUD().padding(.top, 16).transition(.move(edge: .top).combined(with: .opacity))
-                    }
+            header
+                .padding(.bottom, now == nil ? 12 : 14)
+            if let now {
+                NowCard(channel: now) { showChannels = true }
+                    .padding(.bottom, 12)
+            }
+            Group {
+                if connected, model.layout == .dpad {
+                    DPad()
+                } else {
+                    TouchSurface().overlay { SurfaceInfo() }
                 }
-                .padding(.bottom, 18)
+            }
+            .overlay(alignment: .topTrailing) {
+                if connected { LayoutSwitch().padding(12) }
+            }
+            .overlay(alignment: .top) {
+                if volumeVisible {
+                    VolumeHUD().padding(.top, 60).transition(.move(edge: .top).combined(with: .opacity))
+                }
+            }
+            .padding(.bottom, 18)
             HStack {
-                GlassKey(symbol: "keyboard", size: 48, tint: .white.opacity(0.8), id: "keyboard") { model.showKeyboard = true }
+                GlassKey(symbol: "keyboard", size: 52, tint: Theme.dim, id: "keyboard") { model.showKeyboard = true }
                 Spacer()
-                GlassKey(symbol: "square.grid.2x2", size: 48, tint: .white.opacity(0.8), id: "apps") { showApps = true }
+                GlassKey(symbol: "square.grid.2x2", size: 52, tint: Theme.dim, id: "apps") { showApps = true }
                 Spacer()
-                // Só com o GoatTV na TV a dar os canais.
-                if model.hasChannels {
-                    GlassKey(symbol: "play.tv", size: 48, tint: .white.opacity(0.8), id: "channels") { showChannels = true }
+                // Com o GoatTV a dar um canal, a lista abre-se no cartão dele.
+                if model.hasChannels, now == nil {
+                    GlassKey(symbol: "play.tv", size: 52, tint: Theme.dim, id: "channels") { showChannels = true }
                     Spacer()
                 }
-                GlassKey(symbol: "backward.fill", size: 48, tint: .white.opacity(0.8), id: "key:rewind") { model.press(.rewind) } onHold: { model.hold(.rewind, down: $0) }
+                GlassKey(symbol: "backward.fill", size: 52, tint: Theme.dim, id: "key:rewind") { model.press(.rewind) } onHold: { model.hold(.rewind, down: $0) }
                 Spacer()
-                GlassKey(symbol: "forward.fill", size: 48, tint: .white.opacity(0.8), id: "key:fastForward") { model.press(.fastForward) } onHold: { model.hold(.fastForward, down: $0) }
+                GlassKey(symbol: "forward.fill", size: 52, tint: Theme.dim, id: "key:fastForward") { model.press(.fastForward) } onHold: { model.hold(.fastForward, down: $0) }
                 Spacer()
-                GlassKey(symbol: "ellipsis", size: 48, tint: .white.opacity(0.8), id: "more") { showMore = true }
+                GlassKey(symbol: "ellipsis", size: 52, tint: Theme.dim, id: "more") { showMore = true }
             }
             .padding(.horizontal, 8)
             .padding(.bottom, 22)
             HStack(alignment: .center) {
                 GlassKey(symbol: "playpause", size: 74, id: "key:playPause") { model.press(.playPause) }
                 Spacer()
-                GlassKey(symbol: "chevron.left", size: 96, id: "key:back") { model.press(.back) } onHold: { model.hold(.back, down: $0) }
+                GlassKey(symbol: "chevron.left", size: 96, filled: true, id: "key:back") { model.press(.back) } onHold: { model.hold(.back, down: $0) }
                 Spacer()
                 GlassKey(symbol: "tv", size: 74, id: "key:home") { model.press(.home) } onHold: { model.hold(.home, down: $0) }
             }
@@ -83,59 +98,45 @@ struct RemoteView: View {
                 model.showKeyboard = true
             }
         }
-        .sheet(isPresented: $model.showKeyboard) { KeyboardSheet().presentationDetents([.height(250)]) }
-        .sheet(isPresented: $showApps) { AppsSheet().presentationDetents([.medium, .large]) }
-        .sheet(isPresented: $showChannels) { ChannelsSheet().presentationDetents([.medium, .large]) }
-        .sheet(isPresented: $showMore) { MoreSheet().presentationDetents([.medium, .large]) }
-        .sheet(isPresented: $showTVs) { TVsSheet().presentationDetents([.medium, .large]) }
+        .sheet(isPresented: $model.showKeyboard) { KeyboardSheet().presentationDetents([.height(250)]).presentationBackground(Theme.surface) }
+        .sheet(isPresented: $showApps) { AppsSheet().presentationDetents([.medium, .large]).presentationBackground(Theme.surface) }
+        .sheet(isPresented: $showChannels) { ChannelsSheet().presentationDetents([.medium, .large]).presentationBackground(Theme.surface) }
+        .sheet(isPresented: $showMore) { MoreSheet().presentationDetents([.medium, .large]).presentationBackground(Theme.surface) }
+        .sheet(isPresented: $showTVs) { TVsSheet().presentationDetents([.medium, .large]).presentationBackground(Theme.surface) }
     }
 
-    private var topBar: some View {
-        HStack(spacing: 12) {
-            GlassKey(symbol: model.state.muted == true ? "speaker.slash.fill" : "speaker.slash", size: 58,
-                     tint: model.state.muted == true ? Theme.accent : Theme.dim, id: "key:mute") { model.press(.mute) }
+    /// O nome da TV em grande (tocar abre as TVs), com o estado por baixo; à direita, som e ligar.
+    private var header: some View {
+        HStack(alignment: .center, spacing: 8) {
             Button { showTVs = true } label: {
-                HStack(spacing: 11) {
-                    // A TV num círculo de vidro, com o estado da ligação num ponto ao canto.
-                    Image(systemName: model.current?.kind == .apple ? "appletv" : "tv")
-                        .font(.system(size: 15, weight: .regular))
-                        .foregroundStyle(.white.opacity(0.9))
-                        .frame(width: 34, height: 34)
-                        .background(Circle().fill(Color.white.opacity(0.08)))
-                        .overlay(Circle().strokeBorder(Color.white.opacity(0.14), lineWidth: 0.5))
-                        .overlay(alignment: .bottomTrailing) {
-                            Circle().fill(statusColor)
-                                .frame(width: 9, height: 9)
-                                .overlay(Circle().strokeBorder(Theme.surfaceTop, lineWidth: 2))
-                                .offset(x: 1, y: 1)
-                        }
-                    VStack(alignment: .leading, spacing: 1) {
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 4) {
                         Text(model.current?.name ?? "GoatRemote")
-                            .font(.system(size: 16, weight: .semibold, design: .rounded))
-                            .foregroundStyle(.white)
+                            .font(.system(size: 30, weight: .heavy))
+                            .foregroundStyle(Theme.text)
                             .lineLimit(1)
-                            .minimumScaleFactor(0.8)
-                        Text(subtitle)
-                            .lineLimit(1)
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(Theme.dim)
+                            .minimumScaleFactor(0.7)
+                        Image(systemName: "chevron.down").font(.system(size: 16, weight: .bold)).foregroundStyle(Theme.faint)
                     }
-                    Spacer(minLength: 4)
-                    Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.dim)
+                    HStack(spacing: 7) {
+                        Circle().fill(statusColor).frame(width: 7, height: 7)
+                        Text(subtitle).font(.footnote).foregroundStyle(Theme.dim).lineLimit(1)
+                    }
                 }
-                .padding(.horizontal, 18)
-                .frame(maxWidth: .infinity, minHeight: 58)
-                .liquidGlass(Capsule())
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("tv-menu")
-            GlassKey(symbol: "power", size: 58, tint: model.state.isOn == false ? Theme.dim : .white, id: "key:power") { model.press(.power) }
+            GlassKey(symbol: model.state.muted == true ? "speaker.slash.fill" : "speaker.slash", size: 42,
+                     tint: model.state.muted == true ? Theme.accent : Theme.dim, id: "key:mute") { model.press(.mute) }
+            GlassKey(symbol: "power", size: 42, tint: model.state.isOn == false ? Theme.dim : Theme.power, id: "key:power") { model.press(.power) }
         }
     }
 
     private var statusColor: Color {
         switch model.status {
-        case .connected: return model.state.isOn == false ? Theme.dim : .green
+        case .connected: return model.state.isOn == false ? Theme.dim : Theme.green
         case .connecting: return .orange
         case .noTV: return Theme.dim
         default: return Theme.power
@@ -180,10 +181,9 @@ struct SurfaceInfo: View {
                 Image(systemName: symbol).font(.system(size: 46, weight: .light))
                 Text(title).font(.system(size: 19, weight: .semibold, design: .rounded))
                 Spacer()
-                // Com as setas nas bordas, as próprias setas já dizem o que fazer.
-                Text(L("Swipe to move · tap to select · hold for more", "Desliza para andar · toca para escolher · mantém para mais"))
-                    .font(.caption2)
-                    .opacity(model.dpadTaps ? 0 : 0.8)
+                Text(L("Swipe to move · tap to select", "Desliza para andar · toca para escolher"))
+                    .font(.caption)
+                    .foregroundStyle(Theme.faint.opacity(0.6))
                     .padding(.bottom, 16)
             }
             .foregroundStyle(Color.white.opacity(0.13))
@@ -302,7 +302,6 @@ struct VolumeHUD: View {
 }
 
 /// A superfície de toque. Deslizar anda (um passo por cada bocado de dedo), tocar é OK, manter é OK longo.
-/// Com "setas nas bordas", tocar perto de uma borda carrega nessa seta.
 struct TouchSurface: View {
     @Environment(RemoteModel.self) private var model
     @State private var ripples: [Ripple] = []
@@ -322,14 +321,13 @@ struct TouchSurface: View {
     var body: some View {
         GeometryReader { geo in
             ZStack {
-                Color.clear.liquidGlass(RoundedRectangle(cornerRadius: 40, style: .continuous))
-                if model.dpadTaps { dpadHints(geo.size) }
+                HeroBackground(shape: RoundedRectangle(cornerRadius: 28, style: .continuous), glow: 0.16)
                 ForEach(ripples) { ripple in
                     RippleView(strong: ripple.strong).position(ripple.point)
                 }
             }
-            .clipShape(RoundedRectangle(cornerRadius: 40, style: .continuous))
-            .contentShape(RoundedRectangle(cornerRadius: 40, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
             .gesture(drag(in: geo.size))
         }
         .accessibilityElement(children: .ignore)
@@ -338,39 +336,12 @@ struct TouchSurface: View {
         .accessibilityIdentifier("touchpad")
     }
 
-    private func dpadHints(_ size: CGSize) -> some View {
-        ZStack {
-            Circle().strokeBorder(Theme.faint, lineWidth: 1).frame(width: centerRadius(size) * 2, height: centerRadius(size) * 2)
-            Image(systemName: "chevron.up").position(x: size.width / 2, y: 30)
-            Image(systemName: "chevron.down").position(x: size.width / 2, y: size.height - 30)
-            Image(systemName: "chevron.left").position(x: 28, y: size.height / 2)
-            Image(systemName: "chevron.right").position(x: size.width - 28, y: size.height / 2)
-        }
-        .font(.system(size: 20, weight: .semibold))
-        .foregroundStyle(Theme.faint)
-    }
-
-    private func centerRadius(_ size: CGSize) -> CGFloat { min(size.width, size.height) * 0.26 }
-
-    /// A tecla de um toque nesse ponto: OK, ou a seta da borda (com as setas nas bordas).
-    private func target(_ point: CGPoint, _ size: CGSize) -> Key {
-        guard model.dpadTaps else { return .center }
-        let dx = point.x - size.width / 2
-        let dy = point.y - size.height / 2
-        if hypot(dx, dy) < centerRadius(size) { return .center }
-        // Normaliza pela forma (a superfície é mais alta do que larga).
-        let nx = dx / (size.width / 2)
-        let ny = dy / (size.height / 2)
-        if abs(nx) > abs(ny) { return nx > 0 ? .right : .left }
-        return ny > 0 ? .down : .up
-    }
-
     private func drag(in size: CGSize) -> some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged { value in
                 if last == nil {
                     last = value.startLocation
-                    let key = target(value.startLocation, size)
+                    let key = Key.center
                     holdTask = Task { @MainActor in
                         try? await Task.sleep(nanoseconds: 500_000_000)
                         guard !Task.isCancelled, !moved else { return }
@@ -410,7 +381,7 @@ struct TouchSurface: View {
                 if let key = holding {
                     model.hold(key, down: false)
                 } else if !moved {
-                    model.press(target(value.startLocation, size))
+                    model.press(.center)
                     addRipple(value.startLocation, strong: true)
                 }
                 last = nil
@@ -442,5 +413,227 @@ struct RippleView: View {
             .opacity(grown ? 0 : 1)
             .onAppear { withAnimation(.easeOut(duration: 0.45)) { grown = true } }
             .allowsHitTesting(false)
+    }
+}
+
+/// O logótipo de um canal do GoatTV (vem da TV), ou um símbolo enquanto não vem.
+struct ChannelLogoView: View {
+    @Environment(RemoteModel.self) private var model
+    let channel: TVChannel
+    var size = CGSize(width: 52, height: 36)
+    var background: Color = Theme.surfaceHigh
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 9, style: .continuous).fill(background)
+            if let url = model.channelLogoURL(channel) {
+                RemoteImage(url: url, limit: GoatTVChannels.maxLogoBytes, maxPixelSize: GoatTVChannels.logoSide) { image in
+                    if let image {
+                        image.resizable().scaledToFit().padding(4).accessibilityIdentifier("logo")
+                    } else {
+                        Image(systemName: "tv").foregroundStyle(Theme.dim)
+                    }
+                }
+            } else {
+                Image(systemName: "tv").foregroundStyle(Theme.dim)
+            }
+        }
+        .frame(width: size.width, height: size.height)
+        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+    }
+}
+
+/// O canal que o GoatTV está a dar: canal anterior/seguinte e a lista.
+struct NowCard: View {
+    @Environment(RemoteModel.self) private var model
+    let channel: TVChannel
+    let onList: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ChannelLogoView(channel: channel, size: CGSize(width: 62, height: 42), background: .black.opacity(0.35))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(("GoatTV" + (channel.num.map { " · \($0)" } ?? "")).uppercased())
+                    .font(.system(size: 11, weight: .bold)).tracking(0.6).foregroundStyle(Theme.faint).lineLimit(1)
+                Text(channel.name).font(.system(size: 17, weight: .heavy)).foregroundStyle(Theme.text).lineLimit(1)
+            }
+            Spacer(minLength: 4)
+            VStack(spacing: 6) {
+                zapKey("chevron.up", L("Next channel", "Canal seguinte"), "zap:next") { model.zap(1) }
+                zapKey("chevron.down", L("Previous channel", "Canal anterior"), "zap:previous") { model.zap(-1) }
+            }
+            Button(action: onList) {
+                Image(systemName: "list.bullet").font(.system(size: 18, weight: .semibold)).foregroundStyle(.black)
+                    .frame(width: 44, height: 44)
+                    .background(Circle().fill(.white))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(L("Channels", "Canais"))
+            .accessibilityIdentifier("channels")
+        }
+        .padding(14)
+        .background(HeroBackground(shape: RoundedRectangle(cornerRadius: 20, style: .continuous)))
+        .accessibilityIdentifier("now-card")
+    }
+
+    private func zapKey(_ symbol: String, _ label: String, _ id: String, action: @escaping () -> Void) -> some View {
+        PressArea(onTap: action) { pressed in
+            Image(systemName: symbol).font(.system(size: 14, weight: .bold)).foregroundStyle(Theme.text)
+                .frame(width: 34, height: 30)
+                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(pressed ? 0.18 : 0.08)))
+        }
+        .accessibilityElement()
+        .accessibilityAddTraits(.isButton)
+        .accessibilityLabel(label)
+        .accessibilityIdentifier(id)
+    }
+}
+
+/// Superfície de toque ou setas; a escolha fica guardada.
+struct LayoutSwitch: View {
+    @Environment(RemoteModel.self) private var model
+
+    var body: some View {
+        HStack(spacing: 2) {
+            option(.touch, "hand.point.up.left", L("Touch surface", "Superfície de toque"))
+            option(.dpad, "dpad", L("Arrows", "Setas"))
+        }
+        .padding(3)
+        .background(Capsule().fill(Color.black.opacity(0.35)))
+    }
+
+    private func option(_ layout: RemoteLayout, _ symbol: String, _ label: String) -> some View {
+        let on = model.layout == layout
+        return Button { model.layout = layout } label: {
+            Image(systemName: symbol).font(.system(size: 14, weight: .semibold)).foregroundStyle(on ? Color.black : Theme.faint)
+                .frame(width: 38, height: 30)
+                .background(Capsule().fill(on ? Color.white : Color.clear))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+        .accessibilityAddTraits(on ? .isSelected : [])
+        .accessibilityIdentifier("layout:\(layout.rawValue)")
+    }
+}
+
+/// As setas e o OK, como num comando físico. Manter uma seta repete-a, cada vez mais depressa; manter o OK é o OK longo.
+struct DPad: View {
+    @Environment(RemoteModel.self) private var model
+    @State private var pressed: Key?
+    @State private var held = false
+    @State private var task: Task<Void, Never>?
+    /// O raio do OK, em fração do raio das setas.
+    private static let inner: CGFloat = 0.43
+
+    var body: some View {
+        GeometryReader { geo in
+            let side = min(geo.size.width, geo.size.height, 320)
+            ZStack {
+                Circle().fill(RadialGradient(colors: [Color(hex: 0x1E2538), Color(hex: 0x121621)], center: UnitPoint(x: 0.7, y: 0.2),
+                                             startRadius: 0, endRadius: side * 0.9))
+                if let start = sectorStart {
+                    Sector(start: .degrees(start)).fill(Theme.surfacePressed)
+                }
+                ForEach([45.0, 135.0, 225.0, 315.0], id: \.self) { angle in
+                    Path { p in
+                        let a = angle * .pi / 180
+                        let r = side / 2
+                        p.move(to: CGPoint(x: r + cos(a) * r * Self.inner, y: r + sin(a) * r * Self.inner))
+                        p.addLine(to: CGPoint(x: r + cos(a) * r, y: r + sin(a) * r))
+                    }
+                    .stroke(Theme.background, lineWidth: 3)
+                }
+                Circle().fill(pressed == .center ? Theme.surfacePressed : Color(hex: 0x232A3D))
+                    .overlay(Circle().strokeBorder(Theme.background, lineWidth: 3))
+                    .frame(width: side * Self.inner, height: side * Self.inner)
+                Text("OK").font(.system(size: 19, weight: .bold)).foregroundStyle(Theme.text)
+                Group {
+                    Image(systemName: "chevron.up").position(x: side / 2, y: side * 0.11)
+                    Image(systemName: "chevron.down").position(x: side / 2, y: side * 0.89)
+                    Image(systemName: "chevron.left").position(x: side * 0.11, y: side / 2)
+                    Image(systemName: "chevron.right").position(x: side * 0.89, y: side / 2)
+                }
+                .font(.system(size: 22, weight: .bold))
+                .foregroundStyle(Theme.text)
+            }
+            .frame(width: side, height: side)
+            .contentShape(Circle())
+            .gesture(drag(side))
+            .position(x: geo.size.width / 2, y: geo.size.height / 2)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(L("Arrows", "Setas"))
+        .accessibilityAddTraits(.allowsDirectInteraction)
+        .accessibilityIdentifier("dpad")
+    }
+
+    private var sectorStart: Double? {
+        switch pressed {
+        case .right: return -45
+        case .down: return 45
+        case .left: return 135
+        case .up: return 225
+        default: return nil
+        }
+    }
+
+    private func keyAt(_ point: CGPoint, side: CGFloat) -> Key? {
+        let r = side / 2
+        let dx = point.x - r
+        let dy = point.y - r
+        let distance = hypot(dx, dy)
+        if distance > r { return nil }
+        if distance < r * Self.inner { return .center }
+        if abs(dx) > abs(dy) { return dx > 0 ? .right : .left }
+        return dy > 0 ? .down : .up
+    }
+
+    private func drag(_ side: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                guard pressed == nil, let key = keyAt(value.startLocation, side: side) else { return }
+                pressed = key
+                held = false
+                task = Task { @MainActor in
+                    if key == .center {
+                        try? await Task.sleep(nanoseconds: 500_000_000)
+                        guard !Task.isCancelled else { return }
+                        held = true
+                        model.hold(.center, down: true)
+                    } else {
+                        try? await Task.sleep(nanoseconds: 400_000_000)
+                        var interval: UInt64 = 180
+                        while !Task.isCancelled {
+                            held = true
+                            model.press(key)
+                            try? await Task.sleep(nanoseconds: interval * 1_000_000)
+                            interval = max(70, interval - 15)
+                        }
+                    }
+                }
+            }
+            .onEnded { _ in
+                task?.cancel()
+                task = nil
+                if let key = pressed {
+                    if !held { model.press(key) } else if key == .center { model.hold(.center, down: false) }
+                }
+                pressed = nil
+                held = false
+            }
+    }
+}
+
+/// Um quarto de círculo (a seta carregada), a começar em [start] e no sentido dos ponteiros.
+private struct Sector: Shape {
+    let start: Angle
+
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        let c = CGPoint(x: rect.midX, y: rect.midY)
+        p.move(to: c)
+        p.addArc(center: c, radius: rect.width / 2, startAngle: start, endAngle: start + .degrees(90), clockwise: false)
+        p.closeSubpath()
+        return p
     }
 }

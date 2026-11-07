@@ -15,8 +15,6 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import cc.slokker.goatremote.tv.Key
 import cc.slokker.goatremote.ui.AddTvScreen
 import cc.slokker.goatremote.ui.GoatTheme
@@ -36,18 +34,9 @@ class MainActivity : ComponentActivity() {
         setContent {
             GoatTheme {
                 Box(
-                    Modifier.fillMaxSize().background(Theme.background)
-                        // Um brilho muito leve em cima, para dar fundo ao vidro.
-                        .background(
-                            Brush.radialGradient(
-                                listOf(Theme.accent2.copy(alpha = 0.13f), Theme.accent.copy(alpha = 0.04f), Color.Transparent),
-                                center = androidx.compose.ui.geometry.Offset(resources.displayMetrics.widthPixels / 2f, 0f),
-                                radius = 520 * resources.displayMetrics.density,
-                            ),
-                        )
-                        .safeDrawingPadding(),
+                    Modifier.fillMaxSize().background(Theme.background).safeDrawingPadding(),
                 ) {
-                    CompositionLocalProvider(LocalContentColor provides Color.White) {
+                    CompositionLocalProvider(LocalContentColor provides Theme.text) {
                         if (vm.tvs.isEmpty()) AddTvScreen(vm) else RemoteScreen(vm)
                         vm.pairing?.let { PairingDialog(vm, it) }
                     }

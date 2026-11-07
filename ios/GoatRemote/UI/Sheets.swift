@@ -158,7 +158,6 @@ struct AppsSheet: View {
             }
             .aspectRatio(16 / 9, contentMode: .fit)
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.rim, lineWidth: 1))
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("app:\(app.label)")
@@ -206,14 +205,14 @@ struct ChannelsSheet: View {
 
     @ViewBuilder
     private func content(_ list: ChannelList) -> some View {
+        let groupNames = Dictionary(list.groups.map { ($0.id, $0.name) }, uniquingKeysWith: { a, _ in a })
         if let current = list.channels.first(where: { $0.key == list.current }) {
-            section(L("Now playing", "A dar agora"))
-            row(current, current: true)
+            nowPlaying(current)
         }
         let favorites = list.channels.filter(\.favorite)
         if !favorites.isEmpty {
-            section(L("Favourites", "Favoritos")).padding(.top, 6)
-            ForEach(favorites) { row($0, current: $0.key == list.current) }
+            section(L("Favourites", "Favoritos")).padding(.top, 10)
+            ForEach(favorites) { row($0, current: $0.key == list.current, group: $0.group.flatMap { groupNames[$0] }) }
         }
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass").foregroundStyle(Theme.dim)
@@ -243,7 +242,7 @@ struct ChannelsSheet: View {
                                        : L("No channels found", "Nenhum canal encontrado"))
                 .font(.subheadline).foregroundStyle(Theme.dim).padding(.vertical, 12)
         }
-        ForEach(shown) { row($0, current: $0.key == list.current) }
+        ForEach(shown) { row($0, current: $0.key == list.current, group: $0.group.flatMap { groupNames[$0] }) }
         if list.truncated {
             Text(L("The list is too long: only part of it is shown here.", "A lista é longa demais: aqui só aparece uma parte."))
                 .font(.caption).foregroundStyle(Theme.dim).padding(.vertical, 8)
@@ -286,53 +285,67 @@ struct ChannelsSheet: View {
     }
 
     private func section(_ title: String) -> some View {
-        Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.dim)
+        Text(title.uppercased()).font(.system(size: 12, weight: .bold)).tracking(0.7).foregroundStyle(Theme.faint)
+    }
+
+    /// O canal que está a dar, em cartão no topo da lista.
+    private func nowPlaying(_ channel: TVChannel) -> some View {
+        Button {
+            model.play(channel)
+        } label: {
+            HStack(spacing: 12) {
+                ChannelLogoView(channel: channel, size: CGSize(width: 56, height: 38), background: .black.opacity(0.35))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text((L("Now playing", "A dar agora") + (channel.num.map { " · \($0)" } ?? "")).uppercased())
+                        .font(.system(size: 11, weight: .bold)).tracking(0.6).foregroundStyle(Theme.faint).lineLimit(1)
+                    Text(channel.name).font(.system(size: 17, weight: .bold)).foregroundStyle(Theme.text).lineLimit(1)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "play.fill").foregroundStyle(Theme.accent)
+            }
+            .padding(12)
+            .background(HeroBackground(shape: RoundedRectangle(cornerRadius: 18, style: .continuous)))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("channel:\(channel.name)")
     }
 
     private func chip(_ title: String, selected: Bool, id: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Text(title).font(.subheadline).lineLimit(1)
-                .foregroundStyle(selected ? Color.black : Color.white)
+            Text(title).font(.subheadline.weight(selected ? .bold : .regular)).lineLimit(1)
+                .foregroundStyle(selected ? Color.black : Theme.faint)
                 .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .background(Capsule().fill(selected ? Theme.accent : Theme.surfaceHigh))
-                .overlay(Capsule().strokeBorder(Theme.rim, lineWidth: 1))
+                .padding(.vertical, 7)
+                .background(Capsule().fill(selected ? Color.white : Color.clear))
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier(id)
     }
 
-    private func row(_ channel: TVChannel, current: Bool) -> some View {
+    private func row(_ channel: TVChannel, current: Bool, group: String?) -> some View {
         Button {
             model.play(channel)
         } label: {
             HStack(spacing: 12) {
                 Text(channel.num.map { String($0) } ?? "")
-                    .font(.subheadline.monospacedDigit()).foregroundStyle(Theme.dim)
-                    .frame(width: 40, alignment: .leading)
-                ZStack {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Theme.surfaceHigh)
-                    if let url = model.channelLogoURL(channel) {
-                        RemoteImage(url: url, limit: GoatTVChannels.maxLogoBytes, maxPixelSize: GoatTVChannels.logoSide) { image in
-                            if let image {
-                                image.resizable().scaledToFit().accessibilityIdentifier("logo")
-                            } else {
-                                Image(systemName: "tv").foregroundStyle(Theme.dim)
-                            }
-                        }
-                    } else {
-                        Image(systemName: "tv").foregroundStyle(Theme.dim)
-                    }
+                    .font(.footnote.monospacedDigit()).foregroundStyle(Theme.faint)
+                    .frame(width: 36, alignment: .leading)
+                ChannelLogoView(channel: channel)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(channel.name).font(.system(size: 16, weight: .semibold)).foregroundStyle(current ? Theme.accent : Theme.text).lineLimit(1)
+                    if let group { Text(group).font(.footnote).foregroundStyle(Theme.faint).lineLimit(1) }
                 }
-                .frame(width: 40, height: 40)
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                Text(channel.name).foregroundStyle(current ? Theme.accent : .white).lineLimit(1)
                 Spacer(minLength: 0)
-                if current { Image(systemName: "play.fill").foregroundStyle(Theme.accent) }
+                if current {
+                    Image(systemName: "play.fill").foregroundStyle(Theme.accent)
+                } else if channel.favorite {
+                    Image(systemName: "star.fill").font(.footnote).foregroundStyle(Color(hex: 0xF5C04A))
+                }
             }
             .padding(.horizontal, 8)
-            .padding(.vertical, 6)
-            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(current ? Theme.accent.opacity(0.18) : .clear))
+            .padding(.vertical, 7)
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(current ? Theme.accent.opacity(0.13) : .clear))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -444,20 +457,20 @@ struct MoreSheet: View {
                         key(.previous, "backward.end.fill", L("Previous", "Anterior"))
                         key(.next, "forward.end.fill", L("Next", "Seguinte"))
                     }
-                    Text(L("Numbers", "Números")).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.dim)
+                    Text(L("Numbers", "Números").uppercased()).font(.system(size: 12, weight: .bold)).tracking(0.7).foregroundStyle(Theme.faint)
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 5), spacing: 10) {
                         ForEach(0..<10) { n in
                             let digit = (n + 1) % 10
                             Button { model.press(Key(rawValue: Key.num0.rawValue + digit)!) } label: {
                                 Text("\(digit)").font(.title3.weight(.semibold)).foregroundStyle(.white)
                                     .frame(maxWidth: .infinity, minHeight: 50)
-                                    .liquidGlass(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                    .liquidGlass(RoundedRectangle(cornerRadius: 14, style: .continuous), interactive: false)
                             }
                             .buttonStyle(.plain)
                             .accessibilityIdentifier("num:\(digit)")
                         }
                     }
-                    Text(L("Options", "Opções")).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.dim)
+                    Text(L("Options", "Opções").uppercased()).font(.system(size: 12, weight: .bold)).tracking(0.7).foregroundStyle(Theme.faint)
                     VStack(spacing: 0) {
                         Toggle(L("Vibration", "Vibração"), isOn: $model.haptics)
                             .padding(.vertical, 12)
@@ -470,16 +483,6 @@ struct MoreSheet: View {
                             }
                         }
                         .padding(.vertical, 12)
-                        Divider()
-                        Toggle(isOn: $model.dpadTaps) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(L("Arrows on the edges", "Setas nas bordas"))
-                                Text(L("Tap near an edge of the touch surface for that arrow", "Tocar perto de uma borda da superfície carrega nessa seta"))
-                                    .font(.footnote).foregroundStyle(Theme.dim)
-                            }
-                        }
-                        .padding(.vertical, 12)
-                        .accessibilityIdentifier("opt:dpad")
                         Divider()
                         UpdateRow()
                         Divider()
@@ -514,13 +517,12 @@ struct MoreSheet: View {
 
     private func key(_ key: Key, _ symbol: String, _ title: String) -> some View {
         PressArea(onTap: { model.press(key) }, onHold: { model.hold(key, down: $0) }) { pressed in
-            VStack(spacing: 6) {
-                Image(systemName: symbol).font(.system(size: 20, weight: .medium))
-                Text(title).font(.caption2).lineLimit(1)
+            VStack(spacing: 7) {
+                Image(systemName: symbol).font(.system(size: 20, weight: .medium)).foregroundStyle(Theme.text)
+                Text(title).font(.caption).foregroundStyle(Theme.dim).lineLimit(1)
             }
-            .foregroundStyle(.white)
-            .frame(maxWidth: .infinity, minHeight: 68)
-            .liquidGlass(RoundedRectangle(cornerRadius: 16, style: .continuous), pressed: pressed)
+            .frame(maxWidth: .infinity, minHeight: 72)
+            .liquidGlass(RoundedRectangle(cornerRadius: 16, style: .continuous), interactive: false, pressed: pressed)
         }
         .accessibilityElement()
         .accessibilityAddTraits(.isButton)
@@ -639,10 +641,10 @@ struct TVsSheet: View {
                             dismiss()
                         } label: {
                             HStack(spacing: 12) {
-                                Image(systemName: tv.kind.symbol).foregroundStyle(Theme.accent).frame(width: 28)
+                                IconTile(symbol: tv.kind.symbol, tint: tv.id == model.current?.id ? Theme.green : Theme.accent)
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(tv.name).foregroundStyle(.white)
-                                    Text(subtitle(tv)).font(.caption).foregroundStyle(Theme.dim)
+                                    Text(tv.name).font(.system(size: 16, weight: .semibold)).foregroundStyle(Theme.text)
+                                    Text(subtitle(tv)).font(.footnote).foregroundStyle(Theme.faint).lineLimit(1)
                                 }
                                 Spacer()
                                 if tv.id == model.current?.id { Image(systemName: "checkmark").foregroundStyle(Theme.accent) }
@@ -651,6 +653,7 @@ struct TVsSheet: View {
                         .swipeActions {
                             Button(role: .destructive) { model.forget(tv) } label: { Label(L("Forget", "Esquecer"), systemImage: "trash") }
                         }
+                        .listRowBackground(Theme.card)
                     }
                 } footer: {
                     Text(L("Swipe left on a TV to forget it.", "Desliza uma TV para a esquerda para a esquecer."))
@@ -658,24 +661,34 @@ struct TVsSheet: View {
                 let unpaired = finder.found.filter { found in !model.tvs.contains { $0.id == found.id } }
                 if !unpaired.isEmpty {
                     Section(L("On this network", "Nesta rede")) {
-                        ForEach(unpaired) { found in FoundTVRow(found: found) }
+                        ForEach(unpaired) { found in FoundTVRow(found: found).listRowBackground(Theme.card) }
                     }
                 }
                 Section {
-                    Button { adding = true } label: { Label(L("Add a TV", "Juntar uma TV"), systemImage: "plus") }
+                    Button { adding = true } label: { actionLabel(L("Add a TV", "Juntar uma TV"), "plus") }
+                        .listRowBackground(Theme.card)
                     if model.current != nil {
                         Button {
                             model.repairCurrent()
-                        } label: { Label(L("Pair this TV again", "Emparelhar esta TV outra vez"), systemImage: "link") }
+                        } label: { actionLabel(L("Pair this TV again", "Emparelhar esta TV outra vez"), "link") }
+                            .listRowBackground(Theme.card)
                     }
                 }
             }
+            .scrollContentBackground(.hidden)
             .navigationTitle(L("TVs", "TVs"))
             .navigationBarTitleDisplayMode(.inline)
             .sheet(isPresented: $adding) { AddTVView(onDone: { adding = false }) }
         }
         .onAppear { finder.start() }
         .onDisappear { finder.stop() }
+    }
+
+    private func actionLabel(_ title: String, _ symbol: String) -> some View {
+        HStack(spacing: 12) {
+            IconTile(symbol: symbol, tint: Theme.accent)
+            Text(title).font(.system(size: 16, weight: .semibold)).foregroundStyle(Theme.text)
+        }
     }
 
     private func subtitle(_ tv: SavedTV) -> String {
@@ -701,10 +714,10 @@ struct FoundTVRow: View {
             model.startPairing(found)
         } label: {
             HStack(spacing: 12) {
-                Image(systemName: found.kind.symbol).foregroundStyle(Theme.accent).frame(width: 28)
+                IconTile(symbol: found.kind.symbol, tint: Theme.accent2)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(found.name).foregroundStyle(.white)
-                    Text(found.kind == .apple ? "Apple TV" : "Android TV · Google TV").font(.caption).foregroundStyle(Theme.dim)
+                    Text(found.name).font(.system(size: 16, weight: .semibold)).foregroundStyle(Theme.text)
+                    Text(found.kind == .apple ? "Apple TV" : "Android TV · Google TV").font(.footnote).foregroundStyle(Theme.faint)
                 }
                 Spacer()
                 if found.kind == .apple && !RemoteModel.appleTVReady {
@@ -781,5 +794,17 @@ private enum ImageCache {
             kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
         ]
         return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary).map { UIImage(cgImage: $0) }
+    }
+}
+
+/// Um símbolo num quadrado com a cor dele, como nas Definições do GoatTV.
+struct IconTile: View {
+    let symbol: String
+    let tint: Color
+
+    var body: some View {
+        Image(systemName: symbol).font(.system(size: 16, weight: .semibold)).foregroundStyle(tint)
+            .frame(width: 38, height: 38)
+            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(tint.opacity(0.16)))
     }
 }

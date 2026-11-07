@@ -1,6 +1,5 @@
 package cc.slokker.goatremote
 
-import android.accessibilityservice.AccessibilityService
 import android.graphics.Bitmap
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.ExperimentalTestApi
@@ -94,24 +93,17 @@ class RemoteUiTest {
         rule.onNodeWithTag("send-text").performClick()
         pause(0.8)
 
-        // Ligar as setas nas bordas (em Mais) e fechar a folha.
-        rule.onNodeWithTag("more").performClick()
-        rule.waitUntilExactlyOneExists(hasTestTag("more-grid"), 5_000)
-        rule.onNodeWithTag("more-grid").performScrollToNode(hasTestTag("opt:dpad"))
-        rule.onNodeWithTag("opt:dpad").performClick()
-        pause(0.4)
-        shot("options")
-        // O "voltar" do sistema (o do Espresso espera pelo foco da janela, que uma janela do sistema pode roubar).
-        InstrumentationRegistry.getInstrumentation().uiAutomation.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
-        pause(0.8)
-
-        // Setas nas bordas: tocar em cima e à direita.
-        rule.onNodeWithTag("touchpad").performTouchInput {
+        // As setas: em cima e à direita, e de volta à superfície de toque.
+        rule.onNodeWithTag("layout:dpad").performClick()
+        rule.waitUntilExactlyOneExists(hasTestTag("dpad"), 5_000)
+        rule.onNodeWithTag("dpad").performTouchInput {
             click(Offset(width / 2f, 12f))
             click(Offset(width - 12f, height / 2f))
         }
         pause(0.4)
         shot("dpad")
+        rule.onNodeWithTag("layout:touch").performClick()
+        rule.waitUntilExactlyOneExists(hasTestTag("touchpad"), 5_000)
 
         // A lista vem do "GoatLauncher" da TV falsa (porta 6470): também tem apps que o comando nunca viu abertas.
         rule.onNodeWithTag("apps").performClick()

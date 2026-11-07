@@ -5,6 +5,11 @@ import Observation
 import RemoteCore
 import UIKit
 
+/// O meio do comando: a superfície de toque (deslizar) ou as setas com o OK, como num comando físico.
+enum RemoteLayout: String {
+    case touch, dpad
+}
+
 /// O estado da app: as TVs, a ligação à escolhida e o emparelhamento.
 @MainActor
 @Observable
@@ -57,9 +62,13 @@ final class RemoteModel {
     var volumeButtons: Bool = UserDefaults.standard.object(forKey: "volumeButtons") as? Bool ?? true {
         didSet { UserDefaults.standard.set(volumeButtons, forKey: "volumeButtons") }
     }
-    /// Touchpad: só deslizar e tocar (como o da Apple TV), ou também tocar nas bordas para as setas.
-    var dpadTaps: Bool = UserDefaults.standard.bool(forKey: "dpadTaps") {
-        didSet { UserDefaults.standard.set(dpadTaps, forKey: "dpadTaps") }
+    /// Superfície de toque ou setas (D-pad). Quem tinha as "setas nas bordas" ligadas começa nas setas.
+    var layout: RemoteLayout = UserDefaults.standard.string(forKey: "layout").flatMap(RemoteLayout.init(rawValue:))
+        ?? (UserDefaults.standard.bool(forKey: "dpadTaps") ? .dpad : .touch) {
+        didSet {
+            UserDefaults.standard.set(layout.rawValue, forKey: "layout")
+            UserDefaults.standard.removeObject(forKey: "dpadTaps")
+        }
     }
 
     @ObservationIgnored private var link: TVControl? {
@@ -173,6 +182,8 @@ final class RemoteModel {
         // Ao ligar, a TV manda vários valores seguidos (na SHIELD, com HDMI-CEC, acaba em 0): isso não é mudar o volume.
         if old.volume == nil, new.volume != nil { volumeSettlesAt = Date().addingTimeInterval(5) }
         if old.volume != nil, new.volume != old.volume || new.muted != old.muted, !volumeUnknown, Date() >= volumeSettlesAt { volumeChanged += 1 }
+        // O GoatTV veio para a frente: o canal que está a dar pode ter mudado.
+        if new.currentApp == GoatTVChannels.androidPackage, old.currentApp != new.currentApp, hasChannels { refreshChannels() }
         if let app = new.currentApp, !AppCatalog.isLauncher(app) {
             recentApps.removeAll { $0 == app }
             recentApps.insert(app, at: 0)
@@ -359,6 +370,24 @@ final class RemoteModel {
     }
 
     private static let androidGoatTV = TVApp(package: GoatTVChannels.androidPackage, label: "GoatTV", banner: false, color: nil)
+
+    /// O canal que o GoatTV está a dar, se ele estiver à frente (na Android TV pela app aberta; a Apple TV não diz qual
+    /// é, por isso vale a última lista que veio).
+    var nowPlaying: TVChannel? {
+        guard let list = channels else { return nil }
+        if current?.kind == .android, state.currentApp != GoatTVChannels.androidPackage { return nil }
+        return list.channels.first { $0.key == list.current }
+    }
+
+    /// Canal seguinte ou anterior, no grupo do que está a dar (como o zapping na TV).
+    func zap(_ delta: Int) {
+        guard let list = channels, let now = nowPlaying else { return }
+        let inGroup = list.channels.filter { $0.group == now.group }
+        let group = inGroup.isEmpty ? list.channels : inGroup
+        guard let i = group.firstIndex(where: { $0.key == now.key }) else { return }
+        let n = group.count
+        play(group[((i + delta) % n + n) % n])
+    }
 
     var goatTVClosedLine: String { L("GoatTV has to be open on the TV", "O GoatTV tem de estar aberto na TV") }
 

@@ -30,7 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
@@ -55,24 +55,28 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** O visual do comando da Apple TV: fundo preto, peças em cinzento-vidro com um realce subtil em cima. */
+/** O visual do GoatTV no telemóvel: fundo azul-noite, cartões opacos, botões redondos e o azul→roxo de destaque. */
 object Theme {
-    val background = Color.Black
-    val surface = Color(0xFF1C1C1E)
-    val surfaceTop = Color(0xFF26262A)
-    val surfaceBottom = Color(0xFF18181B)
-    val surfacePressed = Color(0xFF2C2C2E)
-    val surfaceHigh = Color(0xFF2C2C2E)
-    val accent = Color(0xFF38BDF8)
-    val accent2 = Color(0xFF8B5CF6)
-    val power = Color(0xFFEF4444)
-    val green = Color(0xFF34C759)
+    val background = Color(0xFF05070D)
+    /** O fundo das folhas. */
+    val surface = Color(0xFF0B0D14)
+    /** Cartões (listas, teclas do Mais). */
+    val card = Color(0xFF12151D)
+    /** Botões e o que está dentro de um cartão. */
+    val surfaceHigh = Color(0xFF191D28)
+    val surfacePressed = Color(0xFF262C3D)
+    val accent = Color(0xFF5AA9FF)
+    val accent2 = Color(0xFF8B7CFF)
+    val power = Color(0xFFF2777E)
+    val green = Color(0xFF34D399)
     val orange = Color(0xFFFF9F0A)
-    val dim = Color.White.copy(alpha = 0.55f)
-    val faint = Color.White.copy(alpha = 0.18f)
+    val text = Color(0xFFF5F5F7)
+    val dim = Color(0xFFEBEBF5).copy(alpha = 0.6f)
+    val faint = Color(0xFFEBEBF5).copy(alpha = 0.38f)
+    val line = Color.White.copy(alpha = 0.08f)
     val gradient = Brush.linearGradient(listOf(accent, accent2))
-    /** O realce da borda: mais claro em cima, quase nada em baixo (dá o ar de vidro). */
-    val rim = Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.22f), Color.White.copy(alpha = 0.04f)))
+    /** O cartão do que está a dar: o azul-escuro do GoatTV com um brilho do destaque no canto. */
+    val hero = Brush.linearGradient(listOf(Color(0xFF1D2236), Color(0xFF0E1018)))
 
     val colors: ColorScheme = darkColorScheme(
         primary = accent,
@@ -83,7 +87,7 @@ object Theme {
         surfaceContainerLow = surface,
         surfaceContainer = surface,
         surfaceContainerHigh = surfaceHigh,
-        onSurface = Color.White,
+        onSurface = text,
         onSurfaceVariant = dim,
         error = power,
     )
@@ -94,14 +98,24 @@ fun hexColor(value: Long) = Color(0xFF000000 or value)
 @Composable
 fun GoatTheme(content: @Composable () -> Unit) = MaterialTheme(colorScheme = Theme.colors, content = content)
 
-/** Fundo de vidro escuro numa forma qualquer. */
+/** Fundo de botão numa forma qualquer: opaco, mais claro enquanto se carrega. */
 fun Modifier.glass(shape: Shape, pressed: Boolean = false): Modifier = this
-    .shadow(10.dp, shape, ambientColor = Color.Black, spotColor = Color.Black)
     .clip(shape)
-    .background(
-        Brush.verticalGradient(if (pressed) listOf(Theme.surfacePressed, Theme.surfaceTop) else listOf(Theme.surfaceTop, Theme.surfaceBottom)),
-    )
-    .border(1.dp, Theme.rim, shape)
+    .background(if (pressed) Theme.surfacePressed else Theme.surfaceHigh)
+
+/** Fundo de cartão (listas, teclas do Mais). */
+fun Modifier.card(shape: Shape, pressed: Boolean = false): Modifier = this
+    .clip(shape)
+    .background(if (pressed) Theme.surfaceHigh else Theme.card)
+
+/** O fundo do cartão do que está a dar e da superfície de toque: o gradiente do GoatTV e um brilho no canto. */
+fun Modifier.hero(shape: Shape, glow: Float = 0.22f): Modifier = this
+    .clip(shape)
+    .background(Theme.hero)
+    .drawBehind {
+        drawRect(Brush.radialGradient(listOf(Theme.accent.copy(alpha = glow), Color.Transparent),
+            center = androidx.compose.ui.geometry.Offset(size.width * 0.8f, size.height * 0.1f), radius = size.maxDimension * 0.7f))
+    }
 
 /**
  * Um botão do comando: toque curto, ou carregar e manter (manda o início e o fim do toque longo à TV).
@@ -133,14 +147,15 @@ fun Modifier.pressable(onTap: () -> Unit, onHold: ((Boolean) -> Unit)? = null, p
     }
 }
 
-/** Botão redondo de vidro com um símbolo. */
+/** Botão redondo com um símbolo. [filled]: branco com o símbolo a preto (o botão principal, voltar). */
 @Composable
 fun GlassKey(
     icon: ImageVector,
     label: String,
     tag: String,
     size: Dp = 60.dp,
-    tint: Color = Color.White,
+    tint: Color = Theme.text,
+    filled: Boolean = false,
     onHold: ((Boolean) -> Unit)? = null,
     onTap: () -> Unit,
 ) {
@@ -150,13 +165,13 @@ fun GlassKey(
         modifier = Modifier
             .size(size)
             .scale(scale)
-            .glass(CircleShape, pressed)
+            .then(if (filled) Modifier.clip(CircleShape).background(if (pressed) Color(0xFFD9DAE0) else Color.White) else Modifier.glass(CircleShape, pressed))
             .pressable(onTap, onHold) { pressed = it }
             .semantics { contentDescription = label; role = Role.Button }
             .testTag(tag),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(size * 0.4f))
+        Icon(icon, contentDescription = null, tint = if (filled) Color.Black else tint, modifier = Modifier.size(size * 0.4f))
     }
 }
 

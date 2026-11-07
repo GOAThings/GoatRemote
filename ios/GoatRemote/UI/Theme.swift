@@ -1,21 +1,41 @@
 import SwiftUI
 
-/// O visual do comando da Apple TV: fundo preto, peças em cinzento-vidro com um realce subtil em cima.
+/// O visual do GoatTV no telemóvel: fundo azul-noite, cartões opacos, botões redondos e o azul→roxo de destaque.
 enum Theme {
-    static let background = Color.black
-    static let surface = Color(hex: 0x1C1C1E)
-    static let surfaceTop = Color(hex: 0x26262A)
-    static let surfaceBottom = Color(hex: 0x18181B)
-    static let surfacePressed = Color(hex: 0x2C2C2E)
-    static let surfaceHigh = Color(hex: 0x2C2C2E)
-    static let accent = Color(hex: 0x38BDF8)
-    static let accent2 = Color(hex: 0x8B5CF6)
-    static let power = Color(hex: 0xEF4444)
-    static let dim = Color.white.opacity(0.55)
-    static let faint = Color.white.opacity(0.18)
+    static let background = Color(hex: 0x05070D)
+    /// O fundo das folhas.
+    static let surface = Color(hex: 0x0B0D14)
+    /// Cartões (listas, teclas do Mais).
+    static let card = Color(hex: 0x12151D)
+    /// Botões e o que está dentro de um cartão.
+    static let surfaceHigh = Color(hex: 0x191D28)
+    static let surfacePressed = Color(hex: 0x262C3D)
+    static let accent = Color(hex: 0x5AA9FF)
+    static let accent2 = Color(hex: 0x8B7CFF)
+    static let power = Color(hex: 0xF2777E)
+    static let green = Color(hex: 0x34D399)
+    static let text = Color(hex: 0xF5F5F7)
+    static let dim = Color(hex: 0xEBEBF5).opacity(0.6)
+    static let faint = Color(hex: 0xEBEBF5).opacity(0.38)
+    static let line = Color.white.opacity(0.08)
     static let gradient = LinearGradient(colors: [accent, accent2], startPoint: .topLeading, endPoint: .bottomTrailing)
-    /// O realce da borda: mais claro em cima, quase nada em baixo (dá o ar de vidro).
-    static let rim = LinearGradient(colors: [Color.white.opacity(0.22), Color.white.opacity(0.04)], startPoint: .top, endPoint: .bottom)
+}
+
+/// O fundo do cartão do que está a dar e da superfície de toque: o gradiente do GoatTV e um brilho no canto.
+struct HeroBackground<S: Shape>: View {
+    let shape: S
+    var glow = 0.22
+
+    var body: some View {
+        shape.fill(LinearGradient(colors: [Color(hex: 0x1D2236), Color(hex: 0x0E1018)], startPoint: .topLeading, endPoint: .bottomTrailing))
+            .overlay {
+                GeometryReader { geo in
+                    RadialGradient(colors: [Theme.accent.opacity(glow), .clear], center: UnitPoint(x: 0.8, y: 0.1),
+                                   startRadius: 0, endRadius: max(geo.size.width, geo.size.height) * 0.7)
+                }
+                .clipShape(shape)
+            }
+    }
 }
 
 extension Color {
@@ -24,29 +44,21 @@ extension Color {
     }
 }
 
-/// Fundo de vidro numa forma qualquer.
+/// Fundo opaco numa forma qualquer: botão (mais claro enquanto se carrega) ou cartão.
 struct GlassBackground<S: InsettableShape>: View {
     let shape: S
     var pressed = false
+    var card = false
 
     var body: some View {
-        shape
-            .fill(LinearGradient(colors: pressed ? [Theme.surfacePressed, Theme.surfaceTop] : [Theme.surfaceTop, Theme.surfaceBottom],
-                                 startPoint: .top, endPoint: .bottom))
-            .overlay(shape.strokeBorder(Theme.rim, lineWidth: 1))
-            .shadow(color: .black.opacity(0.7), radius: 10, y: 5)
+        shape.fill(card ? (pressed ? Theme.surfaceHigh : Theme.card) : (pressed ? Theme.surfacePressed : Theme.surfaceHigh))
     }
 }
 
 extension View {
-    /// Liquid Glass do iOS 26 (com o brilho que segue o dedo e o salto ao carregar); antes disso, o vidro escuro.
-    @ViewBuilder
+    /// O fundo das peças, como no GoatTV: botões ([interactive]) ou cartões.
     func liquidGlass<S: InsettableShape>(_ shape: S, interactive: Bool = true, pressed: Bool = false) -> some View {
-        if #available(iOS 26.0, *) {
-            self.glassEffect(interactive ? .regular.interactive() : .regular, in: shape)
-        } else {
-            self.background(GlassBackground(shape: shape, pressed: pressed))
-        }
+        background(GlassBackground(shape: shape, pressed: pressed, card: !interactive))
     }
 }
 
@@ -93,11 +105,12 @@ struct PressArea<Label: View>: View {
     }
 }
 
-/// Botão redondo de vidro com um símbolo.
+/// Botão redondo com um símbolo. [filled]: branco com o símbolo a preto (o botão principal, voltar).
 struct GlassKey: View {
     let symbol: String
     var size: CGFloat = 60
-    var tint: Color = .white
+    var tint: Color = Theme.text
+    var filled = false
     let id: String
     let onTap: () -> Void
     var onHold: ((Bool) -> Void)?
@@ -105,10 +118,12 @@ struct GlassKey: View {
     var body: some View {
         PressArea(onTap: onTap, onHold: onHold) { pressed in
             Image(systemName: symbol)
-                .font(.system(size: size * 0.34, weight: .medium))
-                .foregroundStyle(tint)
+                .font(.system(size: size * 0.34, weight: filled ? .semibold : .medium))
+                .foregroundStyle(filled ? Color.black : tint)
                 .frame(width: size, height: size)
-                .liquidGlass(Circle(), pressed: pressed)
+                .background {
+                    if filled { Circle().fill(pressed ? Color(hex: 0xD9DAE0) : .white) } else { GlassBackground(shape: Circle(), pressed: pressed) }
+                }
                 .scaleEffect(pressed ? 0.92 : 1)
         }
         .accessibilityElement()

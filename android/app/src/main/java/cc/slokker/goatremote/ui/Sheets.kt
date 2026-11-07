@@ -64,6 +64,7 @@ import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
+import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material.icons.rounded.Tv
 import androidx.compose.material.icons.rounded.VolumeDown
@@ -109,6 +110,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cc.slokker.goatremote.L
@@ -136,13 +138,34 @@ private fun GoatSheet(onDismiss: () -> Unit, skipPartial: Boolean = false, conte
 
 @Composable
 private fun SheetTitle(title: String) {
-    Text(title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
-        textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+    Text(title, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 10.dp))
 }
 
 @Composable
 private fun Section(title: String) {
-    Text(title, color = Theme.dim, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 6.dp, bottom = 2.dp))
+    Text(title.uppercase(), color = Theme.faint, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.7.sp,
+        modifier = Modifier.padding(start = 2.dp, top = 14.dp, bottom = 6.dp))
+}
+
+/** O logótipo de um canal do GoatTV (vem da TV), ou um símbolo enquanto não vem. */
+@Composable
+internal fun ChannelLogo(vm: RemoteViewModel, channel: TvChannel, width: Dp, height: Dp, background: Color = Theme.surfaceHigh) {
+    val logo = rememberImage(vm.channelLogoUrl(channel), GoatTvChannels.MAX_LOGO_BYTES, GoatTvChannels.LOGO_SIDE)
+    Box(Modifier.size(width, height).clip(RoundedCornerShape(9.dp)).background(background), contentAlignment = Alignment.Center) {
+        if (logo != null) {
+            Image(logo, null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize().padding(4.dp).testTag("logo"))
+        } else {
+            Icon(Icons.Rounded.LiveTv, null, tint = Theme.dim, modifier = Modifier.size(20.dp))
+        }
+    }
+}
+
+/** Um símbolo num quadrado com a cor dele, como nas Definições do GoatTV. */
+@Composable
+private fun IconTile(icon: ImageVector, tint: Color) {
+    Box(Modifier.size(38.dp).clip(RoundedCornerShape(10.dp)).background(tint.copy(alpha = 0.16f)), contentAlignment = Alignment.Center) {
+        Icon(icon, null, tint = tint, modifier = Modifier.size(20.dp))
+    }
 }
 
 private fun tvIcon(kind: TvKind) = if (kind == TvKind.APPLE) Icons.Rounded.LiveTv else Icons.Rounded.Tv
@@ -216,7 +239,7 @@ fun AppsSheet(vm: RemoteViewModel, onDismiss: () -> Unit) {
                     }
                 }
                 item(span = { full }) {
-                    Column(Modifier.padding(top = 4.dp).fillMaxWidth().glass(RoundedCornerShape(18.dp)).padding(16.dp)) {
+                    Column(Modifier.padding(top = 4.dp).fillMaxWidth().card(RoundedCornerShape(18.dp)).padding(16.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Rounded.Apps, null, tint = Color.White, modifier = Modifier.size(20.dp))
                             Spacer(Modifier.width(8.dp))
@@ -257,7 +280,6 @@ private fun AppTile(vm: RemoteViewModel, app: TvApp, remoteImage: Boolean, onDis
     Box(
         Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(shape)
             .background(Brush.linearGradient(listOf(tint, tint.copy(alpha = 0.6f))))
-            .border(1.dp, Theme.rim, shape)
             .clickable {
                 vm.launch(app)
                 onDismiss()
@@ -320,14 +342,12 @@ fun ChannelsSheet(vm: RemoteViewModel, onDismiss: () -> Unit) {
                 return@LazyColumn
             }
             val current = list.channels.firstOrNull { it.key == list.current }
-            if (current != null) {
-                item(key = "s:now") { Section(L("Now playing", "A dar agora")) }
-                item(key = "c:" + current.key) { ChannelRow(vm, current, true) }
-            }
+            if (current != null) item(key = "c:" + current.key) { NowPlayingRow(vm, current) }
+            val groupNames = list.groups.associate { it.id to it.name }
             val favorites = list.channels.filter { it.favorite }
             if (favorites.isNotEmpty()) {
                 item(key = "s:fav") { Section(L("Favourites", "Favoritos")) }
-                items(favorites, key = { "f:" + it.key }) { ChannelRow(vm, it, it.key == list.current) }
+                items(favorites, key = { "f:" + it.key }) { ChannelRow(vm, it, it.key == list.current, groupNames[it.group]) }
             }
             item(key = "search") {
                 OutlinedTextField(
@@ -359,7 +379,7 @@ fun ChannelsSheet(vm: RemoteViewModel, onDismiss: () -> Unit) {
                     )
                 }
             }
-            items(shown, key = { "l:" + it.key }) { ChannelRow(vm, it, it.key == list.current) }
+            items(shown, key = { "l:" + it.key }) { ChannelRow(vm, it, it.key == list.current, groupNames[it.group]) }
             if (list.truncated) {
                 item(key = "truncated") {
                     Text(L("The list is too long: only part of it is shown here.", "A lista é longa demais: aqui só aparece uma parte."),
@@ -373,7 +393,7 @@ fun ChannelsSheet(vm: RemoteViewModel, onDismiss: () -> Unit) {
 /** Sem lista: a carregar, o GoatTV fechado (com "Abrir o GoatTV" se der para o abrir daqui) ou uma falha. */
 @Composable
 private fun ChannelsState(vm: RemoteViewModel) {
-    Column(Modifier.fillMaxWidth().glass(RoundedCornerShape(18.dp)).padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(Modifier.fillMaxWidth().card(RoundedCornerShape(18.dp)).padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         when {
             vm.openingGoatTv || vm.channelsStatus == RemoteViewModel.ChannelsStatus.UNKNOWN ->
                 CircularProgressIndicator(color = Theme.dim, strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
@@ -403,41 +423,60 @@ private fun GroupChip(title: String, selected: Boolean, tag: String, onClick: ()
     val shape = RoundedCornerShape(50)
     Box(
         Modifier.clip(shape)
-            .background(if (selected) Theme.accent else Theme.surfaceHigh)
-            .border(1.dp, Theme.rim, shape)
+            .background(if (selected) Color.White else Color.Transparent)
             .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 8.dp)
+            .padding(horizontal = 14.dp, vertical = 7.dp)
             .testTag(tag),
     ) {
-        Text(title, color = if (selected) Color.Black else Color.White, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(title, color = if (selected) Color.Black else Theme.faint, fontSize = 14.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+            maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
+/** O canal que está a dar, em cartão no topo da lista. */
 @Composable
-private fun ChannelRow(vm: RemoteViewModel, channel: TvChannel, current: Boolean) {
-    val shape = RoundedCornerShape(12.dp)
-    val logo = rememberImage(vm.channelLogoUrl(channel), GoatTvChannels.MAX_LOGO_BYTES, GoatTvChannels.LOGO_SIDE)
+private fun NowPlayingRow(vm: RemoteViewModel, channel: TvChannel) {
     Row(
-        Modifier.fillMaxWidth().clip(shape)
-            .background(if (current) Theme.accent.copy(alpha = 0.18f) else Color.Transparent)
+        Modifier.fillMaxWidth().padding(bottom = 4.dp).hero(RoundedCornerShape(18.dp))
             .clickable { vm.play(channel) }
-            .padding(horizontal = 8.dp, vertical = 6.dp)
+            .padding(12.dp)
             .semantics { contentDescription = channel.name }
             .testTag("channel:" + channel.name),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(channel.num?.toString() ?: "", color = Theme.dim, fontSize = 14.sp, maxLines = 1, modifier = Modifier.width(44.dp))
-        Box(Modifier.size(40.dp).clip(RoundedCornerShape(8.dp)).background(Theme.surfaceHigh), contentAlignment = Alignment.Center) {
-            if (logo != null) {
-                Image(logo, null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize().testTag("logo"))
-            } else {
-                Icon(Icons.Rounded.LiveTv, null, tint = Theme.dim, modifier = Modifier.size(20.dp))
-            }
-        }
+        ChannelLogo(vm, channel, 56.dp, 38.dp, Color.Black.copy(alpha = 0.35f))
         Spacer(Modifier.width(12.dp))
-        Text(channel.name, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
-            color = if (current) Theme.accent else Color.White)
+        Column(Modifier.weight(1f)) {
+            Text((L("Now playing", "A dar agora") + (channel.num?.let { " · $it" } ?: "")).uppercase(), color = Theme.faint, fontSize = 11.sp,
+                fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp, maxLines = 1)
+            Text(channel.name, fontSize = 17.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Icon(Icons.Rounded.PlayArrow, null, tint = Theme.accent, modifier = Modifier.size(20.dp))
+    }
+}
+
+@Composable
+private fun ChannelRow(vm: RemoteViewModel, channel: TvChannel, current: Boolean, group: String?) {
+    val shape = RoundedCornerShape(12.dp)
+    Row(
+        Modifier.fillMaxWidth().clip(shape)
+            .background(if (current) Theme.accent.copy(alpha = 0.13f) else Color.Transparent)
+            .clickable { vm.play(channel) }
+            .padding(horizontal = 8.dp, vertical = 7.dp)
+            .semantics { contentDescription = channel.name }
+            .testTag("channel:" + channel.name),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(channel.num?.toString() ?: "", color = Theme.faint, fontSize = 13.sp, maxLines = 1, modifier = Modifier.width(40.dp))
+        ChannelLogo(vm, channel, 52.dp, 36.dp)
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(channel.name, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                color = if (current) Theme.accent else Theme.text)
+            if (group != null) Text(group, color = Theme.faint, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
         if (current) Icon(Icons.Rounded.PlayArrow, null, tint = Theme.accent, modifier = Modifier.size(20.dp))
+        else if (channel.favorite) Icon(Icons.Rounded.Star, null, tint = Color(0xFFF5C04A), modifier = Modifier.size(18.dp))
     }
 }
 
@@ -478,19 +517,15 @@ fun MoreSheet(vm: RemoteViewModel, onDismiss: () -> Unit) {
             items((1..10).map { it % 10 }, span = { GridItemSpan(4) }) { digit -> DigitKey(vm, digit) }
             item(span = { GridItemSpan(20) }) { Section(L("Options", "Opções")) }
             item(span = { GridItemSpan(20) }) {
-                Column(Modifier.fillMaxWidth().glass(RoundedCornerShape(16.dp)).padding(horizontal = 16.dp)) {
+                Column(Modifier.fillMaxWidth().card(RoundedCornerShape(16.dp)).padding(horizontal = 16.dp)) {
                     Option(L("Vibration", "Vibração"), null, vm.haptics, vm::changeHaptics)
-                    HorizontalDivider(color = Theme.faint)
+                    HorizontalDivider(color = Theme.line)
                     Option(L("Phone volume buttons", "Botões de volume do telemóvel"),
                         L("Change the TV's volume while the app is open", "Mexem no volume da TV com a app aberta"),
                         vm.volumeButtons, vm::changeVolumeButtons)
-                    HorizontalDivider(color = Theme.faint)
-                    Option(L("Arrows on the edges", "Setas nas bordas"),
-                        L("Tap near an edge of the touch surface for that arrow", "Tocar perto de uma borda da superfície carrega nessa seta"),
-                        vm.dpadTaps, vm::changeDpadTaps, "opt:dpad")
-                    HorizontalDivider(color = Theme.faint)
+                    HorizontalDivider(color = Theme.line)
                     UpdateRow()
-                    HorizontalDivider(color = Theme.faint)
+                    HorizontalDivider(color = Theme.line)
                     Row(Modifier.fillMaxWidth().clickable { diagnostics = true }.padding(vertical = 12.dp).testTag("opt:diagnostics"),
                         verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
@@ -597,7 +632,7 @@ fun DiagnosticsSheet(onDismiss: () -> Unit) {
 private fun MoreKey(vm: RemoteViewModel, key: Key, icon: ImageVector, title: String) {
     var pressed by remember { mutableStateOf(false) }
     Column(
-        Modifier.fillMaxWidth().heightIn(min = 68.dp).glass(RoundedCornerShape(16.dp), pressed)
+        Modifier.fillMaxWidth().heightIn(min = 72.dp).card(RoundedCornerShape(16.dp), pressed)
             .pressable({ vm.press(key) }, { vm.hold(key, it) }) { pressed = it }
             .padding(vertical = 12.dp)
             .semantics { contentDescription = title }
@@ -605,9 +640,9 @@ private fun MoreKey(vm: RemoteViewModel, key: Key, icon: ImageVector, title: Str
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Icon(icon, null, tint = Color.White, modifier = Modifier.size(22.dp))
-        Spacer(Modifier.height(6.dp))
-        Text(title, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Icon(icon, null, tint = Theme.text, modifier = Modifier.size(22.dp))
+        Spacer(Modifier.height(7.dp))
+        Text(title, color = Theme.dim, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -615,7 +650,7 @@ private fun MoreKey(vm: RemoteViewModel, key: Key, icon: ImageVector, title: Str
 private fun DigitKey(vm: RemoteViewModel, digit: Int) {
     var pressed by remember { mutableStateOf(false) }
     Box(
-        Modifier.fillMaxWidth().height(50.dp).glass(RoundedCornerShape(14.dp), pressed)
+        Modifier.fillMaxWidth().height(50.dp).card(RoundedCornerShape(14.dp), pressed)
             .pressable({ vm.press(Key.digit(digit)) }) { pressed = it },
         contentAlignment = Alignment.Center,
     ) { Text("$digit", fontSize = 20.sp, fontWeight = FontWeight.SemiBold) }
@@ -642,45 +677,70 @@ fun TvsSheet(vm: RemoteViewModel, onAdd: () -> Unit, onDismiss: () -> Unit) {
     }
     GoatSheet(onDismiss) {
         SheetTitle(L("TVs", "TVs"))
-        LazyColumn(contentPadding = PaddingValues(start = 18.dp, end = 18.dp, bottom = 24.dp)) {
-            items(vm.tvs, key = { it.id }) { tv -> SavedTvRow(vm, tv, onDismiss) }
+        LazyColumn(contentPadding = PaddingValues(start = 14.dp, end = 14.dp, bottom = 24.dp)) {
             item {
-                Text(L("Tap the bin to forget a TV.", "Toca no caixote para esquecer uma TV."), color = Theme.dim, fontSize = 12.sp,
-                    modifier = Modifier.padding(vertical = 6.dp))
+                CardColumn {
+                    vm.tvs.forEachIndexed { i, tv ->
+                        if (i > 0) RowDivider()
+                        SavedTvRow(vm, tv, onDismiss)
+                    }
+                }
+            }
+            item {
+                Text(L("Tap the bin to forget a TV.", "Toca no caixote para esquecer uma TV."), color = Theme.faint, fontSize = 12.sp,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp))
             }
             val unpaired = found.filter { f -> vm.tvs.none { it.id == f.id } }
             if (unpaired.isNotEmpty()) {
                 item { Section(L("On this network", "Nesta rede")) }
-                items(unpaired, key = { "f:" + it.id }) { FoundTvRow(vm, it) }
+                item {
+                    CardColumn {
+                        unpaired.forEachIndexed { i, tv ->
+                            if (i > 0) RowDivider()
+                            FoundTvRow(vm, tv)
+                        }
+                    }
+                }
             }
-            item { Spacer(Modifier.height(10.dp)) }
+            item { Spacer(Modifier.height(14.dp)) }
             item {
-                ActionRow(Icons.Rounded.Add, L("Add a TV", "Juntar uma TV"), onAdd)
-            }
-            if (vm.current != null) {
-                item { ActionRow(Icons.Rounded.Link, L("Pair this TV again", "Emparelhar esta TV outra vez")) { vm.repairCurrent() } }
+                CardColumn {
+                    ActionRow(Icons.Rounded.Add, L("Add a TV", "Juntar uma TV"), onAdd)
+                    if (vm.current != null) {
+                        RowDivider()
+                        ActionRow(Icons.Rounded.Link, L("Pair this TV again", "Emparelhar esta TV outra vez")) { vm.repairCurrent() }
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
+private fun CardColumn(content: @Composable ColumnScope.() -> Unit) =
+    Column(Modifier.fillMaxWidth().card(RoundedCornerShape(16.dp)), content = content)
+
+@Composable
+private fun RowDivider() = HorizontalDivider(color = Theme.line, modifier = Modifier.padding(start = 64.dp))
+
+@Composable
 private fun SavedTvRow(vm: RemoteViewModel, tv: SavedTv, onDismiss: () -> Unit) {
+    val selected = tv.id == vm.current?.id
     Row(
         Modifier.fillMaxWidth().clickable {
             vm.select(tv)
             onDismiss()
-        }.padding(vertical = 10.dp),
+        }.padding(start = 14.dp, top = 11.dp, bottom = 11.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(tvIcon(tv.kind), null, tint = Theme.accent, modifier = Modifier.width(28.dp))
+        IconTile(tvIcon(tv.kind), if (selected) Theme.green else Theme.accent)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(tv.name, fontSize = 16.sp)
-            Text(subtitle(vm, tv), color = Theme.dim, fontSize = 12.sp)
+            Text(tv.name, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(subtitle(vm, tv), color = Theme.faint, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        if (tv.id == vm.current?.id) Icon(Icons.Rounded.Check, null, tint = Theme.accent)
-        IconButton(onClick = { vm.forget(tv) }) { Icon(Icons.Rounded.Delete, L("Forget", "Esquecer"), tint = Theme.dim) }
+        if (selected) Icon(Icons.Rounded.Check, null, tint = Theme.accent)
+        IconButton(onClick = { vm.forget(tv) }) { Icon(Icons.Rounded.Delete, L("Forget", "Esquecer"), tint = Theme.faint) }
     }
 }
 
@@ -700,10 +760,11 @@ private fun subtitle(vm: RemoteViewModel, tv: SavedTv): String {
 
 @Composable
 private fun ActionRow(icon: ImageVector, title: String, onClick: () -> Unit) {
-    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, null, tint = Theme.accent, modifier = Modifier.width(28.dp))
+    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
+        IconTile(icon, Theme.accent)
         Spacer(Modifier.width(12.dp))
-        Text(title, color = Theme.accent, fontSize = 16.sp)
+        Text(title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Theme.faint)
     }
 }
 
@@ -711,17 +772,18 @@ private fun ActionRow(icon: ImageVector, title: String, onClick: () -> Unit) {
 @Composable
 private fun FoundTvRow(vm: RemoteViewModel, found: FoundTv) {
     Row(
-        Modifier.fillMaxWidth().clickable { vm.startPairing(found) }.padding(vertical = 10.dp)
+        Modifier.fillMaxWidth().clickable { vm.startPairing(found) }.padding(horizontal = 14.dp, vertical = 11.dp)
             .testTag("found:" + found.name),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(tvIcon(found.kind), null, tint = Theme.accent, modifier = Modifier.width(28.dp))
+        IconTile(tvIcon(found.kind), Theme.accent2)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(found.name, fontSize = 16.sp)
-            Text(if (found.kind == TvKind.APPLE) "Apple TV" else "Android TV · Google TV", color = Theme.dim, fontSize = 12.sp)
+            Text(found.name, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(if (found.kind == TvKind.APPLE) "Apple TV" else "Android TV · Google TV", color = Theme.faint, fontSize = 13.sp)
         }
-        Text(L("Pair", "Emparelhar"), color = Theme.accent, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+        Text(L("Pair", "Emparelhar"), color = Color.Black, fontSize = 14.sp, fontWeight = FontWeight.Bold,
+            modifier = Modifier.clip(RoundedCornerShape(50)).background(Color.White).padding(horizontal = 14.dp, vertical = 7.dp))
     }
 }
 
@@ -741,7 +803,7 @@ fun AddTvScreen(vm: RemoteViewModel) {
     if (diagnostics) DiagnosticsSheet { diagnostics = false }
     Column(Modifier.fillMaxSize().padding(top = 24.dp)) {
         Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(L("Add a TV", "Juntar uma TV"), fontSize = 28.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            Text(L("Add a TV", "Juntar uma TV"), fontSize = 30.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
             // Antes de haver uma TV não há o Mais: o diagnóstico fica aqui também.
             IconButton({ diagnostics = true }, Modifier.testTag("add:diagnostics")) {
                 Icon(Icons.Rounded.BugReport, L("Diagnostics", "Diagnóstico"), tint = Theme.dim)
@@ -772,16 +834,23 @@ private fun AddTvList(vm: RemoteViewModel, modifier: Modifier) {
                 }
             }
         }
-        items(found, key = { it.id }) { tv ->
-            if (vm.tvs.any { it.id == tv.id }) {
-                Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(tvIcon(tv.kind), null, tint = Theme.accent, modifier = Modifier.width(28.dp))
-                    Spacer(Modifier.width(12.dp))
-                    Text(tv.name, modifier = Modifier.weight(1f))
-                    Text(L("Paired", "Emparelhada"), color = Theme.dim, fontSize = 12.sp)
+        if (found.isNotEmpty()) {
+            item {
+                CardColumn {
+                    found.forEachIndexed { i, tv ->
+                        if (i > 0) RowDivider()
+                        if (vm.tvs.any { it.id == tv.id }) {
+                            Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
+                                IconTile(tvIcon(tv.kind), Theme.green)
+                                Spacer(Modifier.width(12.dp))
+                                Text(tv.name, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                                Text(L("Paired", "Emparelhada"), color = Theme.faint, fontSize = 13.sp)
+                            }
+                        } else {
+                            FoundTvRow(vm, tv)
+                        }
+                    }
                 }
-            } else {
-                FoundTvRow(vm, tv)
             }
         }
         item {

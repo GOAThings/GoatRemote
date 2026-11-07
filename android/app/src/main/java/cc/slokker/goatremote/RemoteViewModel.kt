@@ -67,6 +67,9 @@ sealed interface Phase {
 /** Inglês ou português, conforme a língua do telemóvel (como na app do iPhone). */
 fun L(en: String, pt: String) = if (Locale.getDefault().language == "pt") pt else en
 
+/** O meio do comando: a superfície de toque (deslizar) ou as setas com o OK, como num comando físico. */
+enum class RemoteLayout { TOUCH, DPAD }
+
 /** O estado da app: as TVs, a ligação à escolhida e o emparelhamento. */
 class RemoteViewModel(app: Application) : AndroidViewModel(app) {
     sealed interface Status {
@@ -137,13 +140,16 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
     /** Os botões de volume do telemóvel mexem no volume da TV (com a app aberta). */
     var volumeButtons by mutableStateOf(prefs.getBoolean("volumeButtons", true))
         private set
-    /** Touchpad: só deslizar e tocar, ou também tocar nas bordas para as setas. */
-    var dpadTaps by mutableStateOf(prefs.getBoolean("dpadTaps", false))
+    /** Superfície de toque ou setas (D-pad). Quem tinha as "setas nas bordas" ligadas começa nas setas. */
+    var layout by mutableStateOf(
+        prefs.getString("layout", null)?.let { saved -> RemoteLayout.entries.firstOrNull { it.name == saved } }
+            ?: if (prefs.getBoolean("dpadTaps", false)) RemoteLayout.DPAD else RemoteLayout.TOUCH,
+    )
         private set
 
     fun changeHaptics(on: Boolean) { haptics = on; prefs.edit().putBoolean("haptics", on).apply() }
     fun changeVolumeButtons(on: Boolean) { volumeButtons = on; prefs.edit().putBoolean("volumeButtons", on).apply() }
-    fun changeDpadTaps(on: Boolean) { dpadTaps = on; prefs.edit().putBoolean("dpadTaps", on).apply() }
+    fun changeLayout(new: RemoteLayout) { layout = new; prefs.edit().putString("layout", new.name).remove("dpadTaps").apply() }
 
     private var link: TvControl? = null
         set(value) {
@@ -252,6 +258,8 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
         if (old.volume != null && (new.volume != old.volume || new.muted != old.muted) && !volumeUnknown &&
             System.currentTimeMillis() >= volumeSettlesAt) volumeChanged++
         val app = new.currentApp
+        // O GoatTV veio para a frente: o canal que está a dar pode ter mudado.
+        if (app == GoatTvChannels.ANDROID_PACKAGE && app != old.currentApp && hasChannels) refreshChannels()
         if (app != null && app != old.currentApp && !AppCatalog.isLauncher(app)) {
             recentApps = (listOf(app) + recentApps.filterNot { it == app }).take(12)
             current?.id?.let { prefs.edit().putString("recents.$it", JSONArray(recentApps).toString()).apply() }
@@ -458,6 +466,27 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
                 if (current?.id == tv.id) openingGoatTv = false
             }
         }
+    }
+
+    /**
+     * O canal que o GoatTV está a dar, se ele estiver à frente (na Android TV pela app aberta; a Apple TV não diz qual
+     * é, por isso vale a última lista que veio).
+     */
+    val nowPlaying: TvChannel?
+        get() {
+            val list = channels ?: return null
+            if (current?.kind == TvKind.ANDROID && state.currentApp != GoatTvChannels.ANDROID_PACKAGE) return null
+            return list.channels.firstOrNull { it.key == list.current }
+        }
+
+    /** Canal seguinte ou anterior, no grupo do que está a dar (como o zapping na TV). */
+    fun zap(delta: Int) {
+        val list = channels ?: return
+        val now = nowPlaying ?: return
+        val group = list.channels.filter { it.group == now.group }.ifEmpty { list.channels }
+        val i = group.indexOfFirst { it.key == now.key }
+        if (i < 0) return
+        play(group[(i + delta).mod(group.size)])
     }
 
     fun goatTvClosedLine() = L("GoatTV has to be open on the TV", "O GoatTV tem de estar aberto na TV")
