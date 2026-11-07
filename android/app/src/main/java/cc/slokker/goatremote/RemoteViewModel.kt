@@ -169,6 +169,8 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
     private var stateJob: Job? = null
     private var autoReconnect: Job? = null
     private var lastAutoReconnect = 0L
+    /** Recusas seguidas desta TV que ainda não se mostraram (ver [connect]). */
+    private var notPairedRetries = 0
     /** Ícones das apps da Apple TV (da App Store, por bundle id). */
     private val appleArtwork = mutableStateMapOf<String, String>()
     private val vibrator = app.getSystemService(Vibrator::class.java)
@@ -180,7 +182,8 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
 
     /**
      * Liga à TV escolhida. Uma falha que não seja "não emparelhado" tenta mais uma vez daí a pouco: a SHIELD, por
-     * exemplo, recusa a primeira ligação logo a seguir a emparelhar.
+     * exemplo, recusa a primeira ligação logo a seguir a emparelhar. "Não emparelhado" tenta mais duas vezes antes de
+     * se mostrar: a TV às vezes recusa uma ligação de um telemóvel que conhece (a anterior ainda a fechar, a TV ocupada).
      */
     fun connect(retry: Boolean = true) {
         val tv = current ?: run { status = Status.NoTv; return }
@@ -218,6 +221,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
                 link.connect()
                 if (this@RemoteViewModel.link !== link) return@launch
                 (link as? AndroidTvLink)?.certificate?.let { store.pinCertificate(tv.id, it) }
+                notPairedRetries = 0
                 status = Status.Connected
                 withoutNow.remove(tv.id)
                 update(link.state.value)
@@ -227,6 +231,16 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
                 DebugLog.add("Connect: not paired ($e)")
                 if (this@RemoteViewModel.link !== link) return@launch
                 this@RemoteViewModel.link = null
+                if (notPairedRetries < 2) {
+                    notPairedRetries++
+                    DebugLog.add("Not paired: trying again ($notPairedRetries)")
+                    autoReconnect = viewModelScope.launch {
+                        delay(2000L * notPairedRetries)
+                        if (this@RemoteViewModel.link == null && current?.id == tv.id) connect()
+                    }
+                    return@launch
+                }
+                notPairedRetries = 0
                 status = Status.NotPaired
             } catch (e: Exception) {
                 DebugLog.add("Connect failed${if (retry) " (will retry)" else ""}: $e")

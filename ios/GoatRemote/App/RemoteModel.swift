@@ -87,6 +87,8 @@ final class RemoteModel {
     }
     @ObservationIgnored private var autoReconnect: Task<Void, Never>?
     @ObservationIgnored private var lastAutoReconnect = Date.distantPast
+    /// Recusas seguidas desta TV que ainda não se mostraram (ver connect()).
+    @ObservationIgnored private var notPairedRetries = 0
     /// Ícones das apps da Apple TV (da App Store, por bundle id).
     private var appleArtwork: [String: URL] = [:]
     @ObservationIgnored private let lightHaptics = UIImpactFeedbackGenerator(style: .light)
@@ -147,6 +149,7 @@ final class RemoteModel {
             do {
                 try await link.connect()
                 guard self.link === link else { return }
+                self.notPairedRetries = 0
                 self.status = .connected
                 self.withoutNow.remove(tv.id)
                 self.update(link.state)
@@ -156,6 +159,20 @@ final class RemoteModel {
                 DebugLog.add("Connect: not paired (\(error))")
                 guard self.link === link else { return }
                 self.link = nil
+                // A TV às vezes recusa uma ligação de um iPhone que conhece (a anterior ainda a fechar, a TV ocupada):
+                // só se pede para emparelhar se recusar três vezes seguidas.
+                if self.notPairedRetries < 2 {
+                    self.notPairedRetries += 1
+                    let attempt = self.notPairedRetries
+                    DebugLog.add("Not paired: trying again (\(attempt))")
+                    self.autoReconnect = Task {
+                        try? await Task.sleep(nanoseconds: UInt64(attempt) * 2_000_000_000)
+                        guard !Task.isCancelled, self.link == nil, self.current?.id == tv.id else { return }
+                        self.connect()
+                    }
+                    return
+                }
+                self.notPairedRetries = 0
                 self.status = .notPaired
             } catch {
                 DebugLog.add("Connect failed: \(error)")
