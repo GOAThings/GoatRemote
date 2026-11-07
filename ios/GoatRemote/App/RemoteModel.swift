@@ -159,9 +159,10 @@ final class RemoteModel {
                 DebugLog.add("Connect: not paired (\(error))")
                 guard self.link === link else { return }
                 self.link = nil
-                // A TV às vezes recusa uma ligação de um iPhone que conhece (a anterior ainda a fechar, a TV ocupada):
-                // só se pede para emparelhar se recusar três vezes seguidas.
-                if self.notPairedRetries < 2 {
+                // A TV às vezes recusa uma ligação de um iPhone que conhece: a SHIELD, logo a seguir a mudar de canal,
+                // fecha a ligação e recusa as seguintes durante uns segundos. Só se pede para emparelhar se ainda
+                // recusar passados uns 12 s (três tentativas).
+                if self.notPairedRetries < 3 {
                     self.notPairedRetries += 1
                     let attempt = self.notPairedRetries
                     DebugLog.add("Not paired: trying again (\(attempt))")

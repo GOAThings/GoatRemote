@@ -182,8 +182,9 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
 
     /**
      * Liga à TV escolhida. Uma falha que não seja "não emparelhado" tenta mais uma vez daí a pouco: a SHIELD, por
-     * exemplo, recusa a primeira ligação logo a seguir a emparelhar. "Não emparelhado" tenta mais duas vezes antes de
-     * se mostrar: a TV às vezes recusa uma ligação de um telemóvel que conhece (a anterior ainda a fechar, a TV ocupada).
+     * exemplo, recusa a primeira ligação logo a seguir a emparelhar. "Não emparelhado" tenta mais três vezes (uns 12 s)
+     * antes de se mostrar: a TV às vezes recusa um telemóvel que conhece (a SHIELD, logo a seguir a mudar de canal,
+     * fecha a ligação e recusa as seguintes durante uns segundos).
      */
     fun connect(retry: Boolean = true) {
         val tv = current ?: run { status = Status.NoTv; return }
@@ -231,7 +232,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
                 DebugLog.add("Connect: not paired ($e)")
                 if (this@RemoteViewModel.link !== link) return@launch
                 this@RemoteViewModel.link = null
-                if (notPairedRetries < 2) {
+                if (notPairedRetries < 3) {
                     notPairedRetries++
                     DebugLog.add("Not paired: trying again ($notPairedRetries)")
                     autoReconnect = viewModelScope.launch {
