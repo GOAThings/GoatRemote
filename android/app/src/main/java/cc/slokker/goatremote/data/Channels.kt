@@ -16,6 +16,14 @@ data class TvChannel(
 data class ChannelGroup(val id: String, val name: String)
 
 /** A lista ativa do GoatTV: grupos e canais pela ordem dele, e o canal que está a dar. */
+/** Um programa do guia do GoatTV (horas em ms). */
+data class Programme(val title: String, val startMs: Long, val endMs: Long) {
+    fun progress(now: Long): Float = ((now - startMs).toFloat() / (endMs - startMs)).coerceIn(0f, 1f)
+}
+
+/** O que o GoatTV está a dar (GET /now): o canal e, se ele tiver guia, o programa e o seguinte. */
+data class NowInfo(val current: String?, val now: Programme?, val next: Programme?)
+
 data class ChannelList(
     val playlist: String?,
     val current: String?,
@@ -41,6 +49,9 @@ object GoatTvChannels {
     const val MAX_KEY = 1024
     const val MAX_NAME = 200
     const val MAX_NUM = 999_999
+    /** O /now é pequeno: mais do que isto não é o GoatTV. */
+    const val MAX_NOW_BYTES = 64 shl 10
+    const val MAX_TITLE = 300
 
     enum class Play {
         DONE,
@@ -126,5 +137,19 @@ object GoatTvChannels {
         val playlist = (json.opt("playlist") as? JSONObject)?.let { it.opt("name") as? String }?.take(MAX_NAME)
         val current = (json.opt("current") as? String)?.takeIf { it in keys }
         return ChannelList(playlist, current, groups, channels, truncated)
+    }
+
+    /** Lê a resposta de /now. O que não for um objeto dá erro; um programa estragado (sem título, horas trocadas) fica null. */
+    fun parseNow(text: String): NowInfo {
+        val json = JSONObject(text)
+        fun programme(name: String): Programme? {
+            val o = json.opt(name) as? JSONObject ?: return null
+            val title = (o.opt("title") as? String)?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+            val start = (o.opt("start") as? Number)?.toLong() ?: return null
+            val end = (o.opt("end") as? Number)?.toLong() ?: return null
+            return if (end > start) Programme(title.take(MAX_TITLE), start, end) else null
+        }
+        val current = (json.opt("current") as? String)?.takeIf { it.isNotEmpty() && it.length <= MAX_KEY }
+        return NowInfo(current, programme("now"), programme("next"))
     }
 }

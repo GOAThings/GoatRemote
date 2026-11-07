@@ -8,6 +8,8 @@ import cc.slokker.goatremote.apple.Rti
 import cc.slokker.goatremote.apple.SrpClient
 import cc.slokker.goatremote.apple.Tlv8
 import cc.slokker.goatremote.data.GoatTvChannels
+import cc.slokker.goatremote.data.NowInfo
+import cc.slokker.goatremote.data.Programme
 import cc.slokker.goatremote.data.imageSampleSize
 import cc.slokker.goatremote.tv.Key
 import cc.slokker.goatremote.tv.LauncherVolume
@@ -470,6 +472,20 @@ class CoreTest {
         val cut = GoatTvChannels.parse(many)
         assertEquals(GoatTvChannels.MAX_CHANNELS, cut.channels.size)
         assertTrue(cut.truncated)
+    }
+
+    @Test
+    fun goatTvNow() {
+        val info = GoatTvChannels.parseNow("""{"current": "rtp1", "now": {"title": " News ", "start": 1000, "end": 2000}, "next": {"title": "", "start": 2000, "end": 3000}}""")
+        assertEquals("rtp1", info.current)
+        assertEquals(Programme("News", 1000, 2000), info.now)
+        // Sem título não é um programa.
+        assertNull(info.next)
+        assertEquals(0.5f, info.now!!.progress(1500), 0f)
+        // Horas trocadas ou campos com o tipo errado ficam de fora.
+        val bad = GoatTvChannels.parseNow("""{"current": 5, "now": {"title": "A", "start": 2000, "end": 1000}, "next": "x"}""")
+        assertEquals(NowInfo(null, null, null), bad)
+        assertThrows(Exception::class.java) { GoatTvChannels.parseNow("[]") }
     }
 
     @Test

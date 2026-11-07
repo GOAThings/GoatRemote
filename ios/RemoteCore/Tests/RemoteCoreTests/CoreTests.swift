@@ -43,6 +43,7 @@ enum CoreTests {
         ("currentApp", currentApp),
         ("goatTVChannels", goatTVChannels),
         ("goatTVKeys", goatTVKeys),
+        ("goatTVNow", goatTVNow),
     ]
 
     static func proto() throws {
@@ -518,6 +519,19 @@ enum CoreTests {
         let cut = try GoatTVChannels.parse(Data(many.utf8))
         try expect(cut.channels.count, GoatTVChannels.maxChannels)
         try expect(cut.truncated, true)
+    }
+
+    static func goatTVNow() throws {
+        let info = try GoatTVChannels.parseNow(Data(#"{"current": "rtp1", "now": {"title": " News ", "start": 1000, "end": 2000}, "next": {"title": "", "start": 2000, "end": 3000}}"#.utf8))
+        try expect(info.current, "rtp1")
+        try expect(info.now, Programme(title: "News", startMs: 1000, endMs: 2000))
+        // Sem título não é um programa.
+        try expect(info.next, nil)
+        try expect(info.now?.progress(now: 1500), 0.5)
+        // Horas trocadas ou campos com o tipo errado ficam de fora.
+        let bad = try GoatTVChannels.parseNow(Data(#"{"current": 5, "now": {"title": "A", "start": 2000, "end": 1000}, "next": "x"}"#.utf8))
+        try expect(bad, NowInfo(current: nil, now: nil, next: nil))
+        if (try? GoatTVChannels.parseNow(Data("[]".utf8))) != nil { throw Failed(description: "devia ter dado erro") }
     }
 
     static func goatTVKeys() throws {

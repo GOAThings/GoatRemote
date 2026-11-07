@@ -36,7 +36,35 @@ public struct ChannelList: Equatable, Sendable {
     public var truncated: Bool
 }
 
-/// Os canais do GoatTV na TV (GET /channels, GET /logo/<key>, POST /play/<key>). O mesmo que o Android faz.
+/// Um programa do guia do GoatTV (horas em ms).
+public struct Programme: Equatable, Sendable {
+    public let title: String
+    public let startMs: Int64
+    public let endMs: Int64
+
+    public init(title: String, startMs: Int64, endMs: Int64) {
+        self.title = title
+        self.startMs = startMs
+        self.endMs = endMs
+    }
+
+    public func progress(now: Int64) -> Double { min(max(Double(now - startMs) / Double(endMs - startMs), 0), 1) }
+}
+
+/// O que o GoatTV está a dar (GET /now): o canal e, se ele tiver guia, o programa e o seguinte.
+public struct NowInfo: Equatable, Sendable {
+    public let current: String?
+    public let now: Programme?
+    public let next: Programme?
+
+    public init(current: String?, now: Programme?, next: Programme?) {
+        self.current = current
+        self.now = now
+        self.next = next
+    }
+}
+
+/// Os canais do GoatTV na TV (GET /channels, GET /now, GET /logo/<key>, POST /play/<key>). O mesmo que o Android faz.
 public enum GoatTVChannels {
     public static let port = 6471
     /// O GoatTV numa Android TV (abre-se pelo GoatLauncher).
@@ -52,6 +80,9 @@ public enum GoatTVChannels {
     public static let maxKey = 1024
     public static let maxName = 200
     public static let maxNum = 999_999
+    /// O /now é pequeno: mais do que isto não é o GoatTV.
+    public static let maxNowBytes = 64 << 10
+    public static let maxTitle = 300
 
     public enum Play: Equatable, Sendable {
         case done
@@ -129,6 +160,49 @@ public enum GoatTVChannels {
         return ChannelList(playlist: raw.playlist?.name.map { String($0.prefix(maxName)) },
                            current: raw.current.flatMap { keys.contains($0) ? $0 : nil },
                            groups: groups, channels: channels, truncated: truncated)
+    }
+
+    /// Lê a resposta de /now. O que não for um objeto dá erro; um programa estragado (sem título, horas trocadas) fica nil.
+    public static func parseNow(_ data: Data) throws -> NowInfo {
+        let raw = try JSONDecoder().decode(RawNow.self, from: data)
+        func programme(_ p: RawProgramme?) -> Programme? {
+            guard let p, let title = p.title?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty,
+                  let start = p.start, let end = p.end, end > start else { return nil }
+            return Programme(title: String(title.prefix(maxTitle)), startMs: Int64(start), endMs: Int64(end))
+        }
+        let current = raw.current.flatMap { !$0.isEmpty && $0.count <= maxKey ? $0 : nil }
+        return NowInfo(current: current, now: programme(raw.now), next: programme(raw.next))
+    }
+
+    private struct RawNow: Decodable {
+        let current: String?
+        let now: RawProgramme?
+        let next: RawProgramme?
+
+        enum CodingKeys: String, CodingKey { case current, now, next }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            current = try? c.decodeIfPresent(String.self, forKey: .current)
+            now = try? c.decodeIfPresent(RawProgramme.self, forKey: .now)
+            next = try? c.decodeIfPresent(RawProgramme.self, forKey: .next)
+        }
+    }
+
+    private struct RawProgramme: Decodable {
+        let title: String?
+        let start: Double?
+        let end: Double?
+
+        enum CodingKeys: String, CodingKey { case title, start, end }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            title = try? c.decodeIfPresent(String.self, forKey: .title)
+            // Fora do que um Int64 guarda não é uma hora.
+            start = (try? c.decodeIfPresent(Double.self, forKey: .start)).flatMap { abs($0) < 9e15 ? $0 : nil }
+            end = (try? c.decodeIfPresent(Double.self, forKey: .end)).flatMap { abs($0) < 9e15 ? $0 : nil }
+        }
     }
 
     // O JSON tal como vem: os campos com o tipo errado ficam como se não viessem.

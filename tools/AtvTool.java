@@ -684,7 +684,16 @@ public class AtvTool {
 
         static String json(String s) { return "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"") + "\""; }
 
-        /** :6471, como o GoatTV: GET /channels (JSON), GET /logo/<chave> (PNG) e POST /play/<chave>. */
+        /** O programa a dar e o seguinte, em meias horas certas, como o /now do GoatTV. */
+        String nowJson() {
+            long half = 30 * 60_000L;
+            long start = System.currentTimeMillis() / half * half;
+            String name = Arrays.stream(CHANNELS).filter(ch -> ch[0].equals(channel)).map(ch -> (String) ch[2]).findFirst().orElse("TV");
+            return "{\"current\":" + json(channel) + ",\"now\":{\"title\":" + json(name + " Live") + ",\"start\":" + start
+                + ",\"end\":" + (start + half) + "},\"next\":{\"title\":\"Late Show\",\"start\":" + (start + half) + ",\"end\":" + (start + 2 * half) + "}}";
+        }
+
+        /** :6471, como o GoatTV: GET /channels (JSON), GET /now (JSON), GET /logo/<chave> (PNG) e POST /play/<chave>. */
         void goatTvChannels() throws IOException {
             Map<String, byte[]> logos = new HashMap<>();
             for (Object[] ch : CHANNELS) if ((Boolean) ch[4]) logos.put((String) ch[0], drawIcon((String) ch[2], "#0F766E", false));
@@ -716,6 +725,9 @@ public class AtvTool {
                                     .append(",\"logo\":").append(ch[4]).append(",\"favorite\":").append(ch[5]).append('}');
                             }
                             body = j.append("]}").toString().getBytes(StandardCharsets.UTF_8);
+                            type = "application/json; charset=utf-8";
+                        } else if (raw.equals("/now") && !post) {
+                            body = nowJson().getBytes(StandardCharsets.UTF_8);
                             type = "application/json; charset=utf-8";
                         } else if (raw.startsWith("/logo/") && !post) {
                             // A chave vem codificada; regista-se já descodificada.
@@ -779,7 +791,14 @@ public class AtvTool {
                             case "/code" -> code;
                             case "/log" -> String.join("\n", log);
                             case "/state" -> "on=" + on + "\nvolume=" + volume + "\nmuted=" + muted + "\napp=" + app;
-                            default -> "code log state";
+                            // Muda de canal como o comando da própria TV (o telemóvel só sabe pelo /now).
+                            case "/zap" -> {
+                                int i = 0;
+                                while (i < CHANNELS.length && !CHANNELS[i][0].equals(channel)) i++;
+                                channel = (String) CHANNELS[(i + 1) % CHANNELS.length][0];
+                                yield channel;
+                            }
+                            default -> "code log state zap";
                         };
                         byte[] b = body.getBytes(StandardCharsets.UTF_8);
                         OutputStream o = c.getOutputStream();

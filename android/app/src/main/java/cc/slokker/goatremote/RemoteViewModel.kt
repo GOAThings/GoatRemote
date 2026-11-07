@@ -21,6 +21,7 @@ import cc.slokker.goatremote.data.AppCatalog
 import cc.slokker.goatremote.data.ChannelList
 import cc.slokker.goatremote.data.FoundTv
 import cc.slokker.goatremote.data.GoatTvChannels
+import cc.slokker.goatremote.data.NowInfo
 import cc.slokker.goatremote.data.SavedTv
 import cc.slokker.goatremote.data.TvApp
 import cc.slokker.goatremote.data.TvChannel
@@ -119,6 +120,11 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
     /** A abrir o GoatTV na TV, à espera de que dê os canais. */
     var openingGoatTv by mutableStateOf(false)
         private set
+    /** O programa do canal que o GoatTV está a dar (null sem guia, ou num GoatTV antigo, sem o /now). */
+    var nowInfo by mutableStateOf<NowInfo?>(null)
+        private set
+    /** TVs cujo GoatTV não tem o /now (responde 404): até voltar a ligar, não se pergunta. */
+    private val withoutNow = HashSet<String>()
     /** Porque é que o último canal não mudou (null: nada a dizer). */
     var playProblem by mutableStateOf<String?>(null)
         private set
@@ -213,6 +219,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
                 if (this@RemoteViewModel.link !== link) return@launch
                 (link as? AndroidTvLink)?.certificate?.let { store.pinCertificate(tv.id, it) }
                 status = Status.Connected
+                withoutNow.remove(tv.id)
                 update(link.state.value)
                 refreshApps()
                 refreshChannels()
@@ -479,6 +486,66 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
             return list.channels.firstOrNull { it.key == list.current }
         }
 
+    /**
+     * Pergunta ao GoatTV o que está a dar (GET /now, pequeno). Se o canal mudou (pelo comando da TV, por exemplo), o
+     * cartão muda; um canal que a lista não tem pede a lista outra vez. Fechado (Apple TV em segundo plano), o cartão sai.
+     */
+    private suspend fun pollNow(tv: SavedTv) {
+        if (tv.id in withoutNow) return
+        var status = 0
+        var refused = false
+        val info = withContext(Dispatchers.IO) {
+            try {
+                val c = URL(GoatTvChannels.url(tv.host, "now")).openConnection() as HttpURLConnection
+                c.connectTimeout = 2000
+                c.readTimeout = 3000
+                try {
+                    status = c.responseCode
+                    if (status != 200) null
+                    else GoatTvChannels.parseNow(String(c.inputStream.readLimited(GoatTvChannels.MAX_NOW_BYTES), Charsets.UTF_8))
+                } finally {
+                    c.disconnect()
+                }
+            } catch (e: java.net.ConnectException) {
+                refused = true
+                null
+            } catch (e: Exception) {
+                null
+            }
+        }
+        if (current?.id != tv.id) return
+        when {
+            info != null -> {
+                nowInfo = info
+                val list = channels ?: return
+                if (info.current == list.current) return
+                if (info.current == null || list.channels.any { it.key == info.current }) channels = list.copy(current = info.current)
+                else refreshChannels()
+            }
+            status == 404 -> {
+                DebugLog.add("GoatTV on ${tv.name} has no /now")
+                withoutNow.add(tv.id)
+            }
+            refused || status == 503 -> {
+                channels = null
+                channelsStatus = ChannelsStatus.CLOSED
+                nowInfo = null
+            }
+        }
+    }
+
+    init {
+        // Com o GoatTV à frente e a lista dele, a cada 3 s: o canal pode mudar pelo comando da TV.
+        viewModelScope.launch {
+            while (true) {
+                delay(3000)
+                val tv = current ?: continue
+                val front = tv.kind == TvKind.APPLE || state.currentApp == GoatTvChannels.ANDROID_PACKAGE
+                if (status == Status.Connected && channels != null && front) pollNow(tv)
+            }
+        }
+    }
+
     /** Canal seguinte ou anterior, no grupo do que está a dar (como o zapping na TV). */
     fun zap(delta: Int) {
         val list = channels ?: return
@@ -514,6 +581,8 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
                 when (GoatTvChannels.playOutcome(status, refused)) {
                     GoatTvChannels.Play.DONE -> {
                         channels = channels?.copy(current = channel.key)
+                        delay(800)
+                        pollNow(tv)
                         return@launch
                     }
                     GoatTvChannels.Play.NOT_FOUND -> {

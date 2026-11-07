@@ -72,6 +72,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -241,10 +242,29 @@ private fun NowCard(vm: RemoteViewModel, channel: TvChannel, onList: () -> Unit)
     ) {
         ChannelLogo(vm, channel, 62.dp, 42.dp, Color.Black.copy(alpha = 0.35f))
         Spacer(Modifier.width(12.dp))
+        // Com o /now do GoatTV: o programa, as horas, quanto falta e uma barra; sem ele, só o canal.
+        val now by produceState(System.currentTimeMillis()) {
+            while (true) {
+                delay(15_000)
+                value = System.currentTimeMillis()
+            }
+        }
+        val programme = vm.nowInfo?.takeIf { it.current == channel.key }?.now?.takeIf { it.startMs <= now && it.endMs > now }
         Column(Modifier.weight(1f)) {
-            Text(("GoatTV" + (channel.num?.let { " · $it" } ?: "")).uppercase(), color = Theme.faint, fontSize = 11.sp,
-                fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp, maxLines = 1)
-            Text(channel.name, color = Theme.text, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            val caption = if (programme != null) listOfNotNull(channel.num?.toString(), channel.name).joinToString(" · ")
+            else "GoatTV" + (channel.num?.let { " · $it" } ?: "")
+            Text(caption.uppercase(), color = Theme.faint, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(programme?.title ?: channel.name, color = Theme.text, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1,
+                overflow = TextOverflow.Ellipsis)
+            if (programme != null) {
+                Box(Modifier.padding(top = 7.dp).fillMaxWidth().height(3.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.12f))) {
+                    Box(Modifier.fillMaxWidth(programme.progress(now)).height(3.dp).clip(CircleShape).background(Theme.gradient))
+                }
+                val left = ((programme.endMs - now) / 60_000 + 1).toInt()
+                Text("${clock(programme.startMs)} – ${clock(programme.endMs)} · " + L("$left min left", "faltam $left min"),
+                    color = Theme.dim, fontSize = 12.sp, maxLines = 1, modifier = Modifier.padding(top = 5.dp).testTag("now-programme"))
+            }
         }
         Spacer(Modifier.width(8.dp))
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -260,6 +280,9 @@ private fun NowCard(vm: RemoteViewModel, channel: TvChannel, onList: () -> Unit)
         ) { Icon(Icons.AutoMirrored.Rounded.List, null, tint = Color.Black, modifier = Modifier.size(22.dp)) }
     }
 }
+
+/** Hora:minuto, como o telemóvel as mostra. */
+private fun clock(ms: Long): String = java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(java.util.Date(ms))
 
 @Composable
 private fun ZapKey(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, tag: String, onTap: () -> Unit) {

@@ -43,6 +43,10 @@ final class RemoteModel {
     private(set) var openingGoatTV = false
     /// Porque é que o último canal não mudou (nil: nada a dizer).
     private(set) var playProblem: String?
+    /// O programa do canal que o GoatTV está a dar (nil sem guia, ou num GoatTV antigo, sem o /now).
+    private(set) var nowInfo: NowInfo?
+    /// TVs cujo GoatTV não tem o /now (responde 404): até voltar a ligar, não se pergunta.
+    @ObservationIgnored private var withoutNow = Set<String>()
 
     /// O emparelhamento em curso (a folha mostra-o).
     var pairing: PairingModel?
@@ -99,6 +103,7 @@ final class RemoteModel {
         current = TVStore.current
         recentApps = Self.loadRecents(current?.id)
         hasChannels = Self.hasGoatTV(current?.id)
+        watchNow()
     }
 
     // MARK: Ligação
@@ -143,6 +148,7 @@ final class RemoteModel {
                 try await link.connect()
                 guard self.link === link else { return }
                 self.status = .connected
+                self.withoutNow.remove(tv.id)
                 self.update(link.state)
                 self.refreshApps()
                 self.refreshChannels()
@@ -356,6 +362,54 @@ final class RemoteModel {
         return outcome == .ready
     }
 
+    /// Pergunta ao GoatTV o que está a dar (GET /now, pequeno). Se o canal mudou (pelo comando da TV, por exemplo), o
+    /// cartão muda; um canal que a lista não tem pede a lista outra vez. Fechado (Apple TV em segundo plano), o cartão sai.
+    private func pollNow(_ tv: SavedTV) async {
+        guard !withoutNow.contains(tv.id), let url = URL(string: GoatTVChannels.url(host: tv.host, "now")) else { return }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 3
+        var info: NowInfo?
+        var status = 0
+        var refused = false
+        do {
+            let (data, code) = try await BoundedHTTP.get(request, limit: GoatTVChannels.maxNowBytes)
+            status = code
+            if code == 200 { info = try GoatTVChannels.parseNow(data) }
+        } catch let error as URLError where error.code == .cannotConnectToHost {
+            refused = true
+        } catch {}
+        guard current?.id == tv.id else { return }
+        if let info {
+            nowInfo = info
+            guard let list = channels, info.current != list.current else { return }
+            if info.current == nil || list.channels.contains(where: { $0.key == info.current }) {
+                channels?.current = info.current
+            } else {
+                refreshChannels()
+            }
+        } else if status == 404 {
+            DebugLog.add("GoatTV on \(tv.name) has no /now")
+            withoutNow.insert(tv.id)
+        } else if refused || status == 503 {
+            channels = nil
+            channelsStatus = .closed
+            nowInfo = nil
+        }
+    }
+
+    /// Com o GoatTV à frente e a lista dele, a cada 3 s: o canal pode mudar pelo comando da TV.
+    private func watchNow() {
+        Task { [weak self] in
+            while true {
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
+                guard let self else { return }
+                guard let tv = current, status == .connected, channels != nil,
+                      tv.kind == .apple || state.currentApp == GoatTVChannels.androidPackage else { continue }
+                await pollNow(tv)
+            }
+        }
+    }
+
     /// Como abrir o GoatTV nesta TV: na Android TV pelo GoatLauncher (só se se sabe que o tem); na Apple TV pela
     /// própria ligação, se ele estiver na lista de apps dela. nil: só se pode pedir para o abrirem na TV.
     var goatTVApp: TVApp? {
@@ -429,6 +483,8 @@ final class RemoteModel {
                 switch GoatTVChannels.playOutcome(status: status, refused: refused) {
                 case .done:
                     channels?.current = channel.key
+                    try? await Task.sleep(nanoseconds: 800_000_000)
+                    await pollNow(tv)
                     return
                 case .notFound:
                     playProblem = L("This channel isn't available on the TV", "Este canal não está disponível na TV")

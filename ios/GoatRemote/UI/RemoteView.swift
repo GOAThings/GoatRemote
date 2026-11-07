@@ -452,10 +452,9 @@ struct NowCard: View {
     var body: some View {
         HStack(spacing: 12) {
             ChannelLogoView(channel: channel, size: CGSize(width: 62, height: 42), background: .black.opacity(0.35))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(("GoatTV" + (channel.num.map { " · \($0)" } ?? "")).uppercased())
-                    .font(.system(size: 11, weight: .bold)).tracking(0.6).foregroundStyle(Theme.faint).lineLimit(1)
-                Text(channel.name).font(.system(size: 17, weight: .heavy)).foregroundStyle(Theme.text).lineLimit(1)
+            // Com o /now do GoatTV: o programa, as horas, quanto falta e uma barra; sem ele, só o canal.
+            TimelineView(.periodic(from: .now, by: 15)) { context in
+                info(at: Int64(context.date.timeIntervalSince1970 * 1000))
             }
             Spacer(minLength: 4)
             VStack(spacing: 6) {
@@ -474,6 +473,37 @@ struct NowCard: View {
         .padding(14)
         .background(HeroBackground(shape: RoundedRectangle(cornerRadius: 20, style: .continuous)))
         .accessibilityIdentifier("now-card")
+    }
+
+    private func info(at now: Int64) -> some View {
+        let programme = model.nowInfo.flatMap { $0.current == channel.key ? $0.now : nil }.flatMap { $0.startMs <= now && $0.endMs > now ? $0 : nil }
+        let caption = programme != nil ? [channel.num.map { String($0) }, channel.name].compactMap { $0 }.joined(separator: " · ")
+            : "GoatTV" + (channel.num.map { " · \($0)" } ?? "")
+        return VStack(alignment: .leading, spacing: 2) {
+            Text(caption.uppercased())
+                .font(.system(size: 11, weight: .bold)).tracking(0.6).foregroundStyle(Theme.faint).lineLimit(1)
+            Text(programme?.title ?? channel.name).font(.system(size: 17, weight: .heavy)).foregroundStyle(Theme.text).lineLimit(1)
+            if let programme {
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(Color.white.opacity(0.12))
+                        Capsule().fill(Theme.gradient).frame(width: geo.size.width * programme.progress(now: now))
+                    }
+                }
+                .frame(height: 3)
+                .padding(.top, 5)
+                let left = (programme.endMs - now) / 60_000 + 1
+                Text("\(Self.clock(programme.startMs)) – \(Self.clock(programme.endMs)) · " + L("\(left) min left", "faltam \(left) min"))
+                    .font(.caption).foregroundStyle(Theme.dim).lineLimit(1)
+                    .padding(.top, 3)
+                    .accessibilityIdentifier("now-programme")
+            }
+        }
+    }
+
+    /// Hora:minuto, como o telemóvel as mostra.
+    private static func clock(_ ms: Int64) -> String {
+        Date(timeIntervalSince1970: Double(ms) / 1000).formatted(date: .omitted, time: .shortened)
     }
 
     private func zapKey(_ symbol: String, _ label: String, _ id: String, action: @escaping () -> Void) -> some View {
