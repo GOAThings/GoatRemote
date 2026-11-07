@@ -5,10 +5,10 @@ remote. All the TVs at home show up in one list, so switching between them is on
 
 ## Screenshots
 
-| | | |
-|---|---|---|
-| ![Remote](docs/screenshots/remote.jpg) | ![Apps](docs/screenshots/apps.jpg) | ![More](docs/screenshots/more.jpg) |
-| ![Keyboard](docs/screenshots/keyboard.jpg) | ![Add a TV](docs/screenshots/add-tv.jpg) | ![Pairing](docs/screenshots/pairing.jpg) |
+| | | | |
+|---|---|---|---|
+| ![Remote](docs/screenshots/remote.jpg) | ![GoatTV channel](docs/screenshots/channel.jpg) | ![Arrows](docs/screenshots/dpad.jpg) | ![Channels](docs/screenshots/channels.jpg) |
+| ![Apps](docs/screenshots/apps.jpg) | ![More](docs/screenshots/more.jpg) | ![Keyboard](docs/screenshots/keyboard.jpg) | ![Add a TV](docs/screenshots/add-tv.jpg) |
 
 iPhone screenshots against the fake TV used in the tests. The Android app looks the same.
 
@@ -17,7 +17,8 @@ iPhone screenshots against the fake TV used in the tests. The Android app looks 
 - **Finds the TVs** on your home network (Android TV, Google TV and Apple TV) and pairs with the code shown on
   the TV: Android TV with the same protocol as the Google TV app, Apple TV with the one Apple's remote uses (a
   4-digit PIN). It works with any app on the TV, not only ours.
-- **Touch surface**: swipe to move, tap to select, hold for a long press, or turn on arrows on the edges.
+- **Touch surface or arrows**: swipe to move, tap to select, hold for a long press; or switch to a ring of arrows
+  with OK in the middle, like a physical remote (holding an arrow repeats it). The app remembers your choice.
 - **Buttons**: play/pause, back, home, power, mute, rewind and fast forward; under More, volume, channels, search,
   guide, info, subtitles, audio track, last channel, input, settings, stop, previous, next and the numbers.
 - **Volume**: the phone's volume buttons change the TV's volume while the app is open. With GoatLauncher on the
@@ -29,7 +30,8 @@ iPhone screenshots against the fake TV used in the tests. The Android app looks 
   up with their banners; without it, the apps you've opened on that TV. On Apple TV, the TV's own app list, with
   App Store icons.
 - **Channels**: with GoatTV on the TV, its channel list (current, favourites, search and groups) with logos; tap a
-  channel to switch to it, opening GoatTV first if needed.
+  channel to switch to it, opening GoatTV first if needed. While GoatTV is playing, a card at the top shows the
+  channel and what's on (with GoatTV 0.9.17 or newer), with buttons for the next and previous channel.
 - **Several TVs**, and on the iPhone, Siri and Shortcuts ("press a TV button").
 - **Quick access**: a home screen widget and, on Android, Quick Settings tiles.
 - English and Portuguese.

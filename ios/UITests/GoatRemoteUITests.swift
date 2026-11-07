@@ -122,14 +122,13 @@ final class GoatRemoteUITests: XCTestCase {
         pause(0.5)
         shot("channel-played")
 
-        // Fechada a folha, o comando mostra o canal do GoatTV (com o programa do /now) por cima das setas.
+        // Fechada a folha, o comando mostra o canal do GoatTV, com o programa do /now.
         app.swipeDown()
         pause(0.6)
         if app.buttons["channel:News 24"].firstMatch.exists { app.swipeDown() }
         XCTAssertTrue(app.descendants(matching: .any)["now-card"].waitForExistence(timeout: 10), "O cartão do canal não apareceu")
-        app.buttons["layout:dpad"].tap()
         pause(1.5)
-        shot("now-dpad")
+        shot("now-card")
 
         // O que a TV falsa recebeu.
         let log = fetch("log") ?? ""
@@ -139,10 +138,13 @@ final class GoatRemoteUITests: XCTestCase {
         add(attachment)
         for expected in ["emparelhado", "tecla DPAD_CENTER", "tecla DPAD_UP", "tecla DPAD_DOWN", "tecla DPAD_LEFT", "tecla DPAD_RIGHT",
                          "tecla DPAD_CENTER (início)", "tecla DPAD_CENTER (fim)", "tecla MEDIA_PLAY_PAUSE", "tecla BACK", "tecla HOME",
-                         "launcher /volume/mute", "launcher /volume/up", "tecla SEARCH", "texto hello", "tecla ENTER",
+                         "launcher /volume/mute", "launcher /volume/up", "tecla SEARCH", "tecla ENTER",
                          "launcher /open/com.google.android.youtube.tv", "launcher /apps", "launcher /icon/cc.slokker.itv"] {
             XCTAssertTrue(log.contains(expected), "Falta no registo da TV: \(expected)")
         }
+        // O texto vai à medida que se escreve (o simulador escreve uma tecla de cada vez): juntas, as partes dão "hello".
+        let typed = log.components(separatedBy: "\n").filter { $0.hasPrefix("texto ") }.map { String($0.dropFirst(6)) }.joined()
+        XCTAssertEqual(typed, "hello", "O texto que chegou à TV")
         // Linhas inteiras: o primeiro /play deu 409, o launcher abriu o GoatTV e o segundo mudou de canal.
         let lines = log.components(separatedBy: "\n")
         for expected in ["goattv /channels", "goattv /logo/rtp1", "goattv /play/news 24/hd 409", "launcher /open/cc.slokker.itv",
