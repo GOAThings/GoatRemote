@@ -554,15 +554,16 @@ struct DPad: View {
     @State private var task: Task<Void, Never>?
     /// O raio do OK, em fração do raio das setas.
     private static let inner: CGFloat = 0.43
+    /// O contorno da roda e as divisões entre as setas.
+    private static let line = Color.white.opacity(0.16)
 
     var body: some View {
         GeometryReader { geo in
             let side = min(geo.size.width, geo.size.height, 320)
             ZStack {
-                Circle().fill(RadialGradient(colors: [Color(hex: 0x1E2538), Color(hex: 0x121621)], center: UnitPoint(x: 0.7, y: 0.2),
-                                             startRadius: 0, endRadius: side * 0.9))
+                Circle().fill(.white.opacity(0.04))
                 if let start = sectorStart {
-                    Sector(start: .degrees(start)).fill(Theme.surfacePressed)
+                    Sector(start: .degrees(start), inner: Self.inner).fill(.white.opacity(0.10))
                 }
                 ForEach([45.0, 135.0, 225.0, 315.0], id: \.self) { angle in
                     Path { p in
@@ -571,10 +572,11 @@ struct DPad: View {
                         p.move(to: CGPoint(x: r + cos(a) * r * Self.inner, y: r + sin(a) * r * Self.inner))
                         p.addLine(to: CGPoint(x: r + cos(a) * r, y: r + sin(a) * r))
                     }
-                    .stroke(Theme.background, lineWidth: 3)
+                    .stroke(Self.line, lineWidth: 1.5)
                 }
-                Circle().fill(pressed == .center ? Theme.surfacePressed : Color(hex: 0x232A3D))
-                    .overlay(Circle().strokeBorder(Theme.background, lineWidth: 3))
+                Circle().strokeBorder(Self.line, lineWidth: 1.5)
+                Circle().fill(.white.opacity(pressed == .center ? 0.14 : 0.05))
+                    .overlay(Circle().strokeBorder(Self.line, lineWidth: 1.5))
                     .frame(width: side * Self.inner, height: side * Self.inner)
                 Text("OK").font(.system(size: 19, weight: .bold)).foregroundStyle(Theme.text)
                 Group {
@@ -591,6 +593,8 @@ struct DPad: View {
             .gesture(drag(side))
             .position(x: geo.size.width / 2, y: geo.size.height / 2)
         }
+        .padding(20)
+        .background(HeroBackground(shape: RoundedRectangle(cornerRadius: 28, style: .continuous), glow: 0.16))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(L("Arrows", "Setas"))
         .accessibilityAddTraits(.allowsDirectInteraction)
@@ -654,15 +658,18 @@ struct DPad: View {
     }
 }
 
-/// Um quarto de círculo (a seta carregada), a começar em [start] e no sentido dos ponteiros.
+/// Um quarto do anel (a seta carregada), a começar em [start] e no sentido dos ponteiros. Fica de fora do OK, que é transparente.
 private struct Sector: Shape {
     let start: Angle
+    /// O raio do OK, em fração do raio da roda.
+    let inner: CGFloat
 
     func path(in rect: CGRect) -> Path {
         var p = Path()
         let c = CGPoint(x: rect.midX, y: rect.midY)
-        p.move(to: c)
-        p.addArc(center: c, radius: rect.width / 2, startAngle: start, endAngle: start + .degrees(90), clockwise: false)
+        let r = rect.width / 2
+        p.addArc(center: c, radius: r, startAngle: start, endAngle: start + .degrees(90), clockwise: false)
+        p.addArc(center: c, radius: r * inner, startAngle: start + .degrees(90), endAngle: start, clockwise: true)
         p.closeSubpath()
         return p
     }

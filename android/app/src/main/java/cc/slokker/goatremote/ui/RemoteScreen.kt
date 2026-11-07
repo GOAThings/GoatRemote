@@ -14,7 +14,6 @@ import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.material.icons.automirrored.rounded.List
 import androidx.compose.material.icons.rounded.Gamepad
 import androidx.compose.material.icons.rounded.TouchApp
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.semantics.selected
 import cc.slokker.goatremote.RemoteLayout
 import cc.slokker.goatremote.data.TvChannel
@@ -81,8 +80,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.ClipOp
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -553,7 +556,7 @@ private fun TouchSurface(vm: RemoteViewModel) {
 private fun Dpad(vm: RemoteViewModel) {
     var pressed by remember { mutableStateOf<Key?>(null) }
     val scope = rememberCoroutineScope()
-    BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+    BoxWithConstraints(Modifier.fillMaxSize().hero(RoundedCornerShape(28.dp), glow = 0.16f).padding(20.dp), contentAlignment = Alignment.Center) {
         val side = minOf(maxWidth, maxHeight, 320.dp)
         Box(
             Modifier.size(side)
@@ -604,8 +607,8 @@ private fun Dpad(vm: RemoteViewModel) {
             Canvas(Modifier.fillMaxSize()) {
                 val radius = size.minDimension / 2f
                 val inner = radius * DPAD_INNER
-                drawCircle(Brush.radialGradient(listOf(Color(0xFF1E2538), Color(0xFF121621)),
-                    center = Offset(size.width * 0.7f, size.height * 0.2f), radius = radius * 1.8f), radius)
+                val line = 1.5.dp.toPx()
+                drawCircle(Color.White.copy(alpha = 0.04f), radius)
                 val sector = when (pressed) {
                     Key.RIGHT -> -45f
                     Key.DOWN -> 45f
@@ -613,15 +616,19 @@ private fun Dpad(vm: RemoteViewModel) {
                     Key.UP -> 225f
                     else -> null
                 }
-                if (sector != null) drawArc(Theme.surfacePressed, sector, 90f, useCenter = true)
-                val gap = 3.dp.toPx()
+                if (sector != null) {
+                    // Só o anel: o OK é transparente e não pode acender com a seta.
+                    val hole = Path().apply { addOval(Rect(center, inner)) }
+                    clipPath(hole, ClipOp.Difference) { drawArc(Color.White.copy(alpha = 0.10f), sector, 90f, useCenter = true) }
+                }
                 for (angle in listOf(45.0, 135.0, 225.0, 315.0)) {
                     val a = Math.toRadians(angle)
                     val dir = Offset(kotlin.math.cos(a).toFloat(), kotlin.math.sin(a).toFloat())
-                    drawLine(Theme.background, center + dir * inner, center + dir * radius, strokeWidth = gap)
+                    drawLine(WHEEL_LINE, center + dir * inner, center + dir * radius, strokeWidth = line)
                 }
-                drawCircle(if (pressed == Key.CENTER) Theme.surfacePressed else Color(0xFF232A3D), inner)
-                drawCircle(Theme.background, inner, style = Stroke(gap))
+                drawCircle(Color.White.copy(alpha = if (pressed == Key.CENTER) 0.14f else 0.05f), inner)
+                drawCircle(WHEEL_LINE, inner, style = Stroke(line))
+                drawCircle(WHEEL_LINE, radius - line / 2, style = Stroke(line))
             }
             val edge = side * 0.07f
             val arrow = Modifier.size(34.dp)
@@ -636,6 +643,9 @@ private fun Dpad(vm: RemoteViewModel) {
 
 /** O raio do OK, em fração do raio das setas. */
 private const val DPAD_INNER = 0.43f
+
+/** O contorno da roda e as divisões entre as setas. */
+private val WHEEL_LINE = Color.White.copy(alpha = 0.16f)
 
 /** O círculo que se expande e desvanece onde se tocou. */
 @Composable
