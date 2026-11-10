@@ -291,9 +291,9 @@ final class AppleTVLink: TVControl, @unchecked Sendable {
 
     /// Um id estável por instalação (sem ele a TV não manda os eventos de ligada/desligada).
     private static var stableID: String {
-        if let id = UserDefaults.standard.string(forKey: "companion.id") { return id }
+        if let id = UserDefaults.standard.string(forKey: StoreKeys.companionID) { return id }
         let id = (0..<6).map { _ in String(format: "%02x", UInt8.random(in: 0...255)) }.joined()
-        UserDefaults.standard.set(id, forKey: "companion.id")
+        UserDefaults.standard.set(id, forKey: StoreKeys.companionID)
         return id
     }
 

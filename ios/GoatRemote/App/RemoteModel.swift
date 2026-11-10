@@ -5,11 +5,6 @@ import Observation
 import RemoteCore
 import UIKit
 
-/// O meio do comando: a superfície de toque (deslizar) ou as setas com o OK, como num comando físico.
-enum RemoteLayout: String {
-    case touch, dpad
-}
-
 /// O estado da app: as TVs, a ligação à escolhida e o emparelhamento.
 @MainActor
 @Observable
@@ -59,19 +54,19 @@ final class RemoteModel {
     private(set) var volumeChanged = 0
 
     // Opções (Mais → Opções).
-    var haptics: Bool = UserDefaults.standard.object(forKey: "haptics") as? Bool ?? true {
-        didSet { UserDefaults.standard.set(haptics, forKey: "haptics") }
+    var haptics: Bool = UserDefaults.standard.object(forKey: StoreKeys.haptics) as? Bool ?? true {
+        didSet { UserDefaults.standard.set(haptics, forKey: StoreKeys.haptics) }
     }
     /// Os botões de volume do iPhone mexem no volume da TV (com a app aberta).
-    var volumeButtons: Bool = UserDefaults.standard.object(forKey: "volumeButtons") as? Bool ?? true {
-        didSet { UserDefaults.standard.set(volumeButtons, forKey: "volumeButtons") }
+    var volumeButtons: Bool = UserDefaults.standard.object(forKey: StoreKeys.volumeButtons) as? Bool ?? true {
+        didSet { UserDefaults.standard.set(volumeButtons, forKey: StoreKeys.volumeButtons) }
     }
     /// Superfície de toque ou setas (D-pad). Quem tinha as "setas nas bordas" ligadas começa nas setas.
-    var layout: RemoteLayout = UserDefaults.standard.string(forKey: "layout").flatMap(RemoteLayout.init(rawValue:))
-        ?? (UserDefaults.standard.bool(forKey: "dpadTaps") ? .dpad : .touch) {
+    var layout: RemoteLayout = RemoteLayout.saved(UserDefaults.standard.string(forKey: StoreKeys.layout),
+                                                  dpadTaps: UserDefaults.standard.bool(forKey: StoreKeys.dpadTaps)) {
         didSet {
-            UserDefaults.standard.set(layout.rawValue, forKey: "layout")
-            UserDefaults.standard.removeObject(forKey: "dpadTaps")
+            UserDefaults.standard.set(layout.rawValue, forKey: StoreKeys.layout)
+            UserDefaults.standard.removeObject(forKey: StoreKeys.dpadTaps)
         }
     }
 
@@ -223,17 +218,17 @@ final class RemoteModel {
             recentApps.removeAll { $0 == app }
             recentApps.insert(app, at: 0)
             recentApps = Array(recentApps.prefix(12))
-            if let id = current?.id { UserDefaults.standard.set(recentApps, forKey: "recents.\(id)") }
+            if let id = current?.id { UserDefaults.standard.set(recentApps, forKey: StoreKeys.perTV(StoreKeys.recents, id)) }
         }
     }
 
     private static func loadRecents(_ id: String?) -> [String] {
         guard let id else { return [] }
-        let saved = UserDefaults.standard.stringArray(forKey: "recents.\(id)") ?? []
+        let saved = UserDefaults.standard.stringArray(forKey: StoreKeys.perTV(StoreKeys.recents, id)) ?? []
         // O que não for um nome de pacote não volta a ler-se.
         var seen = Set<String>()
         let recents = Array(saved.filter { RemoteProtocol.isPackageName($0) && seen.insert($0).inserted }.prefix(12))
-        if recents != saved { UserDefaults.standard.set(recents, forKey: "recents.\(id)") }
+        if recents != saved { UserDefaults.standard.set(recents, forKey: StoreKeys.perTV(StoreKeys.recents, id)) }
         return recents
     }
 
@@ -291,7 +286,7 @@ final class RemoteModel {
             request.httpMethod = "POST"
             request.timeoutInterval = 3
             let status = (try? await URLSession.shared.data(for: request))?.1 as? HTTPURLResponse
-            if status?.statusCode == 200 { return }
+            if !LauncherApps.openFallsBack(status: status?.statusCode ?? 0) { return }
             DebugLog.add("Launcher didn't open it (HTTP \(status?.statusCode ?? 0)), using the remote's link")
             if current?.id == tv.id { open(app.link, haptic: false) }
         }
@@ -304,14 +299,11 @@ final class RemoteModel {
         Task {
             var request = URLRequest(url: url)
             request.timeoutInterval = 4
-            guard let (data, status) = try? await BoundedHTTP.get(request, limit: 2 << 20), status == 200,
-                  let list = try? JSONDecoder().decode([Lenient<TVApp>].self, from: data) else { return }
-            // Uma app mal descrita fica de fora; as outras contam (como no Android).
-            let apps = list.compactMap(\.value)
+            guard let (data, status) = try? await BoundedHTTP.get(request, limit: LauncherApps.maxBytes), status == 200,
+                  let apps = try? LauncherApps.parse(data) else { return }
             Self.setLauncher(tv.id, true)
             guard current?.id == tv.id else { return }
-            var seen = Set<String>()
-            installedApps = apps.filter { seen.insert($0.package).inserted }
+            installedApps = apps
         }
     }
 
@@ -322,7 +314,7 @@ final class RemoteModel {
         return URL(string: "http://\(tv.host):\(Self.launcherPort)/icon/\(package)")
     }
 
-    static let launcherPort = 6470
+    static let launcherPort = LauncherApps.port
 
     // MARK: Canais do GoatTV (porta 6471)
 
@@ -339,7 +331,7 @@ final class RemoteModel {
     @ObservationIgnored private var playTask: Task<Void, Never>?
 
     private static func hasGoatTV(_ tvID: String?) -> Bool {
-        tvID.map { UserDefaults.standard.bool(forKey: "goattv.\($0)") } ?? false
+        tvID.map { UserDefaults.standard.bool(forKey: StoreKeys.perTV(StoreKeys.goatTV, $0)) } ?? false
     }
 
     /// Pede a lista ao GoatTV da TV. Ao ligar e ao abrir a folha.
@@ -386,7 +378,7 @@ final class RemoteModel {
             }
             channelsStatus = .ready
             hasChannels = true
-            UserDefaults.standard.set(true, forKey: "goattv.\(tv.id)")
+            UserDefaults.standard.set(true, forKey: StoreKeys.perTV(StoreKeys.goatTV, tv.id))
         case .closed:
             channels = nil
             channelsStatus = .closed
@@ -609,7 +601,7 @@ final class RemoteModel {
     func forget(_ tv: SavedTV) {
         if tv.kind == .apple { CompanionCredentials.delete(tv.id) }
         TVStore.remove(tv.id)
-        for key in ["recents", "launcher", "volumeUnknown", "goattv"] { UserDefaults.standard.removeObject(forKey: "\(key).\(tv.id)") }
+        for key in StoreKeys.perTVKeys(tv.id) { UserDefaults.standard.removeObject(forKey: key) }
         tvs = TVStore.all
         if current?.id == tv.id {
             link?.close()
@@ -711,17 +703,17 @@ final class RemoteModel {
     /// launcher: 404, ou ligação recusada na porta dele, numa TV onde nunca se viu nenhum. Onde já se viu, isso é só não
     /// ter respondido; esquecer a TV limpa o que se sabe, se o launcher saiu mesmo de lá.
     static func hasLauncher(_ tvID: String) -> Bool? {
-        UserDefaults.standard.object(forKey: "launcher.\(tvID)") as? Bool
+        UserDefaults.standard.object(forKey: StoreKeys.perTV(StoreKeys.launcher, tvID)) as? Bool
     }
 
     static func setLauncher(_ tvID: String, _ value: Bool) {
-        UserDefaults.standard.set(value, forKey: "launcher.\(tvID)")
+        UserDefaults.standard.set(value, forKey: StoreKeys.perTV(StoreKeys.launcher, tvID))
     }
 
     /// Com HDMI-CEC, o volume está na TV e a box não sabe o valor: o que reporta não diz nada. Descobre-se ao
     /// carregar: o launcher mudou o volume e o valor não mexeu. Fica guardado por TV.
     private var volumeUnknown: Bool {
-        current.map { UserDefaults.standard.bool(forKey: "volumeUnknown.\($0.id)") } ?? false
+        current.map { UserDefaults.standard.bool(forKey: StoreKeys.perTV(StoreKeys.volumeUnknown, $0.id)) } ?? false
     }
 
     /// A última tecla, para o indicador numa TV sem valor de volume (nil: mostra-se a barra).
@@ -743,7 +735,7 @@ final class RemoteModel {
                 try? await Task.sleep(for: .milliseconds(800))
                 guard current?.id == tv.id else { return }
                 let unknown = state.volume == before.0 && state.muted == before.1
-                UserDefaults.standard.set(unknown, forKey: "volumeUnknown.\(tv.id)")
+                UserDefaults.standard.set(unknown, forKey: StoreKeys.perTV(StoreKeys.volumeUnknown, tv.id))
                 volumePressed = unknown ? key : nil
                 if unknown { volumeChanged += 1 }
             case .noLauncher:
@@ -1064,26 +1056,7 @@ enum BoundedHTTP {
     }
 }
 
-/// Um elemento de uma lista que, se não se ler, fica nil em vez de estragar a lista toda.
-struct Lenient<T: Decodable>: Decodable {
-    let value: T?
-
-    init(from decoder: Decoder) throws {
-        value = try? T(from: decoder)
-    }
-}
-
-/// Uma app instalada na TV, como o GoatLauncher a dá.
-struct TVApp: Decodable, Identifiable, Hashable {
-    let package: String
-    let label: String
-    /// Tem banner de TV (16:9); senão é um ícone sobre a [color].
-    let banner: Bool
-    let color: String?
-
-    var id: String { package }
-    var link: String { "market://launch?id=\(package)" }
-
+extension TVApp {
     var tint: Color {
         guard let color, color.hasPrefix("#"), let value = UInt32(color.dropFirst(), radix: 16) else { return Theme.surfaceHigh }
         return Color(hex: value)

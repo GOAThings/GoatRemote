@@ -1,61 +1,14 @@
 import Foundation
 import RemoteCore
 
-/// Android TV / Google TV (protocolo da app Google TV) ou Apple TV (protocolo Companion).
-enum TVKind: String, Codable, Sendable {
-    case android, apple
-
+extension TVKind {
     var symbol: String { self == .apple ? "appletv.fill" : "tv" }
-}
-
-/// Uma TV guardada (emparelhada). [id] é o nome com que se anuncia na rede ("apple:" + nome nas Apple TV), ou o IP
-/// se foi juntada à mão.
-struct SavedTV: Codable, Identifiable, Hashable, Sendable {
-    var id: String
-    var name: String
-    var host: String
-    var kind: TVKind = .android
-    /// A porta do comando, se não for a de sempre (a Apple TV escolhe uma).
-    var port: UInt16?
-    /// O SHA-256 do certificado do comando da TV (Android TV), guardado na primeira ligação depois de emparelhar.
-    var certificate: String?
-
-    init(id: String, name: String, host: String, kind: TVKind = .android, port: UInt16? = nil, certificate: String? = nil) {
-        self.id = id
-        self.name = name
-        self.host = host
-        self.kind = kind
-        self.port = port
-        self.certificate = certificate
-    }
-
-    // As TVs guardadas antes de haver Apple TV não têm "kind".
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        id = try c.decode(String.self, forKey: .id)
-        name = try c.decode(String.self, forKey: .name)
-        host = try c.decode(String.self, forKey: .host)
-        kind = try c.decodeIfPresent(TVKind.self, forKey: .kind) ?? .android
-        port = try c.decodeIfPresent(UInt16.self, forKey: .port)
-        certificate = try c.decodeIfPresent(String.self, forKey: .certificate)
-    }
-
-    /// A mesma TV num endereço novo (visto na procura), ou nil se não mudou. Só a Apple TV guarda a porta: a da Android
-    /// TV é sempre a mesma. O certificado fica: continua a ser a mesma TV.
-    static func moved(_ tv: SavedTV, host: String, port: UInt16?) -> SavedTV? {
-        let newPort = tv.kind == .apple ? port ?? tv.port : tv.port
-        guard !host.isEmpty, host != tv.host || newPort != tv.port else { return nil }
-        var moved = tv
-        moved.host = host
-        moved.port = newPort
-        return moved
-    }
 }
 
 /// As TVs guardadas e a escolhida (partilhadas pela app e pelos Atalhos).
 enum TVStore {
-    private static let key = "tvs"
-    private static let currentKey = "current"
+    private static let key = StoreKeys.tvs
+    private static let currentKey = StoreKeys.current
 
     static var all: [SavedTV] {
         get {

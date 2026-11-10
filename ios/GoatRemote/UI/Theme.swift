@@ -1,23 +1,26 @@
+import RemoteCore
 import SwiftUI
 
 /// O visual do GoatTV no telemóvel: fundo azul-noite, cartões opacos, botões redondos e o azul→roxo de destaque.
 enum Theme {
-    static let background = Color(hex: 0x05070D)
+    static let background = Color(hex: ThemeTokens.background)
     /// O fundo das folhas.
-    static let surface = Color(hex: 0x0B0D14)
+    static let surface = Color(hex: ThemeTokens.surface)
     /// Cartões (listas, teclas do Mais).
-    static let card = Color(hex: 0x12151D)
+    static let card = Color(hex: ThemeTokens.card)
     /// Botões e o que está dentro de um cartão.
-    static let surfaceHigh = Color(hex: 0x191D28)
-    static let surfacePressed = Color(hex: 0x262C3D)
-    static let accent = Color(hex: 0x5AA9FF)
-    static let accent2 = Color(hex: 0x8B7CFF)
-    static let power = Color(hex: 0xF2777E)
-    static let green = Color(hex: 0x34D399)
-    static let text = Color(hex: 0xF5F5F7)
-    static let dim = Color(hex: 0xEBEBF5).opacity(0.6)
-    static let faint = Color(hex: 0xEBEBF5).opacity(0.38)
-    static let line = Color.white.opacity(0.08)
+    static let surfaceHigh = Color(hex: ThemeTokens.surfaceHigh)
+    static let surfacePressed = Color(hex: ThemeTokens.surfacePressed)
+    static let accent = Color(hex: ThemeTokens.accent)
+    static let accent2 = Color(hex: ThemeTokens.accent2)
+    static let power = Color(hex: ThemeTokens.power)
+    static let green = Color(hex: ThemeTokens.green)
+    static let text = Color(hex: ThemeTokens.text)
+    static let dim = Color(hex: ThemeTokens.dim).opacity(ThemeTokens.dimAlpha)
+    static let faint = Color(hex: ThemeTokens.dim).opacity(ThemeTokens.faintAlpha)
+    static let line = Color.white.opacity(ThemeTokens.lineAlpha)
+    /// A estrela dos canais favoritos.
+    static let favorite = Color(hex: ThemeTokens.favorite)
     static let gradient = LinearGradient(colors: [accent, accent2], startPoint: .topLeading, endPoint: .bottomTrailing)
 }
 
@@ -27,7 +30,7 @@ struct HeroBackground<S: Shape>: View {
     var glow = 0.22
 
     var body: some View {
-        shape.fill(LinearGradient(colors: [Color(hex: 0x1D2236), Color(hex: 0x0E1018)], startPoint: .topLeading, endPoint: .bottomTrailing))
+        shape.fill(LinearGradient(colors: [Color(hex: ThemeTokens.heroTop), Color(hex: ThemeTokens.heroBottom)], startPoint: .topLeading, endPoint: .bottomTrailing))
             .overlay {
                 GeometryReader { geo in
                     RadialGradient(colors: [Theme.accent.opacity(glow), .clear], center: UnitPoint(x: 0.8, y: 0.1),

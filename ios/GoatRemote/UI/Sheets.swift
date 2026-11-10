@@ -340,7 +340,7 @@ struct ChannelsSheet: View {
                 if current {
                     Image(systemName: "play.fill").foregroundStyle(Theme.accent)
                 } else if channel.favorite {
-                    Image(systemName: "star.fill").font(.footnote).foregroundStyle(Color(hex: 0xF5C04A))
+                    Image(systemName: "star.fill").font(.footnote).foregroundStyle(Theme.favorite)
                 }
             }
             .padding(.horizontal, 8)

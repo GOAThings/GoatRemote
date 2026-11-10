@@ -156,22 +156,9 @@ final class CompanionConnection: @unchecked Sendable {
     }
 }
 
-/// O que fica guardado depois de emparelhar com uma Apple TV (no Keychain, por TV).
-struct CompanionCredentials: Codable {
-    /// A chave pública Ed25519 da TV.
-    var tvPublicKey: Data
-    /// A nossa chave privada Ed25519 (32 bytes).
-    var privateKey: Data
-    /// O identificador da TV (da M6).
-    var tvID: Data
-    /// O nosso identificador (UUID em texto, 36 bytes ASCII).
-    var clientID: Data
-    /// Emparelhada pelo AirPlay (ver AirPlayPairing): a identidade da TV no Companion pode ser outra.
-    var viaAirPlay: Bool?
-    /// O id que a TV mostrou no Companion na primeira verificação, se não for a identidade do AirPlay.
-    var companionID: Data?
-
-    private static let service = "cc.slokker.goatremote.appletv"
+/// As credenciais da Apple TV no Keychain: uma por TV (a conta é o id dela), só neste aparelho.
+extension CompanionCredentials {
+    private static let service = StoreKeys.appleTVService
 
     static func load(_ tvID: String) -> CompanionCredentials? {
         let query: [CFString: Any] = [kSecClass: kSecClassGenericPassword, kSecAttrService: service, kSecAttrAccount: tvID,
