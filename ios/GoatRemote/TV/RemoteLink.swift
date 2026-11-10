@@ -172,20 +172,17 @@ final class RemoteLink: @unchecked Sendable {
         connection?.close()
     }
 
-    /// Para os Atalhos e a Siri: uma tecla, e o volume pelo mesmo caminho que no comando (ver LauncherMemory).
+    /// Para os Atalhos e a Siri: uma tecla, e o volume pelo mesmo caminho que no comando (VolumeRouter).
     @MainActor
     static func press(_ key: Key) async throws {
-        if let what = LauncherVolume.path(key), let tv = TVStore.current, tv.kind == .android, LauncherMemory.known(tv.id) != false {
-            let (status, refused) = await LauncherApi(host: tv.host).volume(what)
-            switch LauncherVolume.outcome(known: LauncherMemory.known(tv.id), status: status, refused: refused) {
+        if let tv = TVStore.current, VolumeRouter.route(tv, key, .tap, volumeControl: true) == .launcher,
+           let sent = await VolumeRouter.viaLauncher(tv, key) {
+            switch sent.outcome {
             case .done:
-                LauncherMemory.set(tv.id, true)
                 return
             case .noLauncher:
-                DebugLog.add("Volume: no launcher on \(tv.name) (\(refused ? "refused" : "404")), using keys")
-                LauncherMemory.set(tv.id, false)
+                break
             case .didntAnswer:
-                DebugLog.add("Volume: launcher on \(tv.name) didn't answer (HTTP \(status)), not sending the key")
                 throw Failure.unreachable(L("The TV's launcher didn't answer", "O launcher da TV não respondeu"))
             }
         }

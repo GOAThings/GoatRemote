@@ -128,15 +128,13 @@ final class RemoteModel {
             guard let self, let link, self.link === link else { return }
             self.link = nil
             // Liga outra vez sem incomodar; se voltar a fechar logo a seguir, aí sim mostra-se o aviso.
-            if tv.kind == .android, Date().timeIntervalSince(self.lastAutoReconnect) > 10 {
+            let since = Int(Date().timeIntervalSince(self.lastAutoReconnect) * 1000)
+            if case .retry(let delay, let retry) = ConnectPolicy.next(.closed, notPairedRetries: self.notPairedRetries, retry: true,
+                                                                      kind: tv.kind, sinceAutoReconnectMs: since) {
                 self.lastAutoReconnect = Date()
                 DebugLog.add("Reconnecting to \(tv.name)")
                 self.status = .connecting
-                self.autoReconnect = Task {
-                    try? await Task.sleep(nanoseconds: 1_500_000_000)
-                    guard !Task.isCancelled, self.link == nil, self.current?.id == tv.id else { return }
-                    self.connect()
-                }
+                self.retryLater(tv, delayMs: delay, retry: retry)
                 return
             }
             self.status = .unreachable(L("The TV closed the connection", "A TV fechou a ligação"))
@@ -159,15 +157,11 @@ final class RemoteModel {
                 // A TV às vezes recusa uma ligação de um iPhone que conhece: a SHIELD, logo a seguir a mudar de canal,
                 // fecha a ligação e recusa as seguintes durante uns segundos. Só se pede para emparelhar se ainda
                 // recusar passados uns 12 s (três tentativas).
-                if self.notPairedRetries < 3 {
+                if case .retry(let delay, let again) = ConnectPolicy.next(.notPaired, notPairedRetries: self.notPairedRetries, retry: retry,
+                                                                           kind: tv.kind, sinceAutoReconnectMs: 0) {
                     self.notPairedRetries += 1
-                    let attempt = self.notPairedRetries
-                    DebugLog.add("Not paired: trying again (\(attempt))")
-                    self.autoReconnect = Task {
-                        try? await Task.sleep(nanoseconds: UInt64(attempt) * 2_000_000_000)
-                        guard !Task.isCancelled, self.link == nil, self.current?.id == tv.id else { return }
-                        self.connect()
-                    }
+                    DebugLog.add("Not paired: trying again (\(self.notPairedRetries))")
+                    self.retryLater(tv, delayMs: delay, retry: again)
                     return
                 }
                 self.notPairedRetries = 0
@@ -177,16 +171,20 @@ final class RemoteModel {
                 guard self.link === link else { return }
                 self.link = nil
                 link.close()
-                guard retry else {
-                    self.status = .unreachable(Self.describe(error))
-                    return
-                }
-                self.autoReconnect = Task {
-                    try? await Task.sleep(nanoseconds: 1_500_000_000)
-                    guard !Task.isCancelled, self.link == nil, self.current?.id == tv.id else { return }
-                    self.connect(retry: false)
+                switch ConnectPolicy.next(.failed, notPairedRetries: self.notPairedRetries, retry: retry, kind: tv.kind, sinceAutoReconnectMs: 0) {
+                case .retry(let delay, let again): self.retryLater(tv, delayMs: delay, retry: again)
+                case .give: self.status = .unreachable(Self.describe(error))
                 }
             }
+        }
+    }
+
+    /// No autoReconnect: ir para segundo plano (disconnect) ou mudar de TV cancela esta tentativa.
+    private func retryLater(_ tv: SavedTV, delayMs: Int, retry: Bool) {
+        autoReconnect = Task {
+            try? await Task.sleep(nanoseconds: UInt64(delayMs) * 1_000_000)
+            guard !Task.isCancelled, self.link == nil, self.current?.id == tv.id else { return }
+            self.connect(retry: retry)
         }
     }
 
@@ -210,15 +208,15 @@ final class RemoteModel {
         state = new
         if new.keyboardRequests > old.keyboardRequests { showKeyboard = true }
         // Ao ligar, a TV manda vários valores seguidos (na SHIELD, com HDMI-CEC, acaba em 0): isso não é mudar o volume.
-        if old.volume == nil, new.volume != nil { volumeSettlesAt = Date().addingTimeInterval(5) }
-        if old.volume != nil, new.volume != old.volume || new.muted != old.muted, !volumeUnknown, Date() >= volumeSettlesAt { volumeChanged += 1 }
+        if old.volume == nil, new.volume != nil { volumeSettlesAt = Date().addingTimeInterval(Double(VolumeRoute.settleMs) / 1000) }
+        if VolumeRoute.changed(old: (old.volume, old.muted), new: (new.volume, new.muted), unknown: volumeUnknown,
+                               settled: Date() >= volumeSettlesAt) { volumeChanged += 1 }
         // O GoatTV veio para a frente: o canal que está a dar pode ter mudado.
         if new.currentApp == GoatTVChannels.androidPackage, old.currentApp != new.currentApp, hasChannels { refreshChannels() }
-        if let app = new.currentApp, !AppCatalog.isLauncher(app) {
-            recentApps.removeAll { $0 == app }
-            recentApps.insert(app, at: 0)
-            recentApps = Array(recentApps.prefix(12))
-            if let id = current?.id { UserDefaults.standard.set(recentApps, forKey: StoreKeys.perTV(StoreKeys.recents, id)) }
+        // Só muda (e só se escreve) se a app não for já a primeira: antes reescrevia a cada volume ou tecla (D3).
+        if let recents = RecentApps.push(recentApps, new.currentApp) {
+            recentApps = recents
+            if let id = current?.id { UserDefaults.standard.set(recents, forKey: StoreKeys.perTV(StoreKeys.recents, id)) }
         }
     }
 
@@ -226,8 +224,7 @@ final class RemoteModel {
         guard let id else { return [] }
         let saved = UserDefaults.standard.stringArray(forKey: StoreKeys.perTV(StoreKeys.recents, id)) ?? []
         // O que não for um nome de pacote não volta a ler-se.
-        var seen = Set<String>()
-        let recents = Array(saved.filter { RemoteProtocol.isPackageName($0) && seen.insert($0).inserted }.prefix(12))
+        let recents = RecentApps.sanitize(saved)
         if recents != saved { UserDefaults.standard.set(recents, forKey: StoreKeys.perTV(StoreKeys.recents, id)) }
         return recents
     }
@@ -338,14 +335,8 @@ final class RemoteModel {
         guard let fetched = await GoatTvApi(host: tv.host).channels() else { return false }
         if let error = fetched.error { DebugLog.add("Channels: \(error)") }
         let list = fetched.value
-        var outcome = ChannelsStatus.failed
-        if list != nil {
-            outcome = .ready
-        } else if fetched.refused || fetched.status == 503 {
-            outcome = .closed
-        }
         guard current?.id == tv.id else { return false }
-        switch outcome {
+        switch ChannelsOutcome.of(status: fetched.status, refused: fetched.refused, parsed: list != nil, hadList: channels != nil) {
         case .ready:
             if let list {
                 if !hasChannels { DebugLog.add("GoatTV channels on \(tv.name): \(list.channels.count)") }
@@ -357,11 +348,13 @@ final class RemoteModel {
         case .closed:
             channels = nil
             channelsStatus = .closed
-        case .failed, .unknown:
+        case .keep:
             // Outra resposta (ou nenhuma): fica a lista que já havia.
-            if channels == nil { channelsStatus = .failed }
+            break
+        case .failed:
+            channelsStatus = .failed
         }
-        return outcome == .ready
+        return list != nil
     }
 
     /// Pergunta ao GoatTV o que está a dar (GET /now, pequeno). Se o canal mudou (pelo comando da TV, por exemplo), o
@@ -372,21 +365,24 @@ final class RemoteModel {
         let status = fetched.status
         let refused = fetched.refused
         guard current?.id == tv.id else { return }
-        if let info {
+        switch NowOutcome.of(status: status, refused: refused, parsed: info != nil) {
+        case .update:
             nowInfo = info
-            guard let list = channels, info.current != list.current else { return }
-            if info.current == nil || list.channels.contains(where: { $0.key == info.current }) {
-                channels?.current = info.current
-            } else {
-                refreshChannels()
+            guard let info, let list = channels else { return }
+            switch NowOutcome.list(nowCurrent: info.current, listCurrent: list.current, inList: list.channels.contains(where: { $0.key == info.current })) {
+            case .same: break
+            case .setCurrent: channels?.current = info.current
+            case .refetch: refreshChannels()
             }
-        } else if status == 404 {
+        case .noNow:
             DebugLog.add("GoatTV on \(tv.name) has no /now")
             withoutNow.insert(tv.id)
-        } else if refused || status == 503 {
+        case .close:
             channels = nil
             channelsStatus = .closed
             nowInfo = nil
+        case .nothing:
+            break
         }
     }
 
@@ -473,10 +469,13 @@ final class RemoteModel {
             while !Task.isCancelled {
                 let (status, refused) = await Self.postPlay(tv, channel.key)
                 guard !Task.isCancelled, current?.id == tv.id else { return }
-                switch GoatTVChannels.playOutcome(status: status, refused: refused) {
+                let app = goatTVApp ?? (tv.kind == .android ? Self.androidGoatTV : nil)
+                let inFront = tv.kind == .android && state.currentApp == GoatTVChannels.androidPackage
+                switch PlayStep.of(GoatTVChannels.playOutcome(status: status, refused: refused), waiting: deadline != nil,
+                                   timedOut: deadline.map { Date() >= $0 } ?? false, inFront: inFront, canOpen: app != nil) {
                 case .done:
                     channels?.current = channel.key
-                    try? await Task.sleep(nanoseconds: 800_000_000)
+                    try? await Task.sleep(nanoseconds: UInt64(PlayStep.nowAfterMs) * 1_000_000)
                     await pollNow(tv)
                     return
                 case .notFound:
@@ -487,29 +486,27 @@ final class RemoteModel {
                     DebugLog.add("Play: GoatTV answered HTTP \(status)")
                     playProblem = L("GoatTV didn't answer. Try again", "O GoatTV não respondeu. Tenta outra vez")
                     return
-                case .retry:
-                    if let deadline {
-                        if Date() >= deadline {
-                            playProblem = L("GoatTV didn't switch channels. Check the TV and try again",
-                                            "O GoatTV não mudou de canal. Vê a TV e tenta outra vez")
-                            return
-                        }
-                    } else if tv.kind == .android, state.currentApp == GoatTVChannels.androidPackage {
-                        // Já está à frente, só ainda não pode (a meio de mudar de canal): abri-lo outra vez não ajuda,
-                        // e o link pelo comando faz a SHIELD fechar a ligação.
-                        DebugLog.add("Play: GoatTV is in front but answered \(refused ? "refused" : "HTTP \(status)"), waiting")
-                        deadline = Date().addingTimeInterval(10)
-                    } else {
-                        guard let app = goatTVApp ?? (tv.kind == .android ? Self.androidGoatTV : nil) else {
-                            playProblem = goatTVClosedLine
-                            return
-                        }
-                        DebugLog.add("Play: GoatTV isn't in front (\(refused ? "refused" : "HTTP \(status)")), opening it")
-                        launch(app, haptic: false)
-                        deadline = Date().addingTimeInterval(10)
-                    }
-                    try? await Task.sleep(nanoseconds: 1_000_000_000)
+                case .startWaiting:
+                    // Já está à frente, só ainda não pode (a meio de mudar de canal): abri-lo outra vez não ajuda,
+                    // e o link pelo comando faz a SHIELD fechar a ligação.
+                    DebugLog.add("Play: GoatTV is in front but answered \(refused ? "refused" : "HTTP \(status)"), waiting")
+                    deadline = Date().addingTimeInterval(Double(PlayStep.waitMs) / 1000)
+                case .openAndWait:
+                    guard let app else { return }
+                    DebugLog.add("Play: GoatTV isn't in front (\(refused ? "refused" : "HTTP \(status)")), opening it")
+                    launch(app, haptic: false)
+                    deadline = Date().addingTimeInterval(Double(PlayStep.waitMs) / 1000)
+                case .cannotOpen:
+                    playProblem = goatTVClosedLine
+                    return
+                case .timedOut:
+                    playProblem = L("GoatTV didn't switch channels. Check the TV and try again",
+                                    "O GoatTV não mudou de canal. Vê a TV e tenta outra vez")
+                    return
+                case .keepWaiting:
+                    break
                 }
+                try? await Task.sleep(nanoseconds: UInt64(PlayStep.retryEveryMs) * 1_000_000)
             }
         }
     }
@@ -648,15 +645,20 @@ final class RemoteModel {
     func press(_ key: Key, haptic: Bool = true) {
         if haptic, haptics { lightHaptics.impactOccurred() }
         guard let link, status == .connected else { return reconnectIfNeeded() }
-        if noVolume(key) || volumeViaLauncher(key) { return }
-        link.key(key)
+        switch VolumeRouter.route(current, key, .tap, volumeControl: state.volumeControl) {
+        case .key: link.key(key)
+        case .launcher: if let tv = current { volumeViaLauncher(tv, key) }
+        case .explain: volumeChanged += 1
+        case .nothing: break
+        }
     }
 
     /// Se a TV tem o GoatLauncher (fica guardado por TV: nil enquanto não se sabe). Com ele, ou sem se saber, o
     /// volume nunca vai como tecla: as teclas de volume do protocolo rebentam o Android 11 da SHIELD quando o
     /// GoatLauncher vê as teclas (botões a abrir apps). Só se manda tecla quando se tem a certeza de que não há
     /// launcher: 404, ou ligação recusada na porta dele, numa TV onde nunca se viu nenhum. Onde já se viu, isso é só não
-    /// ter respondido; esquecer a TV limpa o que se sabe, se o launcher saiu mesmo de lá.
+    /// ter respondido; esquecer a TV limpa o que se sabe, se o launcher saiu mesmo de lá. A regra está em VolumeRoute e
+    /// no VolumeRouter, por onde passa todo o volume.
     static func hasLauncher(_ tvID: String) -> Bool? { LauncherMemory.known(tvID) }
 
     static func setLauncher(_ tvID: String, _ value: Bool) { LauncherMemory.set(tvID, value) }
@@ -673,32 +675,27 @@ final class RemoteModel {
     /// Mostrado no indicador de volume quando o launcher não respondeu (nil: nada a dizer).
     private(set) var volumeProblem: String?
 
-    /// O volume pelo GoatLauncher (POST /volume/…) em vez de tecla; false se esta TV não tem launcher (tecla).
-    private func volumeViaLauncher(_ key: Key) -> Bool {
-        guard let what = LauncherVolume.path(key), let tv = current, tv.kind == .android, Self.hasLauncher(tv.id) != false else { return false }
-        let before = (state.volume, state.muted)
+    /// O volume pelo GoatLauncher (POST /volume/…) em vez de tecla. A tecla só vai se ele disser que não há launcher.
+    private func volumeViaLauncher(_ tv: SavedTV, _ key: Key) {
+        let before = (volume: state.volume, muted: state.muted)
         Task {
-            let (status, refused) = await LauncherApi(host: tv.host).volume(what)
-            switch LauncherVolume.outcome(known: Self.hasLauncher(tv.id), status: status, refused: refused) {
+            guard let sent = await VolumeRouter.viaLauncher(tv, key) else { return }
+            switch sent.outcome {
             case .done:
-                Self.setLauncher(tv.id, true)
                 volumeProblem = nil
-                try? await Task.sleep(for: .milliseconds(800))
+                try? await Task.sleep(for: .milliseconds(VolumeRoute.learnAfterMs))
                 guard current?.id == tv.id else { return }
-                let unknown = state.volume == before.0 && state.muted == before.1
+                let unknown = VolumeRoute.learnUnknown(before: before, after: (state.volume, state.muted))
                 UserDefaults.standard.set(unknown, forKey: StoreKeys.perTV(StoreKeys.volumeUnknown, tv.id))
                 volumePressed = unknown ? key : nil
                 if unknown { volumeChanged += 1 }
             case .noLauncher:
-                DebugLog.add("Volume: no launcher on \(tv.name) (\(refused ? "refused" : "404")), using keys")
-                Self.setLauncher(tv.id, false)
                 if current?.id == tv.id { link?.key(key) }
             case .didntAnswer:
                 guard current?.id == tv.id else { return }
-                DebugLog.add("Volume: launcher on \(tv.name) didn't answer (HTTP \(status)), not sending the key")
-                if status == 404 {
+                if sent.status == 404 {
                     volumeProblem = L("Update GoatLauncher on the TV to change the volume from here", "Atualiza o GoatLauncher na TV para mudares o volume daqui")
-                } else if refused {
+                } else if sent.refused {
                     volumeProblem = L("GoatLauncher isn't running on the TV. Open it. If you removed it, forget this TV and pair it again",
                                       "O GoatLauncher não está a correr na TV. Abre-o. Se o tiraste, esquece esta TV e emparelha-a outra vez")
                 } else {
@@ -707,27 +704,18 @@ final class RemoteModel {
                 volumeChanged += 1
             }
         }
-        return true
     }
 
-    /// Volume numa TV que não o controla: em vez de não fazer nada, o indicador explica porquê.
-    private func noVolume(_ key: Key) -> Bool {
-        guard [.volumeUp, .volumeDown, .mute].contains(key), !state.volumeControl else { return false }
-        volumeChanged += 1
-        return true
-    }
-
-    /// Carregar e manter: início e fim.
+    /// Carregar e manter: início e fim. Pelo GoatLauncher não há "manter": cada toque é um passo.
     func hold(_ key: Key, down: Bool) {
         if down { repeatStarted() }
         guard let link, status == .connected else { return reconnectIfNeeded() }
-        if down, noVolume(key) { return }
-        if [.volumeUp, .volumeDown, .mute].contains(key), let tv = current, tv.kind == .android, Self.hasLauncher(tv.id) != false {
-            // Pelo GoatLauncher não há "manter": cada toque é um passo.
-            if down { _ = volumeViaLauncher(key) }
-            return
+        switch VolumeRouter.route(current, key, down ? .holdDown : .holdUp, volumeControl: state.volumeControl) {
+        case .key: link.key(key, down ? .startLong : .endLong)
+        case .launcher: if let tv = current { volumeViaLauncher(tv, key) }
+        case .explain: volumeChanged += 1
+        case .nothing: break
         }
-        link.key(key, down ? .startLong : .endLong)
     }
 
     func type(_ text: String) {

@@ -28,6 +28,13 @@ import cc.slokker.goatremote.data.FoundTv
 import cc.slokker.goatremote.data.GoatTvChannels
 import cc.slokker.goatremote.data.LauncherApps
 import cc.slokker.goatremote.data.LauncherMemory
+import cc.slokker.goatremote.data.ChannelsOutcome
+import cc.slokker.goatremote.data.ConnectPolicy
+import cc.slokker.goatremote.data.NowOutcome
+import cc.slokker.goatremote.data.PlayStep
+import cc.slokker.goatremote.data.RecentApps
+import cc.slokker.goatremote.data.VolumeRoute
+import cc.slokker.goatremote.data.VolumeRouter
 import cc.slokker.goatremote.data.NowInfo
 import cc.slokker.goatremote.data.PrefKeys
 import cc.slokker.goatremote.data.SavedTv
@@ -214,14 +221,13 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
                 if (this@RemoteViewModel.link === link) {
                     this@RemoteViewModel.link = null
                     // Liga outra vez sem incomodar; se voltar a fechar logo a seguir, aí sim mostra-se o aviso.
-                    if (tv.kind == TvKind.ANDROID && System.currentTimeMillis() - lastAutoReconnect > 10_000) {
+                    val decision = ConnectPolicy.next(ConnectPolicy.Failure.CLOSED, notPairedRetries, true, tv.kind,
+                        System.currentTimeMillis() - lastAutoReconnect)
+                    if (decision is ConnectPolicy.Decision.Retry) {
                         lastAutoReconnect = System.currentTimeMillis()
                         DebugLog.add("Reconnecting to ${tv.name}")
                         status = Status.Connecting
-                        autoReconnect = viewModelScope.launch {
-                            delay(1500)
-                            if (this@RemoteViewModel.link == null && current?.id == tv.id) connect()
-                        }
+                        retryLater(tv, decision)
                     } else {
                         status = Status.Unreachable(L("The TV closed the connection", "A TV fechou a ligação"))
                     }
@@ -245,13 +251,11 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
                 DebugLog.add("Connect: not paired ($e)")
                 if (this@RemoteViewModel.link !== link) return@launch
                 this@RemoteViewModel.link = null
-                if (notPairedRetries < 3) {
+                val decision = ConnectPolicy.next(ConnectPolicy.Failure.NOT_PAIRED, notPairedRetries, retry, tv.kind, 0)
+                if (decision is ConnectPolicy.Decision.Retry) {
                     notPairedRetries++
                     DebugLog.add("Not paired: trying again ($notPairedRetries)")
-                    autoReconnect = viewModelScope.launch {
-                        delay(2000L * notPairedRetries)
-                        if (this@RemoteViewModel.link == null && current?.id == tv.id) connect()
-                    }
+                    retryLater(tv, decision)
                     return@launch
                 }
                 notPairedRetries = 0
@@ -261,16 +265,19 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
                 if (this@RemoteViewModel.link !== link) return@launch
                 this@RemoteViewModel.link = null
                 link.close()
-                if (retry) {
-                    // No autoReconnect: ir para segundo plano (disconnect) cancela esta tentativa.
-                    autoReconnect = viewModelScope.launch {
-                        delay(1500)
-                        if (this@RemoteViewModel.link == null && current?.id == tv.id) connect(retry = false)
-                    }
-                } else {
-                    status = Status.Unreachable(describe(e))
+                when (val decision = ConnectPolicy.next(ConnectPolicy.Failure.FAILED, notPairedRetries, retry, tv.kind, 0)) {
+                    is ConnectPolicy.Decision.Retry -> retryLater(tv, decision)
+                    is ConnectPolicy.Decision.Give -> status = Status.Unreachable(describe(e))
                 }
             }
+        }
+    }
+
+    /** No autoReconnect: ir para segundo plano (disconnect) ou mudar de TV cancela esta tentativa. */
+    private fun retryLater(tv: SavedTv, decision: ConnectPolicy.Decision.Retry) {
+        autoReconnect = viewModelScope.launch {
+            delay(decision.delayMs)
+            if (this@RemoteViewModel.link == null && current?.id == tv.id) connect(retry = decision.retryOnFailure)
         }
     }
 
@@ -292,15 +299,15 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
         state = new
         if (new.keyboardRequests > old.keyboardRequests) showKeyboard = true
         // Ao ligar, a TV manda vários valores seguidos (na SHIELD, com HDMI-CEC, acaba em 0): isso não é mudar o volume.
-        if (old.volume == null && new.volume != null) volumeSettlesAt = System.currentTimeMillis() + 5000
-        if (old.volume != null && (new.volume != old.volume || new.muted != old.muted) && !volumeUnknown &&
-            System.currentTimeMillis() >= volumeSettlesAt) volumeChanged++
+        if (old.volume == null && new.volume != null) volumeSettlesAt = System.currentTimeMillis() + VolumeRoute.SETTLE_MS
+        if (VolumeRoute.changed(old.volume to old.muted, new.volume to new.muted, volumeUnknown,
+                System.currentTimeMillis() >= volumeSettlesAt)) volumeChanged++
         val app = new.currentApp
         // O GoatTV veio para a frente: o canal que está a dar pode ter mudado.
         if (app == GoatTvChannels.ANDROID_PACKAGE && app != old.currentApp && hasChannels) refreshChannels()
-        if (app != null && app != old.currentApp && !AppCatalog.isLauncher(app)) {
-            recentApps = (listOf(app) + recentApps.filterNot { it == app }).take(12)
-            current?.id?.let { prefs.edit().putString(PrefKeys.recents(it), JSONArray(recentApps).toString()).apply() }
+        if (app != old.currentApp) RecentApps.push(recentApps, app)?.let { recents ->
+            recentApps = recents
+            current?.id?.let { prefs.edit().putString(PrefKeys.recents(it), JSONArray(recents).toString()).apply() }
         }
     }
 
@@ -311,7 +318,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
             (0 until array.length()).map { array.getString(it) }
         }.getOrNull() ?: return emptyList()
         // O que não for um nome de pacote não volta a ler-se.
-        val recents = saved.filter { RemoteProtocol.isPackageName(it) }.distinct().take(12)
+        val recents = RecentApps.sanitize(saved)
         if (recents != saved) prefs.edit().putString(PrefKeys.recents(id), JSONArray(recents).toString()).apply()
         return recents
     }
@@ -405,20 +412,22 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
         val refused = fetched.refused
         val status = fetched.status
         if (current?.id != tv.id) return false
-        when {
-            list != null -> {
+        when (ChannelsOutcome.of(status, refused, list != null, channels != null)) {
+            ChannelsOutcome.READY -> {
+                list!!
                 channels = list
                 channelsStatus = ChannelsStatus.READY
                 if (!hasChannels) DebugLog.add("GoatTV channels on ${tv.name}: ${list.channels.size}")
                 hasChannels = true
                 prefs.edit().putBoolean(PrefKeys.goatTv(tv.id), true).apply()
             }
-            refused || status == 503 -> {
+            ChannelsOutcome.CLOSED -> {
                 channels = null
                 channelsStatus = ChannelsStatus.CLOSED
             }
             // Outra resposta (ou nenhuma): fica a lista que já havia.
-            else -> if (channels == null) channelsStatus = ChannelsStatus.FAILED
+            ChannelsOutcome.KEEP -> Unit
+            ChannelsOutcome.FAILED -> channelsStatus = ChannelsStatus.FAILED
         }
         return list != null
     }
@@ -477,23 +486,27 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
         val status = fetched.status
         val refused = fetched.refused
         if (current?.id != tv.id) return
-        when {
-            info != null -> {
+        when (NowOutcome.of(status, refused, info != null)) {
+            NowOutcome.UPDATE -> {
+                info!!
                 nowInfo = info
                 val list = channels ?: return
-                if (info.current == list.current) return
-                if (info.current == null || list.channels.any { it.key == info.current }) channels = list.copy(current = info.current)
-                else refreshChannels()
+                when (NowOutcome.list(info.current, list.current, list.channels.any { it.key == info.current })) {
+                    NowOutcome.List.SAME -> Unit
+                    NowOutcome.List.SET_CURRENT -> channels = list.copy(current = info.current)
+                    NowOutcome.List.REFETCH -> refreshChannels()
+                }
             }
-            status == 404 -> {
+            NowOutcome.NO_NOW -> {
                 DebugLog.add("GoatTV on ${tv.name} has no /now")
                 withoutNow.add(tv.id)
             }
-            refused || status == 503 -> {
+            NowOutcome.CLOSE -> {
                 channels = null
                 channelsStatus = ChannelsStatus.CLOSED
                 nowInfo = null
             }
+            NowOutcome.NOTHING -> Unit
         }
     }
 
@@ -558,46 +571,49 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
             while (true) {
                 val (status, refused) = postPlay(tv, channel.key)
                 if (current?.id != tv.id) return@launch
-                when (GoatTvChannels.playOutcome(status, refused)) {
-                    GoatTvChannels.Play.DONE -> {
+                val app = goatTvApp ?: if (tv.kind == TvKind.ANDROID) TvApp(GoatTvChannels.ANDROID_PACKAGE, "GoatTV") else null
+                val inFront = tv.kind == TvKind.ANDROID && state.currentApp == GoatTvChannels.ANDROID_PACKAGE
+                when (PlayStep.of(GoatTvChannels.playOutcome(status, refused), deadline != 0L,
+                    System.currentTimeMillis() >= deadline, inFront, app != null)) {
+                    PlayStep.DONE -> {
                         channels = channels?.copy(current = channel.key)
-                        delay(800)
+                        delay(PlayStep.NOW_AFTER_MS)
                         pollNow(tv)
                         return@launch
                     }
-                    GoatTvChannels.Play.NOT_FOUND -> {
+                    PlayStep.NOT_FOUND -> {
                         playProblem = L("This channel isn't available on the TV", "Este canal não está disponível na TV")
                         refreshChannels()
                         return@launch
                     }
-                    GoatTvChannels.Play.FAILED -> {
+                    PlayStep.FAILED -> {
                         DebugLog.add("Play: GoatTV answered HTTP $status")
                         playProblem = L("GoatTV didn't answer. Try again", "O GoatTV não respondeu. Tenta outra vez")
                         return@launch
                     }
-                    GoatTvChannels.Play.RETRY -> {
-                        if (deadline == 0L && tv.kind == TvKind.ANDROID && state.currentApp == GoatTvChannels.ANDROID_PACKAGE) {
-                            // Já está à frente, só ainda não pode (a meio de mudar de canal): abri-lo outra vez não
-                            // ajuda, e o link pelo comando faz a SHIELD fechar a ligação.
-                            DebugLog.add("Play: GoatTV is in front but answered ${if (refused) "refused" else "HTTP $status"}, waiting")
-                            deadline = System.currentTimeMillis() + 10_000
-                        } else if (deadline == 0L) {
-                            val app = goatTvApp ?: if (tv.kind == TvKind.ANDROID) TvApp(GoatTvChannels.ANDROID_PACKAGE, "GoatTV") else null
-                            if (app == null) {
-                                playProblem = goatTvClosedLine()
-                                return@launch
-                            }
-                            DebugLog.add("Play: GoatTV isn't in front (${if (refused) "refused" else "HTTP $status"}), opening it")
-                            launch(app, haptic = false)
-                            deadline = System.currentTimeMillis() + 10_000
-                        } else if (System.currentTimeMillis() >= deadline) {
-                            playProblem = L("GoatTV didn't switch channels. Check the TV and try again",
-                                "O GoatTV não mudou de canal. Vê a TV e tenta outra vez")
-                            return@launch
-                        }
-                        delay(1000)
+                    PlayStep.START_WAITING -> {
+                        // Já está à frente, só ainda não pode (a meio de mudar de canal): abri-lo outra vez não
+                        // ajuda, e o link pelo comando faz a SHIELD fechar a ligação.
+                        DebugLog.add("Play: GoatTV is in front but answered ${if (refused) "refused" else "HTTP $status"}, waiting")
+                        deadline = System.currentTimeMillis() + PlayStep.WAIT_MS
                     }
+                    PlayStep.OPEN_AND_WAIT -> {
+                        DebugLog.add("Play: GoatTV isn't in front (${if (refused) "refused" else "HTTP $status"}), opening it")
+                        launch(app!!, haptic = false)
+                        deadline = System.currentTimeMillis() + PlayStep.WAIT_MS
+                    }
+                    PlayStep.CANNOT_OPEN -> {
+                        playProblem = goatTvClosedLine()
+                        return@launch
+                    }
+                    PlayStep.TIMED_OUT -> {
+                        playProblem = L("GoatTV didn't switch channels. Check the TV and try again",
+                            "O GoatTV não mudou de canal. Vê a TV e tenta outra vez")
+                        return@launch
+                    }
+                    PlayStep.KEEP_WAITING -> Unit
                 }
+                delay(PlayStep.RETRY_EVERY_MS)
             }
         }
     }
@@ -697,21 +713,27 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
         if (haptic && haptics) vibrate(false)
         val link = link
         if (link == null || status != Status.Connected) return reconnectIfNeeded()
-        if (noVolume(key) || volumeViaLauncher(key)) return
-        link.key(key)
+        when (volume.route(current, key, VolumeRoute.Press.TAP, state.volumeControl)) {
+            VolumeRoute.KEY -> link.key(key)
+            VolumeRoute.LAUNCHER -> volumeViaLauncher(current!!, key)
+            VolumeRoute.EXPLAIN -> volumeChanged++
+            VolumeRoute.NOTHING -> Unit
+        }
     }
 
-    /** O GoatLauncher da TV sabe mudar o volume (null: ainda não se sabe; false: é uma versão sem isso). */
     /**
      * Se a TV tem o GoatLauncher (fica guardado por TV: null enquanto não se sabe). Com ele, ou sem se saber, o
      * volume nunca vai como tecla: as teclas de volume do protocolo rebentam o Android 11 da SHIELD quando o
      * GoatLauncher vê as teclas (botões a abrir apps). Só se manda tecla quando se tem a certeza de que não há
      * launcher: 404, ou ligação recusada na porta dele, numa TV onde nunca se viu nenhum. Onde já se viu, isso é só não
-     * ter respondido; esquecer a TV limpa o que se sabe, se o launcher saiu mesmo de lá.
+     * ter respondido; esquecer a TV limpa o que se sabe, se o launcher saiu mesmo de lá. A regra está em [VolumeRoute]
+     * e no [VolumeRouter], por onde passa todo o volume.
      */
     private fun hasLauncher(tvId: String): Boolean? = launcherMemory.known(tvId)
 
     private fun setLauncher(tvId: String, value: Boolean) = launcherMemory.set(tvId, value)
+
+    private val volume = VolumeRouter(launcherMemory)
 
     /**
      * Com HDMI-CEC, o volume está na TV e a box não sabe o valor: o que reporta não diz nada. Descobre-se ao
@@ -730,40 +752,28 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
     var volumeProblem by mutableStateOf<String?>(null)
         private set
 
-    /** O volume pelo GoatLauncher (POST /volume/…) em vez de tecla; false se esta TV não tem launcher (tecla). */
-    private fun volumeViaLauncher(key: Key): Boolean {
-        val tv = current ?: return false
-        val what = LauncherVolume.path(key) ?: return false
-        if (tv.kind != TvKind.ANDROID || hasLauncher(tv.id) == false) return false
+    /** O volume pelo GoatLauncher (POST /volume/…) em vez de tecla. A tecla só vai se ele disser que não há launcher. */
+    private fun volumeViaLauncher(tv: SavedTv, key: Key) {
         val beforeVolume = state.volume
         val beforeMuted = state.muted
         viewModelScope.launch {
-            val r = LauncherApi(tv.host).volume(what)
-            r.error?.let { DebugLog.add("Volume via launcher failed: $it") }
-            val refused = r.refused
-            val status = r.status
-            when (LauncherVolume.outcome(hasLauncher(tv.id), status, refused)) {
+            val sent = volume.viaLauncher(tv, key) ?: return@launch
+            when (sent.outcome) {
                 LauncherVolume.Outcome.DONE -> {
-                    setLauncher(tv.id, true)
                     volumeProblem = null
-                    delay(800)
+                    delay(VolumeRoute.LEARN_AFTER_MS)
                     if (current?.id == tv.id) {
-                        val unknown = state.volume == beforeVolume && state.muted == beforeMuted
+                        val unknown = VolumeRoute.learnUnknown(beforeVolume, beforeMuted, state.volume, state.muted)
                         prefs.edit().putBoolean(PrefKeys.volumeUnknown(tv.id), unknown).apply()
                         volumePressed = if (unknown) key else null
                         if (unknown) volumeChanged++
                     }
                 }
-                LauncherVolume.Outcome.NO_LAUNCHER -> {
-                    DebugLog.add("Volume: no launcher on ${tv.name} (${if (refused) "refused" else "404"}), using keys")
-                    setLauncher(tv.id, false)
-                    if (current?.id == tv.id) link?.key(key)
-                }
+                LauncherVolume.Outcome.NO_LAUNCHER -> if (current?.id == tv.id) link?.key(key)
                 LauncherVolume.Outcome.DIDNT_ANSWER -> if (current?.id == tv.id) {
-                    DebugLog.add("Volume: launcher on ${tv.name} didn't answer (HTTP $status), not sending the key")
                     volumeProblem = when {
-                        status == 404 -> L("Update GoatLauncher on the TV to change the volume from here", "Atualiza o GoatLauncher na TV para mudares o volume daqui")
-                        refused -> L("GoatLauncher isn't running on the TV. Open it. If you removed it, forget this TV and pair it again",
+                        sent.status == 404 -> L("Update GoatLauncher on the TV to change the volume from here", "Atualiza o GoatLauncher na TV para mudares o volume daqui")
+                        sent.refused -> L("GoatLauncher isn't running on the TV. Open it. If you removed it, forget this TV and pair it again",
                             "O GoatLauncher não está a correr na TV. Abre-o. Se o tiraste, esquece esta TV e emparelha-a outra vez")
                         else -> L("The TV's launcher didn't answer. Try again", "O launcher da TV não respondeu. Tenta outra vez")
                     }
@@ -771,29 +781,20 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
         }
-        return true
     }
 
-    /** Volume numa TV que não o controla: em vez de não fazer nada, o indicador explica porquê. */
-    private fun noVolume(key: Key): Boolean {
-        if (key !in listOf(Key.VOLUME_UP, Key.VOLUME_DOWN, Key.MUTE) || state.volumeControl) return false
-        volumeChanged++
-        return true
-    }
-
-    /** Carregar e manter: início e fim. */
+    /** Carregar e manter: início e fim. Pelo GoatLauncher não há "manter": cada toque é um passo. */
     fun hold(key: Key, down: Boolean) {
         if (down) repeatStarted()
         val link = link
         if (link == null || status != Status.Connected) return reconnectIfNeeded()
-        if (down && noVolume(key)) return
-        val tv = current
-        if (key in listOf(Key.VOLUME_UP, Key.VOLUME_DOWN, Key.MUTE) && tv?.kind == TvKind.ANDROID && hasLauncher(tv.id) != false) {
-            // Pelo GoatLauncher não há "manter": cada toque é um passo.
-            if (down) volumeViaLauncher(key)
-            return
+        val press = if (down) VolumeRoute.Press.HOLD_DOWN else VolumeRoute.Press.HOLD_UP
+        when (volume.route(current, key, press, state.volumeControl)) {
+            VolumeRoute.KEY -> link.key(key, if (down) KeyDirection.START_LONG else KeyDirection.END_LONG)
+            VolumeRoute.LAUNCHER -> volumeViaLauncher(current!!, key)
+            VolumeRoute.EXPLAIN -> volumeChanged++
+            VolumeRoute.NOTHING -> Unit
         }
-        link.key(key, if (down) KeyDirection.START_LONG else KeyDirection.END_LONG)
     }
 
     fun type(text: String) {
