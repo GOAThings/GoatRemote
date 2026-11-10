@@ -15,7 +15,6 @@ data class TvChannel(
 
 data class ChannelGroup(val id: String, val name: String)
 
-/** A lista ativa do GoatTV: grupos e canais pela ordem dele, e o canal que está a dar. */
 /** Um programa do guia do GoatTV (horas em ms). */
 data class Programme(val title: String, val startMs: Long, val endMs: Long) {
     fun progress(now: Long): Float = ((now - startMs).toFloat() / (endMs - startMs)).coerceIn(0f, 1f)
@@ -24,6 +23,7 @@ data class Programme(val title: String, val startMs: Long, val endMs: Long) {
 /** O que o GoatTV está a dar (GET /now): o canal e, se ele tiver guia, o programa e o seguinte. */
 data class NowInfo(val current: String?, val now: Programme?, val next: Programme?)
 
+/** A lista ativa do GoatTV: grupos e canais pela ordem dele, e o canal que está a dar. */
 data class ChannelList(
     val playlist: String?,
     val current: String?,

@@ -4,9 +4,7 @@ import android.annotation.SuppressLint
 import cc.slokker.goatremote.DebugLog
 import java.io.EOFException
 import java.io.IOException
-import java.net.ConnectException
 import java.net.InetSocketAddress
-import java.net.NoRouteToHostException
 import java.net.Socket
 import java.net.SocketTimeoutException
 import java.security.Principal
@@ -220,9 +218,5 @@ class AndroidTvLink(
         socket?.close()
         socket = null
         scope.cancel()
-    }
-
-    companion object {
-        fun isUnreachable(e: Throwable) = e is UnreachableException || e is ConnectException || e is NoRouteToHostException
     }
 }
