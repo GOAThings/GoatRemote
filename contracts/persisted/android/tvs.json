@@ -1,0 +1,58 @@
+{
+  "_about": "SharedPreferences 'tvs', key 'tvs': a JSON array of SavedTv (android/.../data/Tvs.kt). A missing 'kind' is android (saved before Apple TV support); 'cert' is the pinned SHA-256; 'port' only for Apple TV. Existing installs keep these: never rename a key, change a value shape, or 'unify' Android and iOS (they are separate local formats).",
+  "stored": [
+    {
+      "id": "SHIELD",
+      "name": "SHIELD",
+      "host": "192.168.1.10"
+    },
+    {
+      "id": "Sala",
+      "name": "Sala",
+      "host": "192.168.1.11",
+      "kind": "android",
+      "cert": "ab12cd"
+    },
+    {
+      "id": "apple:Quarto",
+      "name": "Quarto",
+      "host": "192.168.1.20",
+      "kind": "apple",
+      "port": 49153
+    },
+    {
+      "id": "192.168.1.30",
+      "name": "192.168.1.30",
+      "host": "192.168.1.30",
+      "kind": "android"
+    }
+  ],
+  "written": [
+    {
+      "id": "SHIELD",
+      "name": "SHIELD",
+      "host": "192.168.1.10",
+      "kind": "android"
+    },
+    {
+      "id": "Sala",
+      "name": "Sala",
+      "host": "192.168.1.11",
+      "kind": "android",
+      "cert": "ab12cd"
+    },
+    {
+      "id": "apple:Quarto",
+      "name": "Quarto",
+      "host": "192.168.1.20",
+      "kind": "apple",
+      "port": 49153
+    },
+    {
+      "id": "192.168.1.30",
+      "name": "192.168.1.30",
+      "host": "192.168.1.30",
+      "kind": "android"
+    }
+  ]
+}

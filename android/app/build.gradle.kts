@@ -55,6 +55,10 @@ android {
         compose = true
         buildConfig = true
     }
+    testOptions {
+        // Os vetores, as amostras e as tabelas partilhadas com o iPhone (e com o GoatLauncher e o GoatTV).
+        unitTests.all { it.systemProperty("contracts", rootProject.file("../contracts").path) }
+    }
 }
 
 dependencies {

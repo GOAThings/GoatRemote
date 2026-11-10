@@ -1,0 +1,46 @@
+{
+  "_producer": "Producer: GoatTV (repo itv) app/src/main/java/cc/slokker/itv/PhoneChannels.kt and data/PhoneChannelList.kt, tested by PhoneChannelListTest. Consumers: android/.../data/Channels.kt and ios/RemoteCore/.../GoatTVChannels.swift. Changing this means changing both repos.",
+  "_about": "What GET /now parses to (times in ms). 'expected' is {current, now, next} or \"error\".",
+  "cases": [
+    {
+      "payload": "{\"current\": \"rtp1\", \"now\": {\"title\": \" News \", \"start\": 1000, \"end\": 2000}, \"next\": {\"title\": \"\", \"start\": 2000, \"end\": 3000}}",
+      "expected": {
+        "current": "rtp1",
+        "now": {
+          "title": "News",
+          "start": 1000,
+          "end": 2000
+        },
+        "next": null
+      }
+    },
+    {
+      "payload": "{\"current\": 5, \"now\": {\"title\": \"A\", \"start\": 2000, \"end\": 1000}, \"next\": \"x\"}",
+      "expected": {
+        "current": null,
+        "now": null,
+        "next": null
+      }
+    },
+    {
+      "payload": "{\"current\": \"a\", \"now\": {\"title\": \"Film\", \"start\": 0, \"end\": 60000}, \"next\": {\"title\": \"Late\", \"start\": 60000, \"end\": 120000}}",
+      "expected": {
+        "current": "a",
+        "now": {
+          "title": "Film",
+          "start": 0,
+          "end": 60000
+        },
+        "next": {
+          "title": "Late",
+          "start": 60000,
+          "end": 120000
+        }
+      }
+    },
+    {
+      "payload": "[]",
+      "expected": "error"
+    }
+  ]
+}

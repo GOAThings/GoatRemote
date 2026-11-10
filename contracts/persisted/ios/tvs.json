@@ -1,0 +1,46 @@
+{
+  "_about": "UserDefaults 'tvs': JSON Data of [SavedTV] (ios/RemoteCore/.../SavedTV.swift, Codable). A missing 'kind' is android; 'certificate' is the pinned SHA-256; nil values are left out. Existing installs keep these: never rename a key, change a value shape, or 'unify' Android and iOS (they are separate local formats).",
+  "stored": [
+    {
+      "id": "SHIELD",
+      "name": "SHIELD",
+      "host": "192.168.1.10"
+    },
+    {
+      "id": "Sala",
+      "name": "Sala",
+      "host": "192.168.1.11",
+      "kind": "android",
+      "certificate": "ab12cd"
+    },
+    {
+      "id": "apple:Quarto",
+      "name": "Quarto",
+      "host": "192.168.1.20",
+      "kind": "apple",
+      "port": 49153
+    }
+  ],
+  "written": [
+    {
+      "id": "SHIELD",
+      "name": "SHIELD",
+      "host": "192.168.1.10",
+      "kind": "android"
+    },
+    {
+      "id": "Sala",
+      "name": "Sala",
+      "host": "192.168.1.11",
+      "kind": "android",
+      "certificate": "ab12cd"
+    },
+    {
+      "id": "apple:Quarto",
+      "name": "Quarto",
+      "host": "192.168.1.20",
+      "kind": "apple",
+      "port": 49153
+    }
+  ]
+}

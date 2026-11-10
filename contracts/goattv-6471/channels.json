@@ -1,0 +1,13 @@
+{"playlist": {"id": "p", "name": "My list"}, "current": "k2",
+ "groups": [{"id": "g1", "name": "News"}, {"id": "g2", "name": "Sport"}, {"id": "g1", "name": "Again"}, {"name": "No id"}, 7],
+ "channels": [
+   {"key": "k1", "num": 1, "name": "One", "group": "g1", "logo": true, "favorite": true},
+   {"key": "k2", "num": 2.0, "name": "Two", "group": "g2", "logo": false},
+   {"key": "k1", "num": 3, "name": "Repeated"},
+   {"key": "", "name": "Empty key"},
+   {"key": "k4", "name": 4},
+   {"name": "No key"},
+   {"key": "k5", "num": -1, "name": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", "group": 5, "logo": "yes", "favorite": 1},
+   {"key": "k6", "num": 1.5, "name": "Six"},
+   "nope"
+ ]}

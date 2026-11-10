@@ -1,0 +1,56 @@
+{
+  "_producer": "Producer: GoatLauncher app/src/main/java/.../data/PhoneRoutes.kt (documented in PhoneApps.kt), tested by PhoneRoutesTest. Consumers: android/.../data/LauncherApps.kt and ios/RemoteCore/.../LauncherApps.swift. Changing this means changing both repos.",
+  "_about": "GET /apps (capped at 2 MiB). A bad item is skipped and the others count; duplicates keep the first; a missing banner is false; a missing color is null. Any 200 means the launcher is there.",
+  "input": "apps.json",
+  "expected": [
+    {
+      "package": "com.netflix.ninja",
+      "label": "Netflix",
+      "banner": true,
+      "color": "#E50914"
+    },
+    {
+      "package": "org.xbmc.kodi",
+      "label": "Kodi",
+      "banner": false,
+      "color": "#17B2E7"
+    },
+    {
+      "package": "cc.slokker.itv",
+      "label": "GoatTV",
+      "banner": true,
+      "color": null
+    },
+    {
+      "package": "com.example.nobanner",
+      "label": "No banner",
+      "banner": false,
+      "color": "#123456"
+    }
+  ],
+  "notAList": [
+    "{}",
+    "not json"
+  ],
+  "expectedIos": [
+    {
+      "package": "com.netflix.ninja",
+      "label": "Netflix",
+      "banner": true,
+      "color": "#E50914"
+    },
+    {
+      "package": "org.xbmc.kodi",
+      "label": "Kodi",
+      "banner": false,
+      "color": "#17B2E7"
+    },
+    {
+      "package": "cc.slokker.itv",
+      "label": "GoatTV",
+      "banner": true,
+      "color": null
+    }
+  ],
+  "_aboutIos": "iOS today drops an item with no banner (strict Bool); resolved in untangle 1.3 (D4/B7), after which expectedIos goes away."
+}

@@ -18,7 +18,8 @@ func expectMalformed(_ line: Int = #line, _ body: () throws -> Void) throws {
     throw Failed(description: "linha \(line): devia ter dado erro")
 }
 
-/// Corre com XCTest no Mac (RemoteCoreTests) e com um runner simples em Linux (sem XCTest).
+/// Corre com um runner simples em Linux (sem XCTest; ver .github/workflows/ios.yml). Os vetores e as amostras vêm de
+/// contracts/, os mesmos que os testes do Android lêem.
 enum CoreTests {
     static let all: [(String, () throws -> Void)] = [
         ("proto", proto),
@@ -44,7 +45,7 @@ enum CoreTests {
         ("goatTVChannels", goatTVChannels),
         ("goatTVKeys", goatTVKeys),
         ("goatTVNow", goatTVNow),
-    ]
+    ] + contracts
 
     static func proto() throws {
         let p = Proto().varint(1, 2).varint(2, 200).message(10, Proto().string(1, "atvremote").string(2, "Olá")).bool(3, true)
@@ -155,11 +156,11 @@ enum CoreTests {
     }
 
     static func sha512() throws {
-        try expect(SHA.hex(SHA512.hash(Array("abc".utf8))), "ddaf35a193617abacc417349ae20413112e6fa4e89a97ea20a9eeee64b55d39a2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f")
+        try expect(SHA.hex(SHA512.hash(Array("abc".utf8))), try Contracts.vectorHex("sha512.abc"))
         try expect(SHA.hex(SHA512.hash([UInt8](repeating: 0x61, count: 200))), "4b11459c33f52a22ee8236782714c150a3b2c60994e9acee17fe68947a3e6789f31e7668394592da7bef827cddca88c4e6f86e4df7ed1ae6cba71f3e98faee9f")
         let ikm = (0..<32).map { UInt8($0) }
-        try expect(SHA.hex(SHA512.hkdf(salt: "Pair-Verify-Encrypt-Salt", info: "Pair-Verify-Encrypt-Info", key: ikm)), "faf9f3558a8ed1e45219bd94fb6d27e5b43a1bc861157fc2a0d291d8e3df410a")
-        try expect(SHA.hex(SHA512.hkdf(salt: "", info: "ClientEncrypt-main", key: ikm)), "9f8aa265911271e6d6e90daf564d82b5913d4b760373afbd6c03e675af681f8d")
+        try expect(SHA.hex(SHA512.hkdf(salt: "Pair-Verify-Encrypt-Salt", info: "Pair-Verify-Encrypt-Info", key: ikm)), try Contracts.vectorHex("hkdf.pairVerify"))
+        try expect(SHA.hex(SHA512.hkdf(salt: "", info: "ClientEncrypt-main", key: ikm)), try Contracts.vectorHex("hkdf.clientEncrypt"))
     }
 
     static func bigint() throws {
@@ -177,9 +178,9 @@ enum CoreTests {
 
     /// O vetor do A.3 da especificação (PIN 1111, sal 01…10, a = 20…3f, b = aa…aa do pyatv).
     static func srp() throws {
-        let salt = hex("0102030405060708090a0b0c0d0e0f10")
-        let client = SRPClient(privateKey: hex("202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f"))
-        try expect(SHA.hex(Array(client.publicKey.prefix(8))), "6823a16e8d3da8dd")
+        let salt = try Contracts.vector("srp.salt")
+        let client = SRPClient(privateKey: try Contracts.vector("srp.privateKey"))
+        try expect(SHA.hex(Array(client.publicKey.prefix(8))), try Contracts.vectorHex("srp.publicKey8"))
         // B do servidor de teste: k·v + g^b mod N.
         let mont = Montgomery(modulus: SRPClient.prime)
         let g = SRPClient.generator
@@ -189,30 +190,30 @@ enum CoreTests {
         let gb = mont.power(g, BigUInt(bytes: [UInt8](repeating: 0xAA, count: 32)))
         var B = mont.multiply(k, v) + gb
         if !(B < SRPClient.prime) { B = B - SRPClient.prime }
-        try expect(SHA.hex(Array(B.bytes.prefix(8))), "8a68cfc16b392740")
+        try expect(SHA.hex(Array(B.bytes.prefix(8))), try Contracts.vectorHex("srp.serverPublicKey8"))
         guard let result = client.process(salt: salt, serverPublicKey: B.bytes, pin: "1111") else { throw Failed(description: "SRP sem resultado") }
-        try expect(SHA.hex(Array(result.sessionKey.prefix(8))), "042ea4421fa34713")
-        try expect(SHA.hex(Array(result.proof.prefix(8))), "6bbc4a3fe6fecde3")
-        try expect(SHA.hex(Array(result.expectedServerProof.prefix(8))), "1bec131ba64b7033")
+        try expect(SHA.hex(Array(result.sessionKey.prefix(8))), try Contracts.vectorHex("srp.sessionKey8"))
+        try expect(SHA.hex(Array(result.proof.prefix(8))), try Contracts.vectorHex("srp.proof8"))
+        try expect(SHA.hex(Array(result.expectedServerProof.prefix(8))), try Contracts.vectorHex("srp.serverProof8"))
     }
 
     static func opack() throws {
         // Bytes do pyatv (com as referências a valores repetidos).
-        let hidC = try OPACK(decoding: hex("e4425f69455f68696443425f740a425f63e2455f6842745309a10e425f7831e803"))
+        let hidC = try OPACK(decoding: try Contracts.vector("opack.hidC"))
         try expect(hidC["_i"]?.string, "_hidC")
         try expect(hidC["_c"]?["_hidC"]?.int, 6)
         try expect(hidC["_c"]?["_hBtS"]?.int, 1)
         try expect(hidC["_x"]?.int, 1000)
-        let touch = try OPACK(decoding: hex("e4425f694b5f746f7563685374617274425f740a425f63e3475f686569676874360000000000408f40445f74466c08465f7769647468a5425f7831eb03"))
+        let touch = try OPACK(decoding: try Contracts.vector("opack.touchStart"))
         try expect(touch["_c"]?["_width"], .double(1000))
-        try expect(try OPACK(decoding: hex("d4436f6f6643626172a0a1".replacingOccurrences(of: "436f6f66", with: "43666f6f"))),
+        try expect(try OPACK(decoding: try Contracts.vector("opack.stringRefs")),
                    .array([.string("foo"), .string("bar"), .string("foo"), .string("bar")]))
-        try expect(try OPACK(decoding: hex("df300130 02c10103".replacingOccurrences(of: " ", with: ""))), .array([.int(1), .int(2), .int(2)]))
-        try expect(try OPACK(decoding: hex("3500008 03f".replacingOccurrences(of: " ", with: ""))), .double(1))
-        try expect(OPACK.int(0x1FF).encoded, hex("31ff01"))
-        try expect(OPACK.int(40).encoded, hex("3028"))
+        try expect(try OPACK(decoding: try Contracts.vector("opack.intRefs")), .array([.int(1), .int(2), .int(2)]))
+        try expect(try OPACK(decoding: try Contracts.vector("opack.double1")), .double(1))
+        try expect(OPACK.int(0x1FF).encoded, try Contracts.vector("opack.int0x1FF"))
+        try expect(OPACK.int(40).encoded, try Contracts.vector("opack.int40"))
         try expect(OPACK.string(String(repeating: "a", count: 33)).encoded.prefix(2).map { $0 }, [0x61, 0x21])
-        try expect(OPACK.array([.int(1), .string("test"), .bool(false)]).encoded, hex("d3094474657374" + "02"))
+        try expect(OPACK.array([.int(1), .string("test"), .bool(false)]).encoded, try Contracts.vector("opack.array_1_test_false"))
         let many = OPACK.array(Array(repeating: .string("a"), count: 15))
         try expect(many.encoded.first, 0xDF)
         try expect(try OPACK(decoding: many.encoded), many)
@@ -230,18 +231,14 @@ enum CoreTests {
         try expect(decoded[3], big)
         try expect(decoded[4], [9, 9])
         // M1 real (pyatv antigo): {"_pd": TLV{0:00, 6:01}, "_pwTy": 1}
-        let m1 = try OPACK(decoding: hex("e2435f706476000100060101455f7077547909"))
+        let m1 = try OPACK(decoding: try Contracts.vector("tlv8.m1"))
         try expect(TLV8.decode(m1["_pd"]?.data ?? [])[6], [1])
         try expect(m1["_pwTy"]?.int, 1)
     }
 
     /// O teclado da Apple TV: os bplist do pyatv lêem-se, e os nossos têm o mesmo significado.
     static func rti() throws {
-        let fake = hex("62706c6973743030d2010203085424746f7058246f626a65637473d2040506075b73657373696f6e555549445d646f63" +
-                       "756d656e74537461746580018002a5090a0b0e1155246e756c6c4f101030313233343536373839616263646566d10c0d" +
-                       "55646f6353748003d10f105f1012636f6e746578744265666f7265496e70757480045f101c46616b6520436f6d70616e" +
-                       "696f6e204b6579626f6172642054657874080d121b202c3a3c3e444a5d6066686b808200000000000001010000000000" +
-                       "000012000000000000000000000000000000a1")
+        let fake = try Contracts.vector("rti.fakeState")
         guard let state = RTI.state(fake) else { throw Failed(description: "RTI.state nil") }
         try expect(state.session, Array("0123456789abcdef".utf8))
         try expect(state.text, "Fake Companion Keyboard Text")
@@ -263,17 +260,7 @@ enum CoreTests {
         try expect(cleared[1]["textToAssert"], .uid(4))
         try expect(cleared[4], .string(""))
         // E o do pyatv (insert "hello"):
-        let theirs = try BPlist.decode(hex(
-            "62706c6973743030d4010203040506070a582476657273696f6e592461726368697665725424746f7058246f626a6563" +
-            "747312000186a05f10105254494b657965644172636869766572d108095e746578744f7065726174696f6e738001a80b" +
-            "0c1317181e222555246e756c6cd30d0e0f1011125e6b6579626f6172644f75747075745624636c6173735f1011746172" +
-            "67657453657373696f6e55554944800280078005d2140e15165d696e73657274696f6e54657874800380045568656c6c" +
-            "6fd2191a1b1c5a24636c6173736e616d655824636c61737365735f101054494b6579626f6172644f7574707574a21b1d" +
-            "584e534f626a656374d21f0e20215c4e532e7575696462797465734f1010303132333435363738396162636465668006" +
-            "d2191a2324564e5355554944a2231dd2191a26275f1011525449546578744f7065726174696f6e73a2261d0008001100" +
-            "1a0024002900320037004a004d005c005e0067006d00740083008a009e00a000a200a400a900b700b900bb00c100c600" +
-            "d100da00ed00f000f900fe010b011e01200125012c012f01340148000000000000020100000000000000280000000000" +
-            "000000000000000000014b"))
+        let theirs = try BPlist.decode(try Contracts.vector("rti.pyatvInsertHello"))
         guard case .array(let pyObjects)? = theirs["$objects"] else { throw Failed(description: "pyatv sem $objects") }
         try expect(pyObjects[2]["insertionText"], .uid(3))
         try expect(pyObjects[3], .string("hello"))

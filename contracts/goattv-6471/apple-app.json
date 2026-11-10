@@ -1,0 +1,32 @@
+{
+  "_producer": "GoatTV tvOS bundle id cc.slokker.goattv (repo itv, tvos/). A re-signed IPA can have another bundle id, so the name \"GoatTV\" also counts (lowest bundle id wins).",
+  "rows": [
+    {
+      "apps": {
+        "x.goattv": "GoatTV",
+        "cc.slokker.goattv": "GoatTV"
+      },
+      "expected": "cc.slokker.goattv"
+    },
+    {
+      "apps": {
+        "com.netflix": "Netflix",
+        "x.goattv": "GoatTV"
+      },
+      "expected": "x.goattv"
+    },
+    {
+      "apps": {
+        "z.goattv": " goattv ",
+        "b.goattv": "GoatTV"
+      },
+      "expected": "b.goattv"
+    },
+    {
+      "apps": {
+        "com.netflix": "Netflix"
+      },
+      "expected": null
+    }
+  ]
+}

@@ -1,0 +1,95 @@
+{
+  "_producer": "Producer: GoatTV (repo itv) app/src/main/java/cc/slokker/itv/PhoneChannels.kt and data/PhoneChannelList.kt, tested by PhoneChannelListTest. Consumers: android/.../data/Channels.kt and ios/RemoteCore/.../GoatTVChannels.swift. Changing this means changing both repos.",
+  "_about": "What GET /channels parses to. 'payload' is the raw body ('@channels.json' = that file); 'expected' is the list, or \"error\".",
+  "cases": [
+    {
+      "payload": "@channels.json",
+      "expected": {
+        "playlist": "My list",
+        "current": "k2",
+        "groups": [
+          {
+            "id": "g1",
+            "name": "News"
+          },
+          {
+            "id": "g2",
+            "name": "Sport"
+          }
+        ],
+        "channels": [
+          {
+            "key": "k1",
+            "num": 1,
+            "name": "One",
+            "group": "g1",
+            "logo": true,
+            "favorite": true
+          },
+          {
+            "key": "k2",
+            "num": 2,
+            "name": "Two",
+            "group": "g2",
+            "logo": false,
+            "favorite": false
+          },
+          {
+            "key": "k5",
+            "num": null,
+            "name": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+            "group": null,
+            "logo": false,
+            "favorite": false
+          },
+          {
+            "key": "k6",
+            "num": null,
+            "name": "Six",
+            "group": null,
+            "logo": false,
+            "favorite": false
+          }
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "payload": "{\"current\": \"hidden\", \"channels\": [{\"key\": \"a\", \"name\": \"A\"}], \"truncated\": true}",
+      "expected": {
+        "playlist": null,
+        "current": null,
+        "groups": [],
+        "channels": [
+          {
+            "key": "a",
+            "num": null,
+            "name": "A",
+            "group": null,
+            "logo": false,
+            "favorite": false
+          }
+        ],
+        "truncated": true
+      }
+    },
+    {
+      "payload": "{}",
+      "expected": {
+        "playlist": null,
+        "current": null,
+        "groups": [],
+        "channels": [],
+        "truncated": false
+      }
+    },
+    {
+      "payload": "[]",
+      "expected": "error"
+    },
+    {
+      "payload": "not json",
+      "expected": "error"
+    }
+  ]
+}

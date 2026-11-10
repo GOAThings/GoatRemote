@@ -1,0 +1,150 @@
+{
+  "_producer": "Producer: GoatLauncher app/src/main/java/.../data/PhoneRoutes.kt (documented in PhoneApps.kt), tested by PhoneRoutesTest. Consumers: android/.../data/LauncherApps.kt and ios/RemoteCore/.../LauncherApps.swift. Changing this means changing both repos.",
+  "_about": "POST /volume/up|down|mute. THE VOLUME-SAFETY RULE: a volume KEY is only sent on noLauncher, i.e. 404 or connection refused on a TV where a launcher was never seen (known != true). Anything else that isn't 200 is didntAnswer and NO key is sent: a protocol volume key reboots the SHIELD (Android 11) while GoatLauncher watches the keys (commits c06672a, bcc9ca4, b272212, 66193b6). 'known' is the stored launcher.<id> (null = never stored).",
+  "rows": [
+    {
+      "known": true,
+      "status": 200,
+      "refused": false,
+      "outcome": "done"
+    },
+    {
+      "known": true,
+      "status": 404,
+      "refused": false,
+      "outcome": "didntAnswer"
+    },
+    {
+      "known": true,
+      "status": 0,
+      "refused": true,
+      "outcome": "didntAnswer"
+    },
+    {
+      "known": true,
+      "status": 0,
+      "refused": false,
+      "outcome": "didntAnswer"
+    },
+    {
+      "known": true,
+      "status": 503,
+      "refused": false,
+      "outcome": "didntAnswer"
+    },
+    {
+      "known": true,
+      "status": 409,
+      "refused": false,
+      "outcome": "didntAnswer"
+    },
+    {
+      "known": true,
+      "status": 500,
+      "refused": false,
+      "outcome": "didntAnswer"
+    },
+    {
+      "known": true,
+      "status": 403,
+      "refused": false,
+      "outcome": "didntAnswer"
+    },
+    {
+      "known": false,
+      "status": 200,
+      "refused": false,
+      "outcome": "done"
+    },
+    {
+      "known": false,
+      "status": 404,
+      "refused": false,
+      "outcome": "noLauncher"
+    },
+    {
+      "known": false,
+      "status": 0,
+      "refused": true,
+      "outcome": "noLauncher"
+    },
+    {
+      "known": false,
+      "status": 0,
+      "refused": false,
+      "outcome": "didntAnswer"
+    },
+    {
+      "known": false,
+      "status": 503,
+      "refused": false,
+      "outcome": "didntAnswer"
+    },
+    {
+      "known": false,
+      "status": 409,
+      "refused": false,
+      "outcome": "didntAnswer"
+    },
+    {
+      "known": false,
+      "status": 500,
+      "refused": false,
+      "outcome": "didntAnswer"
+    },
+    {
+      "known": false,
+      "status": 403,
+      "refused": false,
+      "outcome": "didntAnswer"
+    },
+    {
+      "known": null,
+      "status": 200,
+      "refused": false,
+      "outcome": "done"
+    },
+    {
+      "known": null,
+      "status": 404,
+      "refused": false,
+      "outcome": "noLauncher"
+    },
+    {
+      "known": null,
+      "status": 0,
+      "refused": true,
+      "outcome": "noLauncher"
+    },
+    {
+      "known": null,
+      "status": 0,
+      "refused": false,
+      "outcome": "didntAnswer"
+    },
+    {
+      "known": null,
+      "status": 503,
+      "refused": false,
+      "outcome": "didntAnswer"
+    },
+    {
+      "known": null,
+      "status": 409,
+      "refused": false,
+      "outcome": "didntAnswer"
+    },
+    {
+      "known": null,
+      "status": 500,
+      "refused": false,
+      "outcome": "didntAnswer"
+    },
+    {
+      "known": null,
+      "status": 403,
+      "refused": false,
+      "outcome": "didntAnswer"
+    }
+  ]
+}

@@ -1,0 +1,48 @@
+{
+  "_producer": "Producer: GoatTV (repo itv) app/src/main/java/cc/slokker/itv/PhoneChannels.kt and data/PhoneChannelList.kt, tested by PhoneChannelListTest. Consumers: android/.../data/Channels.kt and ios/RemoteCore/.../GoatTVChannels.swift. Changing this means changing both repos. GoatTV decodes keys with its decodeKey.",
+  "_about": "Channel keys are percent-encoded except A-Z a-z 0-9 - _ ~ (upper-case hex).",
+  "keys": [
+    [
+      "k1",
+      "k1"
+    ],
+    [
+      "AZaz09-_~",
+      "AZaz09-_~"
+    ],
+    [
+      "news 24/hd",
+      "news%2024%2Fhd"
+    ],
+    [
+      "..",
+      "%2E%2E"
+    ],
+    [
+      "a?b#c%d+e&f",
+      "a%3Fb%23c%25d%2Be%26f"
+    ],
+    [
+      "ção",
+      "%C3%A7%C3%A3o"
+    ],
+    [
+      "📺",
+      "%F0%9F%93%BA"
+    ]
+  ],
+  "urls": [
+    {
+      "host": "192.168.1.5",
+      "what": "play",
+      "key": "a/b",
+      "url": "http://192.168.1.5:6471/play/a%2Fb"
+    },
+    {
+      "host": "tv.local",
+      "what": "channels",
+      "key": null,
+      "url": "http://tv.local:6471/channels"
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "_about": "The feel of the remote (ui.md U4), the same on both platforms: android/.../ui/common/Gestures.kt and ios/RemoteCore/.../Gestures.swift. Times in ms, distances in dp/pt.",
+  "touch": {
+    "stepDistance": 44,
+    "holdMs": 500,
+    "repeatAfterMs": 350,
+    "repeatStartMs": 220,
+    "repeatMinMs": 80,
+    "repeatStepMs": 20
+  },
+  "dpad": {
+    "centreHoldMs": 500,
+    "repeatAfterMs": 400,
+    "repeatStartMs": 180,
+    "repeatMinMs": 70,
+    "repeatStepMs": 15,
+    "okRadius": 0.43,
+    "litMinMs": 120,
+    "fadeMs": 180
+  },
+  "key": {
+    "holdMs": 450,
+    "litMinMs": 120
+  },
+  "volumeHudMs": 1600
+}

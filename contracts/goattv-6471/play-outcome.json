@@ -1,0 +1,46 @@
+{
+  "_producer": "Producer: GoatTV (repo itv) app/src/main/java/cc/slokker/itv/PhoneChannels.kt and data/PhoneChannelList.kt, tested by PhoneChannelListTest. Consumers: android/.../data/Channels.kt and ios/RemoteCore/.../GoatTVChannels.swift. Changing this means changing both repos.",
+  "_about": "POST /play/<key>: 200 done, 404 unknown channel, 409/503/refused = GoatTV not in front (open it and retry for 10 s), anything else failed.",
+  "rows": [
+    {
+      "status": 200,
+      "refused": false,
+      "outcome": "done"
+    },
+    {
+      "status": 404,
+      "refused": false,
+      "outcome": "notFound"
+    },
+    {
+      "status": 409,
+      "refused": false,
+      "outcome": "retry"
+    },
+    {
+      "status": 503,
+      "refused": false,
+      "outcome": "retry"
+    },
+    {
+      "status": 0,
+      "refused": true,
+      "outcome": "retry"
+    },
+    {
+      "status": 0,
+      "refused": false,
+      "outcome": "failed"
+    },
+    {
+      "status": 500,
+      "refused": false,
+      "outcome": "failed"
+    },
+    {
+      "status": 401,
+      "refused": false,
+      "outcome": "failed"
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "_about": "Colour tokens (RRGGBB) of android/.../ui/Theme.kt and ios/GoatRemote/UI/Theme.swift (values in RemoteCore ThemeTokens). The glass styles are platform-specific and not listed. iOS 'orange' is the system colour, whose dark variant is FF9F0A.",
+  "tokens": {
+    "background": "05070D",
+    "surface": "0B0D14",
+    "card": "12151D",
+    "surfaceHigh": "191D28",
+    "surfacePressed": "262C3D",
+    "accent": "5AA9FF",
+    "accent2": "8B7CFF",
+    "power": "F2777E",
+    "green": "34D399",
+    "text": "F5F5F7",
+    "dim": "EBEBF5",
+    "faint": "EBEBF5",
+    "heroTop": "1D2236",
+    "heroBottom": "0E1018",
+    "favorite": "F5C04A"
+  },
+  "alpha": {
+    "dim": 0.6,
+    "faint": 0.38,
+    "line": 0.08
+  },
+  "androidOnly": {
+    "orange": "FF9F0A"
+  }
+}

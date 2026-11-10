@@ -1,0 +1,65 @@
+{
+  "_about": "Every persisted key. Per-TV keys are '<prefix>.<tvId>' and forgetting a TV removes all of them. Existing installs keep these: never rename a key, change a value shape, or 'unify' Android and iOS (they are separate local formats).",
+  "android": {
+    "tvsPrefs": {
+      "name": "tvs",
+      "keys": {
+        "tvs": "JSON array of SavedTv",
+        "current": "string tv id"
+      }
+    },
+    "optionsPrefs": {
+      "name": "options",
+      "global": {
+        "haptics": "bool, default true",
+        "volumeButtons": "bool, default true",
+        "layout": "TOUCH | DPAD",
+        "dpadTaps": "bool, legacy: read only when 'layout' is missing, removed on the next layout change",
+        "companion.id": "string, 12 hex digits, the stable _i for Apple TV"
+      },
+      "perTv": {
+        "recents": "JSON array (string) of up to 12 package names",
+        "launcher": "bool, GoatLauncher seen on this TV (missing = unknown)",
+        "volumeUnknown": "bool, HDMI-CEC: the TV doesn't report the volume",
+        "goattv": "bool, GoatTV answered /channels"
+      }
+    },
+    "companionPrefs": {
+      "name": "companion",
+      "keys": "<tvId> = companion.json"
+    },
+    "files": {
+      "identity": "filesDir/identity: int length + PKCS#8 RSA key + int length + certificate DER, written via identity.tmp",
+      "updates/GoatRemote.apk": "cacheDir, the downloaded update"
+    },
+    "layoutValues": [
+      "TOUCH",
+      "DPAD"
+    ]
+  },
+  "ios": {
+    "userDefaults": {
+      "tvs": "Data, JSON of [SavedTV]",
+      "current": "string tv id",
+      "haptics": "bool, default true",
+      "volumeButtons": "bool, default true",
+      "layout": "touch | dpad",
+      "dpadTaps": "bool, legacy",
+      "companion.id": "string"
+    },
+    "perTv": {
+      "recents": "[String] of up to 12 package names",
+      "launcher": "bool",
+      "volumeUnknown": "bool",
+      "goattv": "bool"
+    },
+    "keychain": {
+      "identity": "RSA-2048 key, tag cc.slokker.goatremote.identity; certificate label GoatRemote; AfterFirstUnlockThisDeviceOnly",
+      "appletv": "service cc.slokker.goatremote.appletv, account <tvId> = companion.json"
+    },
+    "layoutValues": [
+      "touch",
+      "dpad"
+    ]
+  }
+}

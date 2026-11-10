@@ -1,0 +1,30 @@
+{
+  "_producer": "Producer: GoatLauncher app/src/main/java/.../data/PhoneRoutes.kt (documented in PhoneApps.kt), tested by PhoneRoutesTest. Consumers: android/.../data/LauncherApps.kt and ios/RemoteCore/.../LauncherApps.swift. Changing this means changing both repos. The launcher answers 409 when its accessibility service is off.",
+  "_about": "POST /open/<pkg>: anything but 200 falls back to market://launch?id=<pkg> through the remote protocol.",
+  "rows": [
+    {
+      "status": 200,
+      "fallback": false
+    },
+    {
+      "status": 0,
+      "fallback": true
+    },
+    {
+      "status": 404,
+      "fallback": true
+    },
+    {
+      "status": 409,
+      "fallback": true
+    },
+    {
+      "status": 500,
+      "fallback": true
+    },
+    {
+      "status": 503,
+      "fallback": true
+    }
+  ]
+}

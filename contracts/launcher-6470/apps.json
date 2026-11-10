@@ -1,0 +1,10 @@
+[
+  {"package": "com.netflix.ninja", "label": "Netflix", "banner": true, "color": "#E50914"},
+  {"package": "org.xbmc.kodi", "label": "Kodi", "banner": false, "color": "#17B2E7"},
+  {"package": "com.netflix.ninja", "label": "Netflix again", "banner": false, "color": "#000000"},
+  {"package": "cc.slokker.itv", "label": "GoatTV", "banner": true},
+  {"package": "com.example.nobanner", "label": "No banner", "color": "#123456"},
+  {"label": "No package", "banner": false, "color": "#FFFFFF"},
+  {"package": "com.example.nolabel", "banner": false},
+  "nope"
+]

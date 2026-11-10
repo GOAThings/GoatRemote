@@ -1,0 +1,17 @@
+{
+  "_about": "Keychain generic password, service cc.slokker.goatremote.appletv, account <tvId>, AfterFirstUnlockThisDeviceOnly: CompanionCredentials as JSON (Codable, Data as Base64). viaAirPlay/companionID are optional. Existing installs keep these: never rename a key, change a value shape, or 'unify' Android and iOS (they are separate local formats).",
+  "plain": {
+    "tvPublicKey": "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=",
+    "privateKey": "ZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXp7fH1+f4CBgoM=",
+    "tvID": "NkYzQTJCMUMtVFY=",
+    "clientID": "MEIxQzJEM0UtNEY1MC02MTcyLTgzOTQtQTVCNkM3RDhFOUYw"
+  },
+  "airPlay": {
+    "tvPublicKey": "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=",
+    "privateKey": "ZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXp7fH1+f4CBgoM=",
+    "tvID": "NkYzQTJCMUMtVFY=",
+    "clientID": "MEIxQzJEM0UtNEY1MC02MTcyLTgzOTQtQTVCNkM3RDhFOUYw",
+    "viaAirPlay": true,
+    "companionID": "Y29tcGFuaW9uLWlk"
+  }
+}
