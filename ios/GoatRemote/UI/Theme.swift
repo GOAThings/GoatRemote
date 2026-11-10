@@ -98,7 +98,7 @@ struct PressArea<Label: View>: View {
                         downAt = Date()
                         guard let onHold else { return }
                         holdTask = Task { @MainActor in
-                            try? await Task.sleep(nanoseconds: 450_000_000)
+                            try? await Task.sleep(nanoseconds: Gestures.nanoseconds(Gestures.Key.holdMs))
                             guard !Task.isCancelled, pressed else { return }
                             holding = true
                             onHold(true)
@@ -109,7 +109,7 @@ struct PressArea<Label: View>: View {
                         if holding { onHold?(false) } else { onTap() }
                         holding = false
                         pressed = false
-                        let wait = max(0, 0.12 - Date().timeIntervalSince(downAt))
+                        let wait = max(0, Double(Gestures.Key.litMinMs) / 1000 - Date().timeIntervalSince(downAt))
                         release = Task { @MainActor in
                             try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
                             guard !Task.isCancelled else { return }
@@ -118,6 +118,13 @@ struct PressArea<Label: View>: View {
                     }
             )
             .animation(.spring(response: 0.22, dampingFraction: 0.6), value: lit)
+            // A manter quando o botão sai do ecrã (uma folha que fecha, a TV que se desliga): acaba-se o toque longo (B5).
+            .onDisappear {
+                holdTask?.cancel()
+                if holding { onHold?(false) }
+                holding = false
+                pressed = false
+            }
     }
 }
 

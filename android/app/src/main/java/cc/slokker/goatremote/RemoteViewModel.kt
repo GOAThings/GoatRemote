@@ -191,6 +191,8 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
         get() = session.autoReconnect
         set(value) { session.autoReconnect = value }
     private val appleArtwork get() = session.appleArtwork
+    /** As teclas mantidas da TV escolhida: os controlos do ecrã chamam [KeyHold.end] quando saem. */
+    val keyHold: KeyHold get() = session.keyHold
     private val scope get() = session.scope
 
     /** Fecha a sessão da TV que estava e começa a de [tv]: nada passa de uma TV para a outra. */

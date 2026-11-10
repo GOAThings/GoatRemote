@@ -68,6 +68,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -127,7 +128,7 @@ fun RemoteScreen(vm: RemoteViewModel) {
     LaunchedEffect(vm.volumeChanged) {
         if (vm.volumeChanged == 0) return@LaunchedEffect
         volumeVisible = true
-        delay(1600)
+        delay(Gestures.VOLUME_HUD_MS)
         volumeVisible = false
     }
     LaunchedEffect(vm.closeSheets) { sheet = null }
@@ -475,7 +476,8 @@ private fun TouchSurface(vm: RemoteViewModel) {
     val ripples = remember { mutableStateListOf<Ripple>() }
     var nextRipple by remember { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
-    val step = with(LocalDensity.current) { 44.dp.toPx() }
+    val step = with(LocalDensity.current) { Gestures.Touch.STEP_DP.dp.toPx() }
+    DisposableEffect(vm.keyHold) { onDispose { vm.keyHold.end() } }
 
     fun addRipple(point: Offset, strong: Boolean = false) {
         val ripple = Ripple(nextRipple++, point, strong)
@@ -499,11 +501,12 @@ private fun TouchSurface(vm: RemoteViewModel) {
                     // Dedo parado depois de deslizar: a mesma direção repete-se, cada vez mais depressa.
                     var repeating: Job? = null
                     val key = Key.CENTER
-                    val timer: Job = scope.launch {
-                        delay(500)
+                    val timer: Job = vm.keyHold.later {
+                        delay(Gestures.Touch.HOLD_MS)
                         if (!moved) {
                             holding = key
                             vm.hold(key, true)
+                            vm.keyHold.longStarted(key) { vm.hold(it, false) }
                             addRipple(start, strong = true)
                         }
                     }
@@ -524,15 +527,15 @@ private fun TouchSurface(vm: RemoteViewModel) {
                             anchor = change.position
                             moved = true
                             val position = change.position
-                            repeating = scope.launch {
-                                delay(350)
+                            repeating = vm.keyHold.later {
+                                delay(Gestures.Touch.REPEAT_AFTER_MS)
                                 vm.repeatStarted()
-                                var interval = 220L
+                                var interval = Gestures.Touch.REPEAT_START_MS
                                 while (true) {
                                     vm.press(direction, haptic = false)
                                     addRipple(position)
                                     delay(interval)
-                                    interval = (interval - 20).coerceAtLeast(80)
+                                    interval = (interval - Gestures.Touch.REPEAT_STEP_MS).coerceAtLeast(Gestures.Touch.REPEAT_MIN_MS)
                                 }
                             }
                         }
@@ -541,6 +544,7 @@ private fun TouchSurface(vm: RemoteViewModel) {
                     repeating?.cancel()
                     val held = holding
                     if (held != null) {
+                        vm.keyHold.longEnded()
                         vm.hold(held, false)
                     } else if (!moved) {
                         vm.press(key)
@@ -564,6 +568,7 @@ private fun Dpad(vm: RemoteViewModel, ready: Boolean) {
     val glow = remember { Animatable(0f) }
     var fade by remember { mutableStateOf<Job?>(null) }
     val scope = rememberCoroutineScope()
+    DisposableEffect(vm.keyHold) { onDispose { vm.keyHold.end() } }
     BoxWithConstraints(Modifier.fillMaxSize().hero(RoundedCornerShape(28.dp), glow = 0.16f).padding(20.dp), contentAlignment = Alignment.Center) {
         val side = minOf(maxWidth, maxHeight, 320.dp)
         Box(
@@ -593,26 +598,32 @@ private fun Dpad(vm: RemoteViewModel, ready: Boolean) {
                         lit = key
                         scope.launch { glow.snapTo(1f) }
                         var held = false
-                        val timer = scope.launch {
+                        val timer = vm.keyHold.later {
                             if (key == Key.CENTER) {
-                                delay(500)
+                                delay(Gestures.Dpad.CENTRE_HOLD_MS)
                                 held = true
                                 vm.hold(Key.CENTER, true)
+                                vm.keyHold.longStarted(Key.CENTER) { vm.hold(it, false) }
                             } else {
-                                delay(400)
+                                delay(Gestures.Dpad.REPEAT_AFTER_MS)
                                 held = true
                                 vm.repeatStarted()
-                                var interval = 180L
+                                var interval = Gestures.Dpad.REPEAT_START_MS
                                 while (true) {
                                     vm.press(key, haptic = false)
                                     delay(interval)
-                                    interval = (interval - 15).coerceAtLeast(70)
+                                    interval = (interval - Gestures.Dpad.REPEAT_STEP_MS).coerceAtLeast(Gestures.Dpad.REPEAT_MIN_MS)
                                 }
                             }
                         }
                         waitForUpOrCancellation()
                         timer.cancel()
-                        if (!held) vm.press(key) else if (key == Key.CENTER) vm.hold(Key.CENTER, false)
+                        if (!held) {
+                            vm.press(key)
+                        } else if (key == Key.CENTER) {
+                            vm.keyHold.longEnded()
+                            vm.hold(Key.CENTER, false)
+                        }
                         fade = scope.launch {
                             delay((LIT_MIN_MS - (SystemClock.uptimeMillis() - downAt)).coerceAtLeast(0))
                             glow.animateTo(0f, tween(LIT_FADE_MS))
@@ -658,12 +669,9 @@ private fun Dpad(vm: RemoteViewModel, ready: Boolean) {
     }
 }
 
-/** O raio do OK, em fração do raio das setas. */
-private const val DPAD_INNER = 0.43f
-
-/** Uma tecla tocada fica acesa pelo menos este tempo, e depois apaga-se neste. */
-private const val LIT_MIN_MS = 120L
-private const val LIT_FADE_MS = 180
+private const val DPAD_INNER = Gestures.Dpad.OK_RADIUS
+private const val LIT_MIN_MS = Gestures.Dpad.LIT_MIN_MS
+private const val LIT_FADE_MS = Gestures.Dpad.FADE_MS
 
 /** O contorno da roda e as divisões entre as setas. */
 private val WHEEL_LINE = Color.White.copy(alpha = 0.16f)

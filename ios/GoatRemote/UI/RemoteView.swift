@@ -164,7 +164,7 @@ struct RemoteView: View {
         let token = volumeToken
         withAnimation(.easeOut(duration: 0.15)) { volumeVisible = true }
         Task {
-            try? await Task.sleep(nanoseconds: 1_600_000_000)
+            try? await Task.sleep(nanoseconds: Gestures.nanoseconds(Gestures.volumeHudMs))
             guard token == volumeToken else { return }
             withAnimation(.easeIn(duration: 0.3)) { volumeVisible = false }
         }
@@ -312,7 +312,7 @@ struct TouchSurface: View {
     @State private var holding: Key?
     @State private var holdTask: Task<Void, Never>?
     @State private var repeatTask: Task<Void, Never>?
-    private let step: CGFloat = 44
+    private let step = CGFloat(Gestures.Touch.stepDistance)
 
     struct Ripple: Identifiable {
         let id = UUID()
@@ -336,6 +336,7 @@ struct TouchSurface: View {
         .accessibilityLabel(L("Touch surface", "Superfície de toque"))
         .accessibilityAddTraits(.allowsDirectInteraction)
         .accessibilityIdentifier("touchpad")
+        .onDisappear { model.keyHold.end() }
     }
 
     private func drag(in size: CGSize) -> some Gesture {
@@ -344,11 +345,12 @@ struct TouchSurface: View {
                 if last == nil {
                     last = value.startLocation
                     let key = Key.center
-                    holdTask = Task { @MainActor in
-                        try? await Task.sleep(nanoseconds: 500_000_000)
+                    holdTask = model.keyHold.later { @MainActor in
+                        try? await Task.sleep(nanoseconds: Gestures.nanoseconds(Gestures.Touch.holdMs))
                         guard !Task.isCancelled, !moved else { return }
                         holding = key
                         model.hold(key, down: true)
+                        model.keyHold.longStarted(key) { model.hold($0, down: false) }
                         addRipple(value.startLocation, strong: true)
                     }
                 }
@@ -365,16 +367,16 @@ struct TouchSurface: View {
                     moved = true
                     // Dedo parado depois de deslizar: a mesma direção repete-se, cada vez mais depressa.
                     let location = value.location
-                    repeatTask = Task { @MainActor in
-                        try? await Task.sleep(nanoseconds: 350_000_000)
+                    repeatTask = model.keyHold.later { @MainActor in
+                        try? await Task.sleep(nanoseconds: Gestures.nanoseconds(Gestures.Touch.repeatAfterMs))
                         guard !Task.isCancelled else { return }
                         model.repeatStarted()
-                        var interval: UInt64 = 220
+                        var interval = Gestures.Touch.repeatStartMs
                         while !Task.isCancelled {
                             model.press(direction, haptic: false)
                             addRipple(location)
-                            try? await Task.sleep(nanoseconds: interval * 1_000_000)
-                            interval = max(80, interval - 20)
+                            try? await Task.sleep(nanoseconds: Gestures.nanoseconds(interval))
+                            interval = max(Gestures.Touch.repeatMinMs, interval - Gestures.Touch.repeatStepMs)
                         }
                     }
                 }
@@ -383,6 +385,7 @@ struct TouchSurface: View {
                 holdTask?.cancel()
                 repeatTask?.cancel()
                 if let key = holding {
+                    model.keyHold.longEnded()
                     model.hold(key, down: false)
                 } else if !moved {
                     model.press(.center)
@@ -565,7 +568,7 @@ struct DPad: View {
     /// false enquanto liga: a roda fica esbatida.
     var ready = true
     /// O raio do OK, em fração do raio das setas.
-    private static let inner: CGFloat = 0.43
+    private static let inner = CGFloat(Gestures.Dpad.okRadius)
     /// O contorno da roda e as divisões entre as setas.
     private static let line = Color.white.opacity(0.16)
 
@@ -612,6 +615,7 @@ struct DPad: View {
         .accessibilityLabel(L("Arrows", "Setas"))
         .accessibilityAddTraits(.allowsDirectInteraction)
         .accessibilityIdentifier("dpad")
+        .onDisappear { model.keyHold.end() }
     }
 
     private var sectorStart: Double? {
@@ -645,22 +649,23 @@ struct DPad: View {
                 lit = key
                 glow = 1
                 downAt = Date()
-                task = Task { @MainActor in
+                task = model.keyHold.later { @MainActor in
                     if key == .center {
-                        try? await Task.sleep(nanoseconds: 500_000_000)
+                        try? await Task.sleep(nanoseconds: Gestures.nanoseconds(Gestures.Dpad.centreHoldMs))
                         guard !Task.isCancelled else { return }
                         held = true
                         model.hold(.center, down: true)
+                        model.keyHold.longStarted(.center) { model.hold($0, down: false) }
                     } else {
-                        try? await Task.sleep(nanoseconds: 400_000_000)
+                        try? await Task.sleep(nanoseconds: Gestures.nanoseconds(Gestures.Dpad.repeatAfterMs))
                         guard !Task.isCancelled else { return }
                         held = true
                         model.repeatStarted()
-                        var interval: UInt64 = 180
+                        var interval = Gestures.Dpad.repeatStartMs
                         while !Task.isCancelled {
                             model.press(key, haptic: false)
-                            try? await Task.sleep(nanoseconds: interval * 1_000_000)
-                            interval = max(70, interval - 15)
+                            try? await Task.sleep(nanoseconds: Gestures.nanoseconds(interval))
+                            interval = max(Gestures.Dpad.repeatMinMs, interval - Gestures.Dpad.repeatStepMs)
                         }
                     }
                 }
@@ -669,15 +674,20 @@ struct DPad: View {
                 task?.cancel()
                 task = nil
                 if let key = pressed {
-                    if !held { model.press(key) } else if key == .center { model.hold(.center, down: false) }
+                    if !held {
+                        model.press(key)
+                    } else if key == .center {
+                        model.keyHold.longEnded()
+                        model.hold(.center, down: false)
+                    }
                 }
                 pressed = nil
                 held = false
-                let wait = max(0, 0.12 - Date().timeIntervalSince(downAt))
+                let wait = max(0, Double(Gestures.Dpad.litMinMs) / 1000 - Date().timeIntervalSince(downAt))
                 fade = Task { @MainActor in
                     try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
                     guard !Task.isCancelled else { return }
-                    withAnimation(.easeOut(duration: 0.18)) { glow = 0 }
+                    withAnimation(.easeOut(duration: Double(Gestures.Dpad.fadeMs) / 1000)) { glow = 0 }
                 }
             }
     }

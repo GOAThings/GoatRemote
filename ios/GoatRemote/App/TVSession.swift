@@ -37,6 +37,8 @@ final class TVSession {
     /// O pedido da lista em curso: trocar de TV cancela-o em vez de esperar por ele.
     @ObservationIgnored var channelsTask: (id: UUID, task: Task<Void, Never>)?
     @ObservationIgnored var playTask: Task<Void, Never>?
+    /// As teclas mantidas desta TV (ver KeyHold).
+    let keyHold = KeyHold()
 
     init(tvID: String?, status: RemoteModel.Status, recents: [String], hasChannels: Bool) {
         self.tvID = tvID
@@ -49,6 +51,7 @@ final class TVSession {
         autoReconnect?.cancel()
         channelsTask?.task.cancel()
         playTask?.cancel()
+        keyHold.end()
         link?.close()
         link = nil
     }

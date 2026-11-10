@@ -19,6 +19,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -134,6 +135,11 @@ fun Modifier.pressable(onTap: () -> Unit, onHold: ((Boolean) -> Unit)? = null, p
     val press by rememberUpdatedState(pressed)
     // Num toque rápido a tecla acendia e apagava entre dois frames: fica acesa pelo menos PRESSED_MIN_MS.
     val release = remember { arrayOfNulls<Job>(1) }
+    // A manter quando o botão sai do ecrã (uma folha que fecha, a TV que se desliga): acaba-se o toque longo (B5).
+    val holdingNow = remember { BooleanArray(1) }
+    DisposableEffect(Unit) {
+        onDispose { if (holdingNow[0]) { holdingNow[0] = false; hold?.invoke(false) } }
+    }
     return pointerInput(Unit) {
         awaitEachGesture {
             awaitFirstDown()
@@ -143,13 +149,15 @@ fun Modifier.pressable(onTap: () -> Unit, onHold: ((Boolean) -> Unit)? = null, p
             var holding = false
             val timer: Job? = hold?.let { h ->
                 scope.launch {
-                    delay(450)
+                    delay(Gestures.Key.HOLD_MS)
                     holding = true
+                    holdingNow[0] = true
                     h(true)
                 }
             }
             val up = waitForUpOrCancellation()
             timer?.cancel()
+            holdingNow[0] = false
             if (holding) hold?.invoke(false) else if (up != null) tap()
             release[0] = scope.launch {
                 delay((PRESSED_MIN_MS - (SystemClock.uptimeMillis() - downAt)).coerceAtLeast(0))
@@ -159,7 +167,7 @@ fun Modifier.pressable(onTap: () -> Unit, onHold: ((Boolean) -> Unit)? = null, p
     }
 }
 
-private const val PRESSED_MIN_MS = 120L
+private const val PRESSED_MIN_MS = Gestures.Key.LIT_MIN_MS
 
 /** Botão redondo com um símbolo. [filled]: branco com o símbolo a preto (o botão principal, voltar). */
 @Composable

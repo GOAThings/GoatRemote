@@ -114,6 +114,8 @@ final class RemoteModel {
             state.keyboardRequests = 0
         }
     }
+    /// As teclas mantidas da TV escolhida: os controlos do ecrã chamam keyHold.end() quando saem.
+    var keyHold: KeyHold { session.keyHold }
     /// Ícones das apps da Apple TV (da App Store, por bundle id).
     private var appleArtwork: [String: URL] {
         get { session.appleArtwork }
