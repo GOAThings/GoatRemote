@@ -305,7 +305,9 @@ final class RemoteModel {
             var request = URLRequest(url: url)
             request.timeoutInterval = 4
             guard let (data, status) = try? await BoundedHTTP.get(request, limit: 2 << 20), status == 200,
-                  let apps = try? JSONDecoder().decode([TVApp].self, from: data) else { return }
+                  let list = try? JSONDecoder().decode([Lenient<TVApp>].self, from: data) else { return }
+            // Uma app mal descrita fica de fora; as outras contam (como no Android).
+            let apps = list.compactMap(\.value)
             Self.setLauncher(tv.id, true)
             guard current?.id == tv.id else { return }
             var seen = Set<String>()
@@ -332,7 +334,8 @@ final class RemoteModel {
         case failed
     }
 
-    @ObservationIgnored private var channelsLoading = false
+    /// O pedido da lista em curso, e de que TV: trocar de TV substitui-o em vez de esperar por ele.
+    @ObservationIgnored private var channelsTask: (tv: String, id: UUID, task: Task<Void, Never>)?
     @ObservationIgnored private var playTask: Task<Void, Never>?
 
     private static func hasGoatTV(_ tvID: String?) -> Bool {
@@ -341,12 +344,15 @@ final class RemoteModel {
 
     /// Pede a lista ao GoatTV da TV. Ao ligar e ao abrir a folha.
     func refreshChannels() {
-        guard let tv = current, !channelsLoading else { return }
-        channelsLoading = true
-        Task {
-            defer { channelsLoading = false }
+        guard let tv = current else { return }
+        if let running = channelsTask, running.tv == tv.id { return }
+        channelsTask?.task.cancel()
+        let id = UUID()
+        let task = Task {
             await loadChannels(tv)
+            if channelsTask?.id == id { channelsTask = nil }
         }
+        channelsTask = (tv.id, id, task)
     }
 
     /// true se veio a lista.
@@ -566,11 +572,17 @@ final class RemoteModel {
         }
     }
 
-    /// O que se sabe dos canais (e o aviso do volume) volta ao início (outra TV, ou esta esquecida).
+    /// O que é de uma TV (canais, volume, tentativas) volta ao início: outra TV, esta emparelhada outra vez, ou esquecida.
     private func resetChannels(_ tv: SavedTV?) {
-        // O indicador do volume era da TV anterior.
+        // O indicador do volume (e o ícone do HDMI-CEC), as tentativas e o que estava a dar eram da TV anterior.
         volumePressed = nil
         volumeProblem = nil
+        volumeSettlesAt = .distantPast
+        notPairedRetries = 0
+        autoReconnect?.cancel()
+        nowInfo = nil
+        channelsTask?.task.cancel()
+        channelsTask = nil
         playTask?.cancel()
         hasChannels = Self.hasGoatTV(tv?.id)
         channels = nil
@@ -1049,6 +1061,15 @@ enum BoundedHTTP {
             data.append(byte)
         }
         return (data, status)
+    }
+}
+
+/// Um elemento de uma lista que, se não se ler, fica nil em vez de estragar a lista toda.
+struct Lenient<T: Decodable>: Decodable {
+    let value: T?
+
+    init(from decoder: Decoder) throws {
+        value = try? T(from: decoder)
     }
 }
 

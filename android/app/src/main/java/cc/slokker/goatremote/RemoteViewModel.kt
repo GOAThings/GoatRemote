@@ -253,8 +253,11 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
                 this@RemoteViewModel.link = null
                 link.close()
                 if (retry) {
-                    delay(1500)
-                    if (this@RemoteViewModel.link == null && current?.id == tv.id) connect(retry = false)
+                    // No autoReconnect: ir para segundo plano (disconnect) cancela esta tentativa.
+                    autoReconnect = viewModelScope.launch {
+                        delay(1500)
+                        if (this@RemoteViewModel.link == null && current?.id == tv.id) connect(retry = false)
+                    }
                 } else {
                     status = Status.Unreachable(describe(e))
                 }
@@ -379,9 +382,12 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
                     try {
                         if (c.responseCode != 200) return@runCatching null
                         val array = JSONArray(String(c.inputStream.readLimited(MAX_APPS_BYTES), Charsets.UTF_8))
-                        (0 until array.length()).map { i ->
-                            val o = array.getJSONObject(i)
-                            TvApp(o.getString("package"), o.getString("label"), o.optBoolean("banner"), o.optString("color").ifEmpty { null })
+                        // Uma app mal descrita fica de fora; as outras contam.
+                        (0 until array.length()).mapNotNull { i ->
+                            runCatching {
+                                val o = array.getJSONObject(i)
+                                TvApp(o.getString("package"), o.getString("label"), o.optBoolean("banner"), o.optString("color").ifEmpty { null })
+                            }.getOrNull()
                         }.distinctBy { it.pkg }
                     } finally {
                         c.disconnect()
@@ -689,11 +695,19 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
         connect()
     }
 
+    /** Tudo o que é de uma TV volta ao início (outra TV, esta emparelhada outra vez, ou esquecida). */
     private fun resetFor(tv: SavedTv?) {
+        autoReconnect?.cancel()
+        notPairedRetries = 0
+        volumeSettlesAt = 0L
         state = TvState()
         recentApps = loadRecents(tv?.id)
         installedApps = emptyList()
         playJob?.cancel()
+        // Uma lista a meio de vir da TV anterior não pode impedir a desta (ver refreshChannels).
+        channelsJob?.cancel()
+        channelsJob = null
+        nowInfo = null
         hasChannels = tv?.let { prefs.getBoolean("goattv.${it.id}", false) } ?: false
         channels = null
         channelsStatus = ChannelsStatus.UNKNOWN

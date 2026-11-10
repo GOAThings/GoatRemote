@@ -151,6 +151,11 @@ class TvFinder(context: Context) {
     fun stop() {
         listeners.forEach { runCatching { nsd.stopServiceDiscovery(it) } }
         listeners.clear()
+        // Como no iPhone: a próxima procura começa do zero, sem TVs (e endereços) de antes.
+        synchronized(tvs) {
+            tvs.clear()
+            _found.value = emptyList()
+        }
     }
 
     private fun resolve(info: NsdServiceInfo, kind: TvKind) {
