@@ -86,20 +86,20 @@ final class RemoteModel {
     private(set) var volumeChanged = 0
 
     // Opções (Mais → Opções).
-    var haptics: Bool = UserDefaults.standard.object(forKey: StoreKeys.haptics) as? Bool ?? true {
-        didSet { UserDefaults.standard.set(haptics, forKey: StoreKeys.haptics) }
+    @ObservationIgnored private let options = Options()
+    var haptics: Bool {
+        get { options.haptics }
+        set { options.haptics = newValue }
     }
     /// Os botões de volume do iPhone mexem no volume da TV (com a app aberta).
-    var volumeButtons: Bool = UserDefaults.standard.object(forKey: StoreKeys.volumeButtons) as? Bool ?? true {
-        didSet { UserDefaults.standard.set(volumeButtons, forKey: StoreKeys.volumeButtons) }
+    var volumeButtons: Bool {
+        get { options.volumeButtons }
+        set { options.volumeButtons = newValue }
     }
-    /// Superfície de toque ou setas (D-pad). Quem tinha as "setas nas bordas" ligadas começa nas setas.
-    var layout: RemoteLayout = RemoteLayout.saved(UserDefaults.standard.string(forKey: StoreKeys.layout),
-                                                  dpadTaps: UserDefaults.standard.bool(forKey: StoreKeys.dpadTaps)) {
-        didSet {
-            UserDefaults.standard.set(layout.rawValue, forKey: StoreKeys.layout)
-            UserDefaults.standard.removeObject(forKey: StoreKeys.dpadTaps)
-        }
+    /// Superfície de toque ou setas (D-pad).
+    var layout: RemoteLayout {
+        get { options.layout }
+        set { options.layout = newValue }
     }
 
     private var link: TVControl? {

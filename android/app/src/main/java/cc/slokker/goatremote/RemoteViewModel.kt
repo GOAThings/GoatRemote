@@ -162,20 +162,16 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
         private set
 
     // Opções (Mais → Opções).
-    var haptics by mutableStateOf(prefs.getBoolean(PrefKeys.HAPTICS, true))
-        private set
+    private val options = Options(prefs)
+    val haptics: Boolean get() = options.haptics
     /** Os botões de volume do telemóvel mexem no volume da TV (com a app aberta). */
-    var volumeButtons by mutableStateOf(prefs.getBoolean(PrefKeys.VOLUME_BUTTONS, true))
-        private set
-    /** Superfície de toque ou setas (D-pad). Quem tinha as "setas nas bordas" ligadas começa nas setas. */
-    var layout by mutableStateOf(
-        RemoteLayout.saved(prefs.getString(PrefKeys.LAYOUT, null), prefs.getBoolean(PrefKeys.DPAD_TAPS, false)),
-    )
-        private set
+    val volumeButtons: Boolean get() = options.volumeButtons
+    /** Superfície de toque ou setas (D-pad). */
+    val layout: RemoteLayout get() = options.layout
 
-    fun changeHaptics(on: Boolean) { haptics = on; prefs.edit().putBoolean(PrefKeys.HAPTICS, on).apply() }
-    fun changeVolumeButtons(on: Boolean) { volumeButtons = on; prefs.edit().putBoolean(PrefKeys.VOLUME_BUTTONS, on).apply() }
-    fun changeLayout(new: RemoteLayout) { layout = new; prefs.edit().putString(PrefKeys.LAYOUT, new.name).remove(PrefKeys.DPAD_TAPS).apply() }
+    fun changeHaptics(on: Boolean) = options.changeHaptics(on)
+    fun changeVolumeButtons(on: Boolean) = options.changeVolumeButtons(on)
+    fun changeLayout(new: RemoteLayout) = options.changeLayout(new)
 
     private var link: TvControl?
         get() = session.link
