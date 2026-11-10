@@ -1,5 +1,7 @@
 package cc.slokker.goatremote.ui
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -23,7 +25,10 @@ import cc.slokker.goatremote.L
 import cc.slokker.goatremote.data.AppUpdater
 import kotlinx.coroutines.launch
 
-/** A versão instalada e, se houver outra mais recente, tocar para a instalar. */
+/**
+ * A versão instalada. Tocar procura já uma versão nova (e diz o que encontrou); com uma mais recente, tocar instala-a.
+ * Se o download falhar, abre-se a página da versão no GitHub.
+ */
 @Composable
 fun UpdateRow() {
     val context = LocalContext.current
@@ -36,7 +41,32 @@ fun UpdateRow() {
     }
     val version = newer
     Column(
-        Modifier.fillMaxWidth().clickable(enabled = version != null && !busy) {
+        Modifier.fillMaxWidth().clickable(enabled = !busy) {
+            if (version == null) {
+                busy = true
+                note = L("Checking…", "A procurar…")
+                scope.launch {
+                    note = try {
+                        val found = AppUpdater.newer()
+                        when {
+                            found == null -> L("You have the latest version", "Tens a versão mais recente")
+                            // As versões de teste não podem receber o APK publicado: só se diz que há.
+                            !AppUpdater.enabled -> L("Version $found is out", "Já saiu a versão $found")
+                            else -> {
+                                newer = found
+                                null
+                            }
+                        }
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        DebugLog.add("Update check failed: $e")
+                        L("Couldn't check for updates", "Não deu para procurar atualizações")
+                    }
+                    busy = false
+                }
+                return@clickable
+            }
             if (!AppUpdater.canInstall(context)) {
                 note = L("Allow GoatRemote to install apps, then tap again", "Autoriza o GoatRemote a instalar apps e toca outra vez")
                 AppUpdater.openInstallPermission(context)
@@ -50,6 +80,8 @@ fun UpdateRow() {
                     .onFailure {
                         DebugLog.add("Update download failed: $it")
                         note = L("Couldn't download the update", "Não foi possível descarregar a atualização")
+                        // Como no iPhone: a página da versão, para a descarregar à mão.
+                        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(AppUpdater.PAGE))) }
                     }
                 busy = false
             }
@@ -60,6 +92,6 @@ fun UpdateRow() {
             fontSize = 16.sp,
             color = if (version != null) Theme.accent else androidx.compose.ui.graphics.Color.White,
         )
-        Text(note ?: BuildConfig.VERSION_NAME, color = Theme.dim, fontSize = 13.sp)
+        Text(note ?: BuildConfig.VERSION_NAME, color = Theme.dim, fontSize = 13.sp, modifier = Modifier.testTag("opt:update-note"))
     }
 }

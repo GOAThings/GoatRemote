@@ -20,6 +20,8 @@ import java.net.URL
 object AppUpdater {
     private const val LATEST = "https://api.github.com/repos/GOAThings/GoatRemote/releases/latest"
     private const val APK = "https://github.com/GOAThings/GoatRemote/releases/latest/download/GoatRemote.apk"
+    /** A página da última versão, para descarregar à mão. */
+    const val PAGE = "https://github.com/GOAThings/GoatRemote/releases/latest"
 
     /** As versões de teste têm outro id e não podem receber o APK publicado. */
     val enabled: Boolean get() = BuildConfig.APPLICATION_ID == "cc.slokker.goatremote"
@@ -31,6 +33,7 @@ object AppUpdater {
         c.connectTimeout = 20_000
         c.readTimeout = 20_000
         try {
+            if (c.responseCode != 200) throw java.io.IOException("HTTP ${c.responseCode}")
             val version = JSONObject(c.inputStream.bufferedReader().readText()).getString("tag_name").removePrefix("v")
             version.takeIf { isNewer(it, BuildConfig.VERSION_NAME) }
         } finally {

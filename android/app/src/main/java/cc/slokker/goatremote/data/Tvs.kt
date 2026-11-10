@@ -38,6 +38,18 @@ data class SavedTv(
         }
 
     companion object {
+        /**
+         * As TVs guardadas que a procura encontrou noutro endereço (pelo id com que se guardaram, o mesmo que as marca
+         * "Emparelhada"), já com o IP novo. Só a Apple TV guarda a porta: a da Android TV é sempre a mesma. O
+         * certificado fica: continua a ser a mesma TV.
+         */
+        fun moved(saved: List<SavedTv>, found: List<FoundTv>): List<SavedTv> = saved.mapNotNull { tv ->
+            val seen = found.firstOrNull { it.id == tv.id && it.kind == tv.kind } ?: return@mapNotNull null
+            val host = seen.host?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+            val port = if (tv.kind == TvKind.APPLE) seen.port ?: tv.port else tv.port
+            if (host == tv.host && port == tv.port) null else tv.copy(host = host, port = port)
+        }
+
         fun fromJson(o: JSONObject) = SavedTv(
             id = o.getString("id"),
             name = o.getString("name"),

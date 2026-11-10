@@ -554,6 +554,23 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     init {
+        // Uma TV guardada que a procura encontrou noutro IP: guarda-se o novo, para voltar a ligar e para "Emparelhar
+        // esta TV outra vez" irem ao sítio certo.
+        viewModelScope.launch { finder.found.collect(::relocate) }
+    }
+
+    private fun relocate(found: List<FoundTv>) {
+        for (tv in SavedTv.moved(store.all, found)) {
+            DebugLog.add("${tv.name} moved to ${tv.host}${tv.port?.let { ":$it" } ?: ""}")
+            store.save(tv)
+            tvs = store.all
+            if (current?.id != tv.id) continue
+            current = tv
+            if (status is Status.Unreachable) connect()
+        }
+    }
+
+    init {
         // Com o GoatTV à frente e a lista dele, a cada 3 s: o canal pode mudar pelo comando da TV.
         viewModelScope.launch {
             while (true) {
@@ -682,6 +699,9 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
         channelsStatus = ChannelsStatus.UNKNOWN
         openingGoatTv = false
         playProblem = null
+        // O indicador do volume era da TV anterior.
+        volumePressed = null
+        volumeProblem = null
     }
 
     fun forget(tv: SavedTv) {

@@ -9,9 +9,12 @@ import cc.slokker.goatremote.apple.Plist
 import cc.slokker.goatremote.apple.Rti
 import cc.slokker.goatremote.apple.SrpClient
 import cc.slokker.goatremote.apple.Tlv8
+import cc.slokker.goatremote.data.FoundTv
 import cc.slokker.goatremote.data.GoatTvChannels
 import cc.slokker.goatremote.data.NowInfo
 import cc.slokker.goatremote.data.Programme
+import cc.slokker.goatremote.data.SavedTv
+import cc.slokker.goatremote.data.TvKind
 import cc.slokker.goatremote.data.imageSampleSize
 import cc.slokker.goatremote.tv.Key
 import cc.slokker.goatremote.tv.LauncherVolume
@@ -537,5 +540,28 @@ class CoreTest {
         assertEquals(CompanionIdentity.Verdict.FIRST_SEEN, CompanionIdentity.check(one, false, true, null))
         assertEquals(CompanionIdentity.Verdict.PINNED, CompanionIdentity.check(one, false, true, byteArrayOf(1)))
         assertEquals(CompanionIdentity.Verdict.REJECTED, CompanionIdentity.check(one, false, true, two))
+    }
+
+    /** Uma TV guardada que aparece noutro IP fica com o endereço novo; a porta só conta na Apple TV. */
+    @Test
+    fun movedTvs() {
+        val shield = SavedTv("SHIELD", "SHIELD", "192.168.1.10", certSha256 = "aa")
+        val apple = SavedTv("apple:Sala", "Sala", "192.168.1.20", TvKind.APPLE, 49153)
+        val manual = SavedTv("192.168.1.30", "192.168.1.30", "192.168.1.30")
+        val saved = listOf(shield, apple, manual)
+        // No mesmo sítio (a porta da Android TV não conta): nada muda.
+        assertEquals(emptyList<SavedTv>(), SavedTv.moved(saved, listOf(FoundTv("SHIELD", TvKind.ANDROID, "192.168.1.10", 6466),
+            FoundTv("Sala", TvKind.APPLE, "192.168.1.20", 49153))))
+        val moved = SavedTv.moved(saved, listOf(
+            FoundTv("SHIELD", TvKind.ANDROID, "192.168.1.11", 6466),
+            FoundTv("Sala", TvKind.APPLE, "192.168.1.20", 49200),
+            // Outro tipo com o mesmo nome, sem endereço, ou desconhecida: não conta.
+            FoundTv("Sala", TvKind.ANDROID, "192.168.1.99", 6466),
+            FoundTv("192.168.1.30", TvKind.ANDROID, null, 6466),
+            FoundTv("Quarto", TvKind.ANDROID, "192.168.1.40", 6466),
+        ))
+        assertEquals(listOf(shield.copy(host = "192.168.1.11"), apple.copy(port = 49200)), moved)
+        assertEquals("aa", moved[0].certSha256)
+        assertNull(moved[0].port)
     }
 }

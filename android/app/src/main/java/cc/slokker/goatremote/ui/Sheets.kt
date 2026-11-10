@@ -69,6 +69,7 @@ import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material.icons.rounded.Tv
 import androidx.compose.material.icons.rounded.VolumeDown
 import androidx.compose.material.icons.rounded.VolumeUp
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -552,6 +553,20 @@ fun DiagnosticsSheet(onDismiss: () -> Unit) {
     var contact by remember { mutableStateOf("") }
     var sending by remember { mutableStateOf(false) }
     var result by remember { mutableStateOf<String?>(null) }
+    var confirmClear by remember { mutableStateOf(false) }
+    if (confirmClear) {
+        ConfirmDialog(
+            L("Clear the diagnostics log?", "Limpar o registo de diagnóstico?"),
+            L("What the app did so far will be gone, and can't be sent in a report.",
+                "O que a app fez até agora desaparece, e já não pode ir num relatório."),
+            L("Clear", "Limpar"),
+            onConfirm = {
+                DebugLog.clear()
+                text = DebugLog.text
+            },
+            onDismiss = { confirmClear = false },
+        )
+    }
     val fieldColors = OutlinedTextFieldDefaults.colors(
         focusedBorderColor = Theme.accent, unfocusedBorderColor = Theme.faint, cursorColor = Theme.accent,
         focusedTextColor = Color.White, unfocusedTextColor = Color.White,
@@ -616,7 +631,7 @@ fun DiagnosticsSheet(onDismiss: () -> Unit) {
                     context.startActivity(Intent.createChooser(send, null))
                 }, Modifier.testTag("diagnostics:share")) { Text(L("Share", "Partilhar"), color = Color.White) }
                 TextButton({ clipboard.setText(AnnotatedString(text)) }) { Text(L("Copy", "Copiar"), color = Color.White) }
-                TextButton({ DebugLog.clear(); text = DebugLog.text }) { Text(L("Clear", "Limpar"), color = Theme.dim) }
+                TextButton({ confirmClear = true }, Modifier.testTag("diagnostics:clear")) { Text(L("Clear", "Limpar"), color = Theme.dim) }
             }
             Text(L("Never includes PINs, codes or keys. Nothing is sent until you send or share it.",
                 "Nunca tem PINs, códigos nem chaves. Nada sai do telemóvel até o enviares ou partilhares."), color = Theme.dim, fontSize = 13.sp)
@@ -723,9 +738,35 @@ private fun CardColumn(content: @Composable ColumnScope.() -> Unit) =
 @Composable
 private fun RowDivider() = HorizontalDivider(color = Theme.line, modifier = Modifier.padding(start = 64.dp))
 
+/** Uma pergunta antes de algo que não se desfaz: [action] a vermelho confirma, Cancelar não faz nada. */
+@Composable
+fun ConfirmDialog(title: String, text: String?, action: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = text?.let { { Text(it, color = Theme.dim) } },
+        confirmButton = {
+            TextButton({ onDismiss(); onConfirm() }, Modifier.testTag("confirm")) { Text(action, color = Theme.power) }
+        },
+        dismissButton = { TextButton(onDismiss) { Text(L("Cancel", "Cancelar"), color = Theme.text) } },
+        containerColor = Theme.surface,
+        titleContentColor = Color.White,
+    )
+}
+
 @Composable
 private fun SavedTvRow(vm: RemoteViewModel, tv: SavedTv, onDismiss: () -> Unit) {
     val selected = tv.id == vm.current?.id
+    var confirmForget by remember { mutableStateOf(false) }
+    if (confirmForget) {
+        ConfirmDialog(
+            L("Forget ${tv.name}?", "Esquecer ${tv.name}?"),
+            L("To use it again, you'll have to pair it again.", "Para a voltares a usar, tens de a emparelhar outra vez."),
+            L("Forget", "Esquecer"),
+            onConfirm = { vm.forget(tv) },
+            onDismiss = { confirmForget = false },
+        )
+    }
     Row(
         Modifier.fillMaxWidth().clickable {
             vm.select(tv)
@@ -740,7 +781,9 @@ private fun SavedTvRow(vm: RemoteViewModel, tv: SavedTv, onDismiss: () -> Unit) 
             Text(subtitle(vm, tv), color = Theme.faint, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         if (selected) Icon(Icons.Rounded.Check, null, tint = Theme.accent)
-        IconButton(onClick = { vm.forget(tv) }) { Icon(Icons.Rounded.Delete, L("Forget", "Esquecer"), tint = Theme.faint) }
+        IconButton(onClick = { confirmForget = true }, Modifier.testTag("forget:" + tv.name)) {
+            Icon(Icons.Rounded.Delete, L("Forget", "Esquecer"), tint = Theme.faint)
+        }
     }
 }
 
