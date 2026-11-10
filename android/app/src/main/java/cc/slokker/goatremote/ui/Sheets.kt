@@ -477,7 +477,7 @@ private fun ChannelRow(vm: RemoteViewModel, channel: TvChannel, current: Boolean
             if (group != null) Text(group, color = Theme.faint, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         if (current) Icon(Icons.Rounded.PlayArrow, null, tint = Theme.accent, modifier = Modifier.size(20.dp))
-        else if (channel.favorite) Icon(Icons.Rounded.Star, null, tint = Color(0xFFF5C04A), modifier = Modifier.size(18.dp))
+        else if (channel.favorite) Icon(Icons.Rounded.Star, null, tint = Theme.favorite, modifier = Modifier.size(18.dp))
     }
 }
 

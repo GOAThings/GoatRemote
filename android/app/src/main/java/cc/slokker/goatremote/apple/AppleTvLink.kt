@@ -1,8 +1,8 @@
 package cc.slokker.goatremote.apple
 
 import android.content.Context
-import android.util.Base64
 import cc.slokker.goatremote.DebugLog
+import cc.slokker.goatremote.data.PrefKeys
 import cc.slokker.goatremote.tv.Key
 import cc.slokker.goatremote.tv.KeyDirection
 import cc.slokker.goatremote.tv.NotPairedException
@@ -41,25 +41,32 @@ class CompanionCredentials(
     fun copy(viaAirPlay: Boolean = this.viaAirPlay, companionId: ByteArray? = this.companionId) =
         CompanionCredentials(tvPublicKey, privateKey, tvId, clientId, viaAirPlay, companionId)
 
+    /** O JSON guardado (contracts/persisted/android/companion.json): Base64 sem quebras de linha. */
+    fun toJson(): JSONObject {
+        val json = JSONObject()
+            .put("tvPublicKey", b64(tvPublicKey)).put("privateKey", b64(privateKey))
+            .put("tvID", b64(tvId)).put("clientID", b64(clientId))
+        if (viaAirPlay) json.put("viaAirPlay", true)
+        companionId?.let { json.put("companionID", b64(it)) }
+        return json
+    }
+
     companion object {
-        private fun prefs(context: Context) = context.getSharedPreferences("companion", Context.MODE_PRIVATE)
-        private fun b64(b: ByteArray) = Base64.encodeToString(b, Base64.NO_WRAP)
-        private fun bytes(s: String) = Base64.decode(s, Base64.NO_WRAP)
+        private fun prefs(context: Context) = context.getSharedPreferences(PrefKeys.COMPANION_PREFS, Context.MODE_PRIVATE)
+        // O mesmo que o Base64.NO_WRAP do Android (alfabeto normal, com "=", sem quebras), mas também nos testes da JVM.
+        private fun b64(b: ByteArray) = java.util.Base64.getEncoder().encodeToString(b)
+        private fun bytes(s: String) = java.util.Base64.getDecoder().decode(s)
+
+        fun fromJson(json: JSONObject) = CompanionCredentials(bytes(json.getString("tvPublicKey")), bytes(json.getString("privateKey")),
+            bytes(json.getString("tvID")), bytes(json.getString("clientID")), json.optBoolean("viaAirPlay", false),
+            json.optString("companionID").ifEmpty { null }?.let(::bytes))
 
         fun load(context: Context, tvId: String): CompanionCredentials? = runCatching {
-            val json = JSONObject(prefs(context).getString(tvId, null) ?: return null)
-            CompanionCredentials(bytes(json.getString("tvPublicKey")), bytes(json.getString("privateKey")),
-                bytes(json.getString("tvID")), bytes(json.getString("clientID")), json.optBoolean("viaAirPlay", false),
-                json.optString("companionID").ifEmpty { null }?.let(::bytes))
+            fromJson(JSONObject(prefs(context).getString(tvId, null) ?: return null))
         }.getOrNull()
 
         fun save(context: Context, tvId: String, c: CompanionCredentials) {
-            val json = JSONObject()
-                .put("tvPublicKey", b64(c.tvPublicKey)).put("privateKey", b64(c.privateKey))
-                .put("tvID", b64(c.tvId)).put("clientID", b64(c.clientId))
-            if (c.viaAirPlay) json.put("viaAirPlay", true)
-            c.companionId?.let { json.put("companionID", b64(it)) }
-            prefs(context).edit().putString(tvId, json.toString()).apply()
+            prefs(context).edit().putString(tvId, c.toJson().toString()).apply()
         }
 
         fun delete(context: Context, tvId: String) {

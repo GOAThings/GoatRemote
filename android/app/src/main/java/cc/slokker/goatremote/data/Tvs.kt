@@ -63,21 +63,21 @@ data class SavedTv(
 
 /** As TVs guardadas e a escolhida. */
 class TvStore(context: Context) {
-    private val prefs = context.getSharedPreferences("tvs", Context.MODE_PRIVATE)
+    private val prefs = context.getSharedPreferences(PrefKeys.TVS_PREFS, Context.MODE_PRIVATE)
 
     var all: List<SavedTv>
         get() = runCatching {
-            val array = JSONArray(prefs.getString("tvs", "[]"))
+            val array = JSONArray(prefs.getString(PrefKeys.TVS, "[]"))
             (0 until array.length()).map { SavedTv.fromJson(array.getJSONObject(it)) }
         }.getOrDefault(emptyList())
         set(value) {
-            prefs.edit().putString("tvs", JSONArray(value.map { it.toJson() }).toString()).apply()
+            prefs.edit().putString(PrefKeys.TVS, JSONArray(value.map { it.toJson() }).toString()).apply()
         }
 
     var currentId: String?
-        get() = prefs.getString("current", null)
+        get() = prefs.getString(PrefKeys.CURRENT, null)
         set(value) {
-            prefs.edit().putString("current", value).apply()
+            prefs.edit().putString(PrefKeys.CURRENT, value).apply()
         }
 
     val current: SavedTv?

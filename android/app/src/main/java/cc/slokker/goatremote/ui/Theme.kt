@@ -76,8 +76,12 @@ object Theme {
     val faint = Color(0xFFEBEBF5).copy(alpha = 0.38f)
     val line = Color.White.copy(alpha = 0.08f)
     val gradient = Brush.linearGradient(listOf(accent, accent2))
+    val heroTop = Color(0xFF1D2236)
+    val heroBottom = Color(0xFF0E1018)
+    /** A estrela dos canais favoritos. */
+    val favorite = Color(0xFFF5C04A)
     /** O cartão do que está a dar: o azul-escuro do GoatTV com um brilho do destaque no canto. */
-    val hero = Brush.linearGradient(listOf(Color(0xFF1D2236), Color(0xFF0E1018)))
+    val hero = Brush.linearGradient(listOf(heroTop, heroBottom))
 
     val colors: ColorScheme = darkColorScheme(
         primary = accent,

@@ -23,7 +23,9 @@ import cc.slokker.goatremote.data.AppCatalog
 import cc.slokker.goatremote.data.ChannelList
 import cc.slokker.goatremote.data.FoundTv
 import cc.slokker.goatremote.data.GoatTvChannels
+import cc.slokker.goatremote.data.LauncherApps
 import cc.slokker.goatremote.data.NowInfo
+import cc.slokker.goatremote.data.PrefKeys
 import cc.slokker.goatremote.data.SavedTv
 import cc.slokker.goatremote.data.TvApp
 import cc.slokker.goatremote.data.TvChannel
@@ -73,7 +75,15 @@ sealed interface Phase {
 fun L(en: String, pt: String) = if (Locale.getDefault().language == "pt") pt else en
 
 /** O meio do comando: a superfície de toque (deslizar) ou as setas com o OK, como num comando físico. */
-enum class RemoteLayout { TOUCH, DPAD }
+enum class RemoteLayout {
+    TOUCH, DPAD;
+
+    companion object {
+        /** O guardado (o nome, "TOUCH" ou "DPAD"); sem ele, quem tinha as "setas nas bordas" ligadas começa nas setas. */
+        fun saved(value: String?, dpadTaps: Boolean): RemoteLayout =
+            value?.let { saved -> entries.firstOrNull { it.name == saved } } ?: if (dpadTaps) DPAD else TOUCH
+    }
+}
 
 /** O estado da app: as TVs, a ligação à escolhida e o emparelhamento. */
 class RemoteViewModel(app: Application) : AndroidViewModel(app) {
@@ -89,7 +99,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
     internal val appContext: Context get() = getApplication()
     private val context: Context get() = appContext
     private val store = TvStore(app)
-    private val prefs = app.getSharedPreferences("options", Context.MODE_PRIVATE)
+    private val prefs = app.getSharedPreferences(PrefKeys.OPTIONS_PREFS, Context.MODE_PRIVATE)
     internal val identities = IdentityStore(File(app.filesDir, "identity"))
     val finder = TvFinder(app)
 
@@ -114,7 +124,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
         private set
 
     /** A TV tem o GoatTV com os canais para o telemóvel (já respondeu a /channels): mostra-se o botão Canais. */
-    var hasChannels by mutableStateOf(store.current?.let { prefs.getBoolean("goattv.${it.id}", false) } ?: false)
+    var hasChannels by mutableStateOf(store.current?.let { prefs.getBoolean(PrefKeys.goatTv(it.id), false) } ?: false)
         private set
     /** A lista de canais do GoatTV (null enquanto não veio, ou com o GoatTV fechado). */
     var channels by mutableStateOf<ChannelList?>(null)
@@ -145,21 +155,20 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
         private set
 
     // Opções (Mais → Opções).
-    var haptics by mutableStateOf(prefs.getBoolean("haptics", true))
+    var haptics by mutableStateOf(prefs.getBoolean(PrefKeys.HAPTICS, true))
         private set
     /** Os botões de volume do telemóvel mexem no volume da TV (com a app aberta). */
-    var volumeButtons by mutableStateOf(prefs.getBoolean("volumeButtons", true))
+    var volumeButtons by mutableStateOf(prefs.getBoolean(PrefKeys.VOLUME_BUTTONS, true))
         private set
     /** Superfície de toque ou setas (D-pad). Quem tinha as "setas nas bordas" ligadas começa nas setas. */
     var layout by mutableStateOf(
-        prefs.getString("layout", null)?.let { saved -> RemoteLayout.entries.firstOrNull { it.name == saved } }
-            ?: if (prefs.getBoolean("dpadTaps", false)) RemoteLayout.DPAD else RemoteLayout.TOUCH,
+        RemoteLayout.saved(prefs.getString(PrefKeys.LAYOUT, null), prefs.getBoolean(PrefKeys.DPAD_TAPS, false)),
     )
         private set
 
-    fun changeHaptics(on: Boolean) { haptics = on; prefs.edit().putBoolean("haptics", on).apply() }
-    fun changeVolumeButtons(on: Boolean) { volumeButtons = on; prefs.edit().putBoolean("volumeButtons", on).apply() }
-    fun changeLayout(new: RemoteLayout) { layout = new; prefs.edit().putString("layout", new.name).remove("dpadTaps").apply() }
+    fun changeHaptics(on: Boolean) { haptics = on; prefs.edit().putBoolean(PrefKeys.HAPTICS, on).apply() }
+    fun changeVolumeButtons(on: Boolean) { volumeButtons = on; prefs.edit().putBoolean(PrefKeys.VOLUME_BUTTONS, on).apply() }
+    fun changeLayout(new: RemoteLayout) { layout = new; prefs.edit().putString(PrefKeys.LAYOUT, new.name).remove(PrefKeys.DPAD_TAPS).apply() }
 
     private var link: TvControl? = null
         set(value) {
@@ -291,19 +300,19 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
         if (app == GoatTvChannels.ANDROID_PACKAGE && app != old.currentApp && hasChannels) refreshChannels()
         if (app != null && app != old.currentApp && !AppCatalog.isLauncher(app)) {
             recentApps = (listOf(app) + recentApps.filterNot { it == app }).take(12)
-            current?.id?.let { prefs.edit().putString("recents.$it", JSONArray(recentApps).toString()).apply() }
+            current?.id?.let { prefs.edit().putString(PrefKeys.recents(it), JSONArray(recentApps).toString()).apply() }
         }
     }
 
     private fun loadRecents(id: String?): List<String> {
         id ?: return emptyList()
         val saved = runCatching {
-            val array = JSONArray(prefs.getString("recents.$id", "[]"))
+            val array = JSONArray(prefs.getString(PrefKeys.recents(id), "[]"))
             (0 until array.length()).map { array.getString(it) }
         }.getOrNull() ?: return emptyList()
         // O que não for um nome de pacote não volta a ler-se.
         val recents = saved.filter { RemoteProtocol.isPackageName(it) }.distinct().take(12)
-        if (recents != saved) prefs.edit().putString("recents.$id", JSONArray(recents).toString()).apply()
+        if (recents != saved) prefs.edit().putString(PrefKeys.recents(id), JSONArray(recents).toString()).apply()
         return recents
     }
 
@@ -314,9 +323,9 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
         TvKind.ANDROID -> AndroidTvLink(tv.host, identities::get, BuildConfig.VERSION_NAME, Build.MODEL, store.certificate(tv.id))
     }
 
-    internal fun stableId(): String = prefs.getString("companion.id", null) ?: (0 until 6)
+    internal fun stableId(): String = prefs.getString(PrefKeys.COMPANION_ID, null) ?: (0 until 6)
         .joinToString("") { "%02x".format((0..255).random()) }
-        .also { prefs.edit().putString("companion.id", it).apply() }
+        .also { prefs.edit().putString(PrefKeys.COMPANION_ID, it).apply() }
 
     // ---- Apps da TV (GoatLauncher; na Apple TV, a própria TV) ----
 
@@ -362,7 +371,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
                     }
                 }.getOrDefault(0)
             }
-            if (status != 200) {
+            if (LauncherApps.openFallsBack(status)) {
                 DebugLog.add("Launcher didn't open it (HTTP $status), using the remote's link")
                 if (current?.id == tv.id) open(app.link, haptic = false)
             }
@@ -381,14 +390,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
                     c.readTimeout = 4000
                     try {
                         if (c.responseCode != 200) return@runCatching null
-                        val array = JSONArray(String(c.inputStream.readLimited(MAX_APPS_BYTES), Charsets.UTF_8))
-                        // Uma app mal descrita fica de fora; as outras contam.
-                        (0 until array.length()).mapNotNull { i ->
-                            runCatching {
-                                val o = array.getJSONObject(i)
-                                TvApp(o.getString("package"), o.getString("label"), o.optBoolean("banner"), o.optString("color").ifEmpty { null })
-                            }.getOrNull()
-                        }.distinctBy { it.pkg }
+                        LauncherApps.parse(String(c.inputStream.readLimited(LauncherApps.MAX_BYTES), Charsets.UTF_8))
                     } finally {
                         c.disconnect()
                     }
@@ -456,7 +458,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
                 channelsStatus = ChannelsStatus.READY
                 if (!hasChannels) DebugLog.add("GoatTV channels on ${tv.name}: ${list.channels.size}")
                 hasChannels = true
-                prefs.edit().putBoolean("goattv.${tv.id}", true).apply()
+                prefs.edit().putBoolean(PrefKeys.goatTv(tv.id), true).apply()
             }
             refused || status == 503 -> {
                 channels = null
@@ -708,7 +710,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
         channelsJob?.cancel()
         channelsJob = null
         nowInfo = null
-        hasChannels = tv?.let { prefs.getBoolean("goattv.${it.id}", false) } ?: false
+        hasChannels = tv?.let { prefs.getBoolean(PrefKeys.goatTv(it.id), false) } ?: false
         channels = null
         channelsStatus = ChannelsStatus.UNKNOWN
         openingGoatTv = false
@@ -721,7 +723,9 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
     fun forget(tv: SavedTv) {
         if (tv.kind == TvKind.APPLE) CompanionCredentials.delete(context, tv.id)
         store.remove(tv.id)
-        prefs.edit().remove("recents.${tv.id}").remove("launcher.${tv.id}").remove("volumeUnknown.${tv.id}").remove("goattv.${tv.id}").apply()
+        val edit = prefs.edit()
+        PrefKeys.perTvKeys(tv.id).forEach { edit.remove(it) }
+        edit.apply()
         tvs = store.all
         if (current?.id == tv.id) {
             link?.close()
@@ -783,16 +787,16 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
      * ter respondido; esquecer a TV limpa o que se sabe, se o launcher saiu mesmo de lá.
      */
     private fun hasLauncher(tvId: String): Boolean? =
-        if (prefs.contains("launcher.$tvId")) prefs.getBoolean("launcher.$tvId", false) else null
+        if (prefs.contains(PrefKeys.launcher(tvId))) prefs.getBoolean(PrefKeys.launcher(tvId), false) else null
 
-    private fun setLauncher(tvId: String, value: Boolean) = prefs.edit().putBoolean("launcher.$tvId", value).apply()
+    private fun setLauncher(tvId: String, value: Boolean) = prefs.edit().putBoolean(PrefKeys.launcher(tvId), value).apply()
 
     /**
      * Com HDMI-CEC, o volume está na TV e a box não sabe o valor: o que reporta não diz nada. Descobre-se ao
      * carregar: o launcher mudou o volume e o valor não mexeu. Fica guardado por TV.
      */
     private val volumeUnknown: Boolean
-        get() = current?.let { prefs.getBoolean("volumeUnknown.${it.id}", false) } ?: false
+        get() = current?.let { prefs.getBoolean(PrefKeys.volumeUnknown(it.id), false) } ?: false
 
     private var volumeSettlesAt = 0L
 
@@ -839,7 +843,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
                     delay(800)
                     if (current?.id == tv.id) {
                         val unknown = state.volume == beforeVolume && state.muted == beforeMuted
-                        prefs.edit().putBoolean("volumeUnknown.${tv.id}", unknown).apply()
+                        prefs.edit().putBoolean(PrefKeys.volumeUnknown(tv.id), unknown).apply()
                         volumePressed = if (unknown) key else null
                         if (unknown) volumeChanged++
                     }
@@ -926,8 +930,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
     internal fun describe(e: Throwable): String = e.message?.takeIf { it.isNotBlank() } ?: e.javaClass.simpleName
 
     companion object {
-        const val LAUNCHER_PORT = 6470
-        private const val MAX_APPS_BYTES = 2 shl 20
+        const val LAUNCHER_PORT = LauncherApps.PORT
     }
 }
 
