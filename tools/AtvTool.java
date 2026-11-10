@@ -458,6 +458,9 @@ public class AtvTool {
         FakeTv(Path dir) throws Exception {
             this.dir = dir;
             this.id = Identity.load(dir, "tv");
+            // Os telemóveis emparelhados ficam na pasta: a TV falsa pode reiniciar a meio de um teste (voltar a ligar).
+            Path saved = dir.resolve("paired.txt");
+            if (Files.exists(saved)) paired.addAll(Files.readAllLines(saved));
         }
 
         void run() throws Exception {
@@ -516,6 +519,7 @@ public class AtvTool {
                     code = "";
                     if (ok) {
                         paired.add(fingerprint(peer));
+                        Files.write(dir.resolve("paired.txt"), paired);
                         note("emparelhado");
                         send(out, pmsg(200, 41, new W().bytes(1, expected)));
                     } else {
@@ -616,11 +620,27 @@ public class AtvTool {
          */
         void launcherApps() throws IOException {
             // Desenhados já (desenhar na hora é lento no Mac do CI e o telemóvel desistia à espera).
-            Map<String, byte[]> icons = new HashMap<>();
             for (int i = 0; i < APPS.length; i++) icons.put(APPS[i][0], drawIcon(APPS[i][1], APPS[i][2], i < 2));
-            ServerSocket http = new ServerSocket(6470);
+            launcherOn();
+        }
+
+        final Map<String, byte[]> icons = new HashMap<>();
+        ServerSocket launcherSocket;
+
+        /** Fecha a porta 6470 (o launcher "não está a correr": o telemóvel vê a ligação recusada). */
+        synchronized void launcherOff() throws IOException {
+            if (launcherSocket != null) launcherSocket.close();
+            launcherSocket = null;
+        }
+
+        synchronized void launcherOn() throws IOException {
+            if (launcherSocket != null) return;
+            ServerSocket http = new ServerSocket();
+            http.setReuseAddress(true);
+            http.bind(new InetSocketAddress(6470));
+            launcherSocket = http;
             Thread.ofPlatform().daemon().start(() -> {
-                while (true) {
+                while (!http.isClosed()) {
                     try (Socket c = http.accept()) {
                         BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), StandardCharsets.UTF_8));
                         String line = r.readLine();
@@ -792,13 +812,16 @@ public class AtvTool {
                             case "/log" -> String.join("\n", log);
                             case "/state" -> "on=" + on + "\nvolume=" + volume + "\nmuted=" + muted + "\napp=" + app;
                             // Muda de canal como o comando da própria TV (o telemóvel só sabe pelo /now).
+                            // O GoatLauncher pára e volta (para o volume e as apps sem launcher).
+                            case "/launcher/off" -> { launcherOff(); note("launcher off"); yield "off"; }
+                            case "/launcher/on" -> { launcherOn(); note("launcher on"); yield "on"; }
                             case "/zap" -> {
                                 int i = 0;
                                 while (i < CHANNELS.length && !CHANNELS[i][0].equals(channel)) i++;
                                 channel = (String) CHANNELS[(i + 1) % CHANNELS.length][0];
                                 yield channel;
                             }
-                            default -> "code log state zap";
+                            default -> "code log state zap launcher/off launcher/on";
                         };
                         byte[] b = body.getBytes(StandardCharsets.UTF_8);
                         OutputStream o = c.getOutputStream();
