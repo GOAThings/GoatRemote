@@ -452,6 +452,7 @@ public class AtvTool {
         volatile boolean muted = false;
         /** A ligação do comando aberta agora (para o volume pedido pelo "GoatLauncher" chegar ao telemóvel). */
         volatile OutputStream remoteOut;
+        volatile SSLSocket remoteSocket;
         volatile String app = "com.google.android.youtube.tv";
         int imeCounter = 1, fieldCounter = 1;
 
@@ -539,6 +540,7 @@ public class AtvTool {
             InputStream in = s.getInputStream();
             OutputStream out = s.getOutputStream();
             remoteOut = out;
+            remoteSocket = s;
             send(out, new W().msg(1, new W().varint(1, 622).msg(2, deviceInfo("Android TV", "GOAT", "fake"))).done());
             note("ligado ao comando");
             ScheduledExecutorService ping = Executors.newSingleThreadScheduledExecutor();
@@ -815,13 +817,20 @@ public class AtvTool {
                             // O GoatLauncher pára e volta (para o volume e as apps sem launcher).
                             case "/launcher/off" -> { launcherOff(); note("launcher off"); yield "off"; }
                             case "/launcher/on" -> { launcherOn(); note("launcher on"); yield "on"; }
+                            // A TV fecha a ligação do comando (como a SHIELD ao mudar de canal); aceita a seguinte.
+                            case "/drop" -> {
+                                SSLSocket dropped = remoteSocket;
+                                if (dropped != null) dropped.close();
+                                note("ligação do comando fechada");
+                                yield "dropped";
+                            }
                             case "/zap" -> {
                                 int i = 0;
                                 while (i < CHANNELS.length && !CHANNELS[i][0].equals(channel)) i++;
                                 channel = (String) CHANNELS[(i + 1) % CHANNELS.length][0];
                                 yield channel;
                             }
-                            default -> "code log state zap launcher/off launcher/on";
+                            default -> "code log state zap launcher/off launcher/on drop";
                         };
                         byte[] b = body.getBytes(StandardCharsets.UTF_8);
                         OutputStream o = c.getOutputStream();
