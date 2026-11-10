@@ -6,17 +6,20 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 /**
- * As teclas mantidas (o OK longo, uma seta a repetir) de uma sessão: os temporizadores correm aqui, não no ecrã. Um
+ * As teclas mantidas (o OK longo, uma seta a repetir) de uma sessão: os temporizadores ficam aqui, não só no ecrã. Um
  * controlo que sai do ecrã a meio (a TV desligou-se, mudou o layout) chama [end]: a repetição pára e um OK longo
  * acaba com o fim do toque longo (B5: antes a repetição podia continuar sozinha, ou o OK ficava "carregado" na TV).
  */
-class KeyHold(private val scope: CoroutineScope) {
+class KeyHold {
     private val jobs = mutableSetOf<Job>()
     private var long: Key? = null
     private var endLong: ((Key) -> Unit)? = null
 
-    /** Um temporizador ou repetição desta tecla mantida. */
-    fun later(block: suspend CoroutineScope.() -> Unit): Job {
+    /**
+     * Um temporizador ou repetição desta tecla mantida, no [scope] do controlo (o relógio dele é o dos testes de
+     * interface), mas guardado aqui para [end] o poder parar.
+     */
+    fun later(scope: CoroutineScope, block: suspend CoroutineScope.() -> Unit): Job {
         val job = scope.launch(block = block)
         jobs.add(job)
         job.invokeOnCompletion { jobs.remove(job) }

@@ -56,11 +56,12 @@ class TvSession(
     var notPairedRetries = 0
     var volumeSettlesAt = 0L
     /** As teclas mantidas desta TV (ver [KeyHold]). */
-    val keyHold = KeyHold(scope)
+    val keyHold = KeyHold()
     /** O GoatTV desta TV não tem o /now (responde 404): até voltar a ligar, não se pergunta. */
     var withoutNow = false
 
     fun close() {
+        keyHold.end()
         scope.cancel()
         link?.close()
         link = null

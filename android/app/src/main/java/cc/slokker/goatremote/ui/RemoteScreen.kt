@@ -500,7 +500,7 @@ private fun TouchSurface(vm: RemoteViewModel) {
                     // Dedo parado depois de deslizar: a mesma direção repete-se, cada vez mais depressa.
                     var repeating: Job? = null
                     val key = Key.CENTER
-                    val timer: Job = vm.keyHold.later {
+                    val timer: Job = vm.keyHold.later(scope) {
                         delay(Gestures.Touch.HOLD_MS)
                         if (!moved) {
                             holding = key
@@ -526,7 +526,7 @@ private fun TouchSurface(vm: RemoteViewModel) {
                             anchor = change.position
                             moved = true
                             val position = change.position
-                            repeating = vm.keyHold.later {
+                            repeating = vm.keyHold.later(scope) {
                                 delay(Gestures.Touch.REPEAT_AFTER_MS)
                                 vm.repeatStarted()
                                 var interval = Gestures.Touch.REPEAT_START_MS
@@ -597,7 +597,7 @@ private fun Dpad(vm: RemoteViewModel, ready: Boolean) {
                         lit = key
                         scope.launch { glow.snapTo(1f) }
                         var held = false
-                        val timer = vm.keyHold.later {
+                        val timer = vm.keyHold.later(scope) {
                             if (key == Key.CENTER) {
                                 delay(Gestures.Dpad.CENTRE_HOLD_MS)
                                 held = true
