@@ -627,6 +627,10 @@ public class AtvTool {
         }
 
         final Map<String, byte[]> icons = new HashMap<>();
+        /** /open responde 409 (ver o controlo /switch/open409). */
+        volatile boolean openConflict;
+        /** O GoatTV responde 503 a tudo (sem lista; ver o controlo /switch/goattv503). */
+        volatile boolean goatTvUnavailable;
         ServerSocket launcherSocket;
 
         /** Fecha a porta 6470 (o launcher "não está a correr": o telemóvel vê a ligação recusada). */
@@ -647,9 +651,12 @@ public class AtvTool {
                         BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), StandardCharsets.UTF_8));
                         String line = r.readLine();
                         String path = line == null ? "/" : line.split(" ")[1];
+                        boolean post = line != null && line.startsWith("POST ");
+                        boolean get = line != null && line.startsWith("GET ");
+                        int status = 200;
                         byte[] body;
                         String type;
-                        if (path.equals("/apps")) {
+                        if (path.equals("/apps") && get) {
                             StringBuilder j = new StringBuilder("[");
                             for (int i = 0; i < APPS.length; i++) {
                                 if (i > 0) j.append(',');
@@ -658,7 +665,7 @@ public class AtvTool {
                             }
                             body = j.append(']').toString().getBytes(StandardCharsets.UTF_8);
                             type = "application/json";
-                        } else if (path.startsWith("/icon/")) {
+                        } else if (path.startsWith("/icon/") && get) {
                             body = icons.getOrDefault(path.substring(6), icons.get(APPS[0][0]));
                             type = "image/png";
                         } else if (path.startsWith("/volume/") && line.startsWith("POST ")) {
@@ -671,7 +678,12 @@ public class AtvTool {
                             if (remote != null) react(remote, key);
                             body = "ok".getBytes(StandardCharsets.UTF_8);
                             type = "text/plain";
-                        } else if (path.startsWith("/open/")) {
+                        } else if (path.startsWith("/open/") && post && openConflict) {
+                            // O launcher sem o serviço de acessibilidade: o telemóvel abre pelo link do comando.
+                            status = 409;
+                            body = new byte[0];
+                            type = "text/plain";
+                        } else if (path.startsWith("/open/") && post) {
                             // A app abre-se e a TV conta ao comando qual é (o cartão do canal precisa do GoatTV à frente).
                             app = path.substring(6);
                             OutputStream remote = remoteOut;
@@ -679,12 +691,16 @@ public class AtvTool {
                             body = "ok".getBytes(StandardCharsets.UTF_8);
                             type = "text/plain";
                         } else {
-                            body = "GoatLauncher".getBytes(StandardCharsets.UTF_8);
+                            // Como o PhoneRoutes do GoatLauncher: caminhos e métodos que não conhece são 404 (o volume
+                            // conta com isto para saber se há launcher).
+                            status = 404;
+                            body = new byte[0];
                             type = "text/plain";
                         }
-                        note("launcher " + path);
+                        note("launcher " + path + (status == 200 ? "" : " " + status));
                         OutputStream o = c.getOutputStream();
-                        o.write(("HTTP/1.1 200 OK\r\nContent-Type: " + type + "\r\nContent-Length: " + body.length + "\r\nConnection: close\r\n\r\n").getBytes(StandardCharsets.US_ASCII));
+                        String reason = switch (status) { case 200 -> "OK"; case 409 -> "Conflict"; default -> "Not Found"; };
+                        o.write(("HTTP/1.1 " + status + " " + reason + "\r\nContent-Type: " + type + "\r\nContent-Length: " + body.length + "\r\nConnection: close\r\n\r\n").getBytes(StandardCharsets.US_ASCII));
                         o.write(body);
                     } catch (Exception ignored) {}
                 }
@@ -731,7 +747,10 @@ public class AtvTool {
                         byte[] body;
                         String type = "text/plain";
                         String path = raw;
-                        if (raw.equals("/channels") && !post) {
+                        if (goatTvUnavailable) {
+                            status = 503;
+                            body = new byte[0];
+                        } else if (raw.equals("/channels") && !post) {
                             StringBuilder j = new StringBuilder("{\"playlist\":{\"id\":\"p1\",\"name\":\"Fake list\"},\"current\":")
                                 .append(json(channel)).append(",\"groups\":[");
                             for (int i = 0; i < GROUPS.length; i++) {
@@ -771,7 +790,7 @@ public class AtvTool {
                         }
                         note("goattv " + path + (status == 200 ? "" : " " + status));
                         OutputStream o = c.getOutputStream();
-                        String reason = switch (status) { case 200 -> "OK"; case 409 -> "Conflict"; default -> "Not Found"; };
+                        String reason = switch (status) { case 200 -> "OK"; case 409 -> "Conflict"; case 503 -> "Service Unavailable"; default -> "Not Found"; };
                         o.write(("HTTP/1.1 " + status + " " + reason + "\r\nContent-Type: " + type + "\r\nContent-Length: " + body.length
                             + "\r\nConnection: close\r\n\r\n").getBytes(StandardCharsets.US_ASCII));
                         o.write(body);
@@ -817,6 +836,9 @@ public class AtvTool {
                             // O GoatLauncher pára e volta (para o volume e as apps sem launcher).
                             case "/launcher/off" -> { launcherOff(); note("launcher off"); yield "off"; }
                             case "/launcher/on" -> { launcherOn(); note("launcher on"); yield "on"; }
+                            // Respostas que o GoatLauncher e o GoatTV verdadeiros dão: 409 no /open, 503 no 6471.
+                            case "/switch/open409" -> { openConflict = !openConflict; note("open 409 " + openConflict); yield "open409=" + openConflict; }
+                            case "/switch/goattv503" -> { goatTvUnavailable = !goatTvUnavailable; note("goattv 503 " + goatTvUnavailable); yield "goattv503=" + goatTvUnavailable; }
                             // A TV fecha a ligação do comando (como a SHIELD ao mudar de canal); aceita a seguinte.
                             case "/drop" -> {
                                 SSLSocket dropped = remoteSocket;
@@ -830,7 +852,7 @@ public class AtvTool {
                                 channel = (String) CHANNELS[(i + 1) % CHANNELS.length][0];
                                 yield channel;
                             }
-                            default -> "code log state zap launcher/off launcher/on drop";
+                            default -> "code log state zap launcher/off launcher/on drop switch/open409 switch/goattv503";
                         };
                         byte[] b = body.getBytes(StandardCharsets.UTF_8);
                         OutputStream o = c.getOutputStream();
