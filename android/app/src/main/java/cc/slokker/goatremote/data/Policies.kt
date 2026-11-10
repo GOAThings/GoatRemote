@@ -212,3 +212,20 @@ enum class OnScreen {
         }
     }
 }
+
+/** Porque é que o volume pelo GoatLauncher não foi (o ecrã diz o texto; aqui é só o motivo). */
+enum class VolumeProblem {
+    /** 404: um GoatLauncher antigo, sem o volume. */
+    UPDATE_LAUNCHER,
+    /** Ligação recusada: o GoatLauncher não está a correr. */
+    LAUNCHER_NOT_RUNNING,
+    NO_ANSWER;
+
+    companion object {
+        fun of(status: Int, refused: Boolean): VolumeProblem = when {
+            status == 404 -> UPDATE_LAUNCHER
+            refused -> LAUNCHER_NOT_RUNNING
+            else -> NO_ANSWER
+        }
+    }
+}

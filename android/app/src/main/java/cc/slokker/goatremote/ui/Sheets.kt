@@ -115,6 +115,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cc.slokker.goatremote.L
+import cc.slokker.goatremote.Strings
 import cc.slokker.goatremote.RemoteViewModel
 import cc.slokker.goatremote.data.AppCatalog
 import cc.slokker.goatremote.data.FoundTv
@@ -182,7 +183,7 @@ fun KeyboardSheet(vm: RemoteViewModel, onDismiss: () -> Unit) {
     }
     GoatSheet(onDismiss, skipPartial = true) {
         Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 24.dp)) {
-            Text(vm.state.textLabel ?: L("Type on the TV", "Escrever na TV"), fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+            Text(vm.state.textLabel ?: Strings.typeOnTheTv, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(14.dp))
             OutlinedTextField(
                 value = text,
@@ -190,7 +191,7 @@ fun KeyboardSheet(vm: RemoteViewModel, onDismiss: () -> Unit) {
                     text = it
                     vm.type(it)
                 },
-                placeholder = { Text(L("Search, password…", "Pesquisa, palavra-passe…")) },
+                placeholder = { Text(Strings.searchPassword) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false, imeAction = ImeAction.Send),
                 keyboardActions = KeyboardActions(onSend = { send() }),
@@ -203,10 +204,10 @@ fun KeyboardSheet(vm: RemoteViewModel, onDismiss: () -> Unit) {
                 TextButton(onClick = {
                     text = ""
                     vm.type("")
-                }, enabled = text.isNotEmpty()) { Text(L("Clear", "Limpar")) }
+                }, enabled = text.isNotEmpty()) { Text(Strings.clear) }
                 Spacer(Modifier.weight(1f))
                 Button(onClick = ::send, colors = ButtonDefaults.buttonColors(containerColor = Theme.accent), modifier = Modifier.testTag("send-text")) {
-                    Text(L("Send", "Enviar"))
+                    Text(Strings.send)
                 }
             }
         }
@@ -233,7 +234,7 @@ fun AppsSheet(vm: RemoteViewModel, onDismiss: () -> Unit) {
             val full = GridItemSpan(2)
             if (vm.installedApps.isEmpty()) {
                 if (vm.recentApps.isNotEmpty()) {
-                    item(span = { full }) { Section(L("Opened on this TV", "Abertas nesta TV")) }
+                    item(span = { full }) { Section(Strings.openedOnThisTv) }
                     items(vm.recentApps) { pkg ->
                         val known = AppCatalog.app(pkg)
                         AppTile(vm, TvApp(pkg, AppCatalog.name(pkg), color = known?.let { "#%06X".format(it.color) }), remoteImage = false, onDismiss)
@@ -244,16 +245,14 @@ fun AppsSheet(vm: RemoteViewModel, onDismiss: () -> Unit) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Rounded.Apps, null, tint = Color.White, modifier = Modifier.size(20.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text(L("All the TV's apps here", "Todas as apps da TV aqui"), fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                            Text(Strings.allTheTvsAppsHere, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                         }
                         Spacer(Modifier.height(8.dp))
                         Text(
                             if (vm.recentApps.isEmpty()) {
-                                L("Android TVs don't share their app list with the remote. Apps show up here as you open them on the TV, or all of them, with their banners, if the TV has GoatLauncher.",
-                                    "As Android TV não dão a lista de apps ao comando. As apps vão aparecendo aqui à medida que as abres na TV, ou todas, com os banners, se a TV tiver o GoatLauncher.")
+                                Strings.androidTvsDontShareTheirApp
                             } else {
-                                L("With GoatLauncher on the TV, all its apps show up here, with their banners.",
-                                    "Com o GoatLauncher na TV, aparecem aqui todas as apps dela, com os banners.")
+                                Strings.withGoatlauncherOnTheTvAll
                             },
                             color = Theme.dim, fontSize = 13.sp,
                         )
@@ -263,9 +262,9 @@ fun AppsSheet(vm: RemoteViewModel, onDismiss: () -> Unit) {
                 val byPackage = vm.installedApps.associateBy { it.pkg }
                 val recent = vm.recentApps.mapNotNull { byPackage[it] }.take(4)
                 if (recent.isNotEmpty()) {
-                    item(span = { full }) { Section(L("Recently opened", "Abertas há pouco")) }
+                    item(span = { full }) { Section(Strings.recentlyOpened) }
                     items(recent, key = { "r:" + it.pkg }) { AppTile(vm, it, true, onDismiss) }
-                    item(span = { full }) { Section(L("All apps", "Todas as apps")) }
+                    item(span = { full }) { Section(Strings.allApps) }
                 }
                 items(vm.installedApps, key = { it.pkg }) { AppTile(vm, it, true, onDismiss) }
             }
@@ -327,7 +326,7 @@ fun ChannelsSheet(vm: RemoteViewModel, onDismiss: () -> Unit) {
         }
     }
     GoatSheet(onDismiss, skipPartial = true) {
-        SheetTitle(L("Channels", "Canais"))
+        SheetTitle(Strings.channels)
         LazyColumn(
             modifier = Modifier.testTag("channels-list"),
             contentPadding = PaddingValues(start = 18.dp, end = 18.dp, bottom = 24.dp),
@@ -347,14 +346,14 @@ fun ChannelsSheet(vm: RemoteViewModel, onDismiss: () -> Unit) {
             val groupNames = list.groups.associate { it.id to it.name }
             val favorites = list.channels.filter { it.favorite }
             if (favorites.isNotEmpty()) {
-                item(key = "s:fav") { Section(L("Favourites", "Favoritos")) }
+                item(key = "s:fav") { Section(Strings.favourites) }
                 items(favorites, key = { "f:" + it.key }) { ChannelRow(vm, it, it.key == list.current, groupNames[it.group]) }
             }
             item(key = "search") {
                 OutlinedTextField(
                     value = query,
                     onValueChange = { query = it.take(100) },
-                    placeholder = { Text(L("Search channels", "Procurar canais")) },
+                    placeholder = { Text(Strings.searchChannels) },
                     leadingIcon = { Icon(Icons.Rounded.Search, null, tint = Theme.dim) },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(autoCorrectEnabled = false, imeAction = ImeAction.Search),
@@ -366,7 +365,7 @@ fun ChannelsSheet(vm: RemoteViewModel, onDismiss: () -> Unit) {
             if (list.groups.isNotEmpty()) {
                 item(key = "groups") {
                     LazyRow(Modifier.padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        item { GroupChip(L("All", "Todos"), group == null, "group:*") { group = null } }
+                        item { GroupChip(Strings.all, group == null, "group:*") { group = null } }
                         items(list.groups, key = { it.id }) { g -> GroupChip(g.name, group == g.id, "group:" + g.name) { group = g.id } }
                     }
                 }
@@ -374,8 +373,8 @@ fun ChannelsSheet(vm: RemoteViewModel, onDismiss: () -> Unit) {
             if (shown.isEmpty()) {
                 item(key = "empty") {
                     Text(
-                        if (list.channels.isEmpty()) L("There are no channels in GoatTV's list", "A lista do GoatTV não tem canais")
-                        else L("No channels found", "Nenhum canal encontrado"),
+                        if (list.channels.isEmpty()) Strings.thereAreNoChannelsInGoattvs
+                        else Strings.noChannelsFound,
                         color = Theme.dim, fontSize = 14.sp, modifier = Modifier.padding(vertical = 12.dp),
                     )
                 }
@@ -383,7 +382,7 @@ fun ChannelsSheet(vm: RemoteViewModel, onDismiss: () -> Unit) {
             items(shown, key = { "l:" + it.key }) { ChannelRow(vm, it, it.key == list.current, groupNames[it.group]) }
             if (list.truncated) {
                 item(key = "truncated") {
-                    Text(L("The list is too long: only part of it is shown here.", "A lista é longa demais: aqui só aparece uma parte."),
+                    Text(Strings.theListIsTooLongOnly,
                         color = Theme.dim, fontSize = 12.sp, modifier = Modifier.padding(vertical = 8.dp))
                 }
             }
@@ -401,19 +400,19 @@ private fun ChannelsState(vm: RemoteViewModel) {
             vm.channelsStatus == RemoteViewModel.ChannelsStatus.CLOSED -> {
                 val app = vm.goatTvApp
                 if (app != null) {
-                    Text(L("GoatTV isn't open on the TV.", "O GoatTV não está aberto na TV."), color = Theme.dim, fontSize = 14.sp)
+                    Text(Strings.goattvIsntOpenOnTheTv, color = Theme.dim, fontSize = 14.sp)
                     Spacer(Modifier.height(10.dp))
                     Button(onClick = vm::openGoatTv, colors = ButtonDefaults.buttonColors(containerColor = Theme.accent),
                         modifier = Modifier.testTag("open-goattv")) {
-                        Text(L("Open GoatTV", "Abrir o GoatTV"))
+                        Text(Strings.openGoattv)
                     }
                 } else {
                     Text(vm.goatTvClosedLine(), color = Theme.dim, fontSize = 14.sp, modifier = Modifier.testTag("goattv-closed"))
                 }
             }
             else -> {
-                Text(L("Couldn't get the channels from GoatTV.", "Não deu para ter os canais do GoatTV."), color = Theme.dim, fontSize = 14.sp)
-                TextButton(onClick = vm::refreshChannels) { Text(L("Try again", "Tentar outra vez")) }
+                Text(Strings.couldntGetTheChannelsFromGoattv, color = Theme.dim, fontSize = 14.sp)
+                TextButton(onClick = vm::refreshChannels) { Text(Strings.tryAgain) }
             }
         }
     }
@@ -448,7 +447,7 @@ private fun NowPlayingRow(vm: RemoteViewModel, channel: TvChannel) {
         ChannelLogo(vm, channel, 56.dp, 38.dp, Color.Black.copy(alpha = 0.35f))
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text((L("Now playing", "A dar agora") + (channel.num?.let { " · $it" } ?: "")).uppercase(), color = Theme.faint, fontSize = 11.sp,
+            Text((Strings.nowPlaying + (channel.num?.let { " · $it" } ?: "")).uppercase(), color = Theme.faint, fontSize = 11.sp,
                 fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp, maxLines = 1)
             Text(channel.name, fontSize = 17.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
@@ -487,7 +486,7 @@ fun MoreSheet(vm: RemoteViewModel, onDismiss: () -> Unit) {
     var diagnostics by remember { mutableStateOf(false) }
     if (diagnostics) DiagnosticsSheet { diagnostics = false }
     GoatSheet(onDismiss) {
-        SheetTitle(L("More", "Mais"))
+        SheetTitle(Strings.more)
         LazyVerticalGrid(
             modifier = Modifier.testTag("more-grid"),
             columns = GridCells.Fixed(20),
@@ -496,33 +495,33 @@ fun MoreSheet(vm: RemoteViewModel, onDismiss: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             val keys = listOf(
-                Triple(Key.VOLUME_DOWN, Icons.Rounded.VolumeDown, L("Vol −", "Vol −")),
-                Triple(Key.VOLUME_UP, Icons.Rounded.VolumeUp, L("Vol +", "Vol +")),
-                Triple(Key.CHANNEL_DOWN, Icons.Rounded.KeyboardDoubleArrowDown, L("Ch −", "Can −")),
-                Triple(Key.CHANNEL_UP, Icons.Rounded.KeyboardDoubleArrowUp, L("Ch +", "Can +")),
-                Triple(Key.SEARCH, Icons.Rounded.Search, L("Search", "Pesquisa")),
+                Triple(Key.VOLUME_DOWN, Icons.Rounded.VolumeDown, Strings.volDown),
+                Triple(Key.VOLUME_UP, Icons.Rounded.VolumeUp, Strings.volUp),
+                Triple(Key.CHANNEL_DOWN, Icons.Rounded.KeyboardDoubleArrowDown, Strings.channelDown),
+                Triple(Key.CHANNEL_UP, Icons.Rounded.KeyboardDoubleArrowUp, Strings.channelUp),
+                Triple(Key.SEARCH, Icons.Rounded.Search, Strings.search),
                 Triple(Key.MENU, Icons.Rounded.Menu, "Menu"),
-                Triple(Key.GUIDE, Icons.Rounded.ListAlt, L("Guide", "Guia")),
+                Triple(Key.GUIDE, Icons.Rounded.ListAlt, Strings.guide),
                 Triple(Key.INFO, Icons.Rounded.Info, "Info"),
-                Triple(Key.CAPTIONS, Icons.Rounded.ClosedCaption, L("Subtitles", "Legendas")),
-                Triple(Key.AUDIO_TRACK, Icons.Rounded.GraphicEq, L("Audio", "Áudio")),
-                Triple(Key.LAST_CHANNEL, Icons.Rounded.History, L("Last ch", "Último can")),
-                Triple(Key.INPUT, Icons.Rounded.Input, L("Input", "Entrada")),
-                Triple(Key.SETTINGS, Icons.Rounded.Settings, L("Settings", "Definições")),
+                Triple(Key.CAPTIONS, Icons.Rounded.ClosedCaption, Strings.subtitles),
+                Triple(Key.AUDIO_TRACK, Icons.Rounded.GraphicEq, Strings.audio),
+                Triple(Key.LAST_CHANNEL, Icons.Rounded.History, Strings.lastCh),
+                Triple(Key.INPUT, Icons.Rounded.Input, Strings.input),
+                Triple(Key.SETTINGS, Icons.Rounded.Settings, Strings.settings),
                 Triple(Key.STOP, Icons.Rounded.Stop, "Stop"),
-                Triple(Key.PREVIOUS, Icons.Rounded.SkipPrevious, L("Previous", "Anterior")),
-                Triple(Key.NEXT, Icons.Rounded.SkipNext, L("Next", "Seguinte")),
+                Triple(Key.PREVIOUS, Icons.Rounded.SkipPrevious, Strings.previous),
+                Triple(Key.NEXT, Icons.Rounded.SkipNext, Strings.next),
             )
             items(keys, span = { GridItemSpan(5) }) { (key, icon, title) -> MoreKey(vm, key, icon, title) }
-            item(span = { GridItemSpan(20) }) { Section(L("Numbers", "Números")) }
+            item(span = { GridItemSpan(20) }) { Section(Strings.numbers) }
             items((1..10).map { it % 10 }, span = { GridItemSpan(4) }) { digit -> DigitKey(vm, digit) }
-            item(span = { GridItemSpan(20) }) { Section(L("Options", "Opções")) }
+            item(span = { GridItemSpan(20) }) { Section(Strings.options) }
             item(span = { GridItemSpan(20) }) {
                 Column(Modifier.fillMaxWidth().card(RoundedCornerShape(16.dp)).padding(horizontal = 16.dp)) {
-                    Option(L("Vibration", "Vibração"), null, vm.haptics, vm::changeHaptics)
+                    Option(Strings.vibration, null, vm.haptics, vm::changeHaptics)
                     HorizontalDivider(color = Theme.line)
-                    Option(L("Phone volume buttons", "Botões de volume do telemóvel"),
-                        L("Change the TV's volume while the app is open", "Mexem no volume da TV com a app aberta"),
+                    Option(Strings.phoneVolumeButtons,
+                        Strings.changeTheTvsVolumeWhileThe,
                         vm.volumeButtons, vm::changeVolumeButtons)
                     HorizontalDivider(color = Theme.line)
                     UpdateRow()
@@ -530,8 +529,8 @@ fun MoreSheet(vm: RemoteViewModel, onDismiss: () -> Unit) {
                     Row(Modifier.fillMaxWidth().clickable { diagnostics = true }.padding(vertical = 12.dp).testTag("opt:diagnostics"),
                         verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text(L("Diagnostics", "Diagnóstico"), fontSize = 16.sp)
-                            Text(L("What the app did, to send when something fails", "O que a app fez, para mandar quando algo falha"),
+                            Text(Strings.diagnostics, fontSize = 16.sp)
+                            Text(Strings.whatTheAppDidToSend,
                                 color = Theme.dim, fontSize = 13.sp)
                         }
                         Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Theme.dim)
@@ -556,10 +555,9 @@ fun DiagnosticsSheet(onDismiss: () -> Unit) {
     var confirmClear by remember { mutableStateOf(false) }
     if (confirmClear) {
         ConfirmDialog(
-            L("Clear the diagnostics log?", "Limpar o registo de diagnóstico?"),
-            L("What the app did so far will be gone, and can't be sent in a report.",
-                "O que a app fez até agora desaparece, e já não pode ir num relatório."),
-            L("Clear", "Limpar"),
+            Strings.clearTheDiagnosticsLog,
+            Strings.whatTheAppDidSoFar,
+            Strings.clear,
             onConfirm = {
                 DebugLog.clear()
                 text = DebugLog.text
@@ -572,18 +570,18 @@ fun DiagnosticsSheet(onDismiss: () -> Unit) {
         focusedTextColor = Color.White, unfocusedTextColor = Color.White,
     )
     GoatSheet(onDismiss, skipPartial = true) {
-        SheetTitle(L("Diagnostics", "Diagnóstico"))
+        SheetTitle(Strings.diagnostics)
         Column(Modifier.padding(horizontal = 18.dp).padding(bottom = 24.dp).verticalScroll(rememberScrollState())) {
             OutlinedTextField(
                 message, { message = it.take(2000) },
-                placeholder = { Text(L("What happened?", "O que aconteceu?"), color = Theme.dim) },
+                placeholder = { Text(Strings.whatHappened, color = Theme.dim) },
                 minLines = 2, maxLines = 5, colors = fieldColors,
                 modifier = Modifier.fillMaxWidth().testTag("diagnostics:message"),
             )
             Spacer(Modifier.height(8.dp))
             OutlinedTextField(
                 contact, { contact = it.take(200) },
-                placeholder = { Text(L("How can we reach you? (optional)", "Como te contactamos? (opcional)"), color = Theme.dim) },
+                placeholder = { Text(Strings.howCanWeReachYouOptional, color = Theme.dim) },
                 singleLine = true, colors = fieldColors,
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
                 modifier = Modifier.fillMaxWidth(),
@@ -598,14 +596,12 @@ fun DiagnosticsSheet(onDismiss: () -> Unit) {
                             message = ""
                             L("Sent. Report $id.", "Enviado. Relatório $id.")
                         } catch (e: DebugLog.TooManyReports) {
-                            L("Too many reports from this network. Try again later, or use Share.",
-                                "Demasiados relatórios desta rede. Tenta mais tarde, ou usa Partilhar.")
+                            Strings.tooManyReportsFromThisNetwork
                         } catch (e: DebugLog.ReportFailed) {
                             L("Couldn't send (HTTP ${e.status}). Use Share instead.", "Não deu para enviar (HTTP ${e.status}). Usa Partilhar.")
                         } catch (e: java.net.UnknownHostException) {
                             // O DNS da rede (filtro no router ou no fornecedor) pode não encontrar o servidor.
-                            L("This network can't find the GOAT server (its DNS may be blocking it). Try again on mobile data, or use Share.",
-                                "Esta rede não encontra o servidor GOAT (o DNS dela pode estar a bloqueá-lo). Tenta com os dados móveis, ou usa Partilhar.")
+                            Strings.thisNetworkCantFindTheGoat
                         } catch (e: kotlinx.coroutines.CancellationException) {
                             throw e
                         } catch (e: Exception) {
@@ -620,7 +616,7 @@ fun DiagnosticsSheet(onDismiss: () -> Unit) {
                 modifier = Modifier.fillMaxWidth().height(48.dp).testTag("diagnostics:send"),
             ) {
                 if (sending) CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
-                else Text(L("Send report", "Enviar relatório"), fontWeight = FontWeight.SemiBold)
+                else Text(Strings.sendReport, fontWeight = FontWeight.SemiBold)
             }
             result?.let { Text(it, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp).testTag("diagnostics:result")) }
             Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -629,12 +625,11 @@ fun DiagnosticsSheet(onDismiss: () -> Unit) {
                         .putExtra(Intent.EXTRA_SUBJECT, "GoatRemote diagnostics")
                         .putExtra(Intent.EXTRA_TEXT, text)
                     context.startActivity(Intent.createChooser(send, null))
-                }, Modifier.testTag("diagnostics:share")) { Text(L("Share", "Partilhar"), color = Color.White) }
-                TextButton({ clipboard.setText(AnnotatedString(text)) }) { Text(L("Copy", "Copiar"), color = Color.White) }
-                TextButton({ confirmClear = true }, Modifier.testTag("diagnostics:clear")) { Text(L("Clear", "Limpar"), color = Theme.dim) }
+                }, Modifier.testTag("diagnostics:share")) { Text(Strings.share, color = Color.White) }
+                TextButton({ clipboard.setText(AnnotatedString(text)) }) { Text(Strings.copy, color = Color.White) }
+                TextButton({ confirmClear = true }, Modifier.testTag("diagnostics:clear")) { Text(Strings.clear, color = Theme.dim) }
             }
-            Text(L("Never includes PINs, codes or keys. Nothing is sent until you send or share it.",
-                "Nunca tem PINs, códigos nem chaves. Nada sai do telemóvel até o enviares ou partilhares."), color = Theme.dim, fontSize = 13.sp)
+            Text(Strings.neverIncludesPinsCodesOrKeys, color = Theme.dim, fontSize = 13.sp)
             Spacer(Modifier.height(12.dp))
             SelectionContainer(Modifier.fillMaxWidth()) {
                 Text(text, fontFamily = FontFamily.Monospace, fontSize = 11.sp, lineHeight = 15.sp, modifier = Modifier.testTag("diagnostics:text"))
@@ -692,7 +687,7 @@ fun TvsSheet(vm: RemoteViewModel, onAdd: () -> Unit, onDismiss: () -> Unit) {
         onDispose { vm.finder.stop() }
     }
     GoatSheet(onDismiss) {
-        SheetTitle(L("TVs", "TVs"))
+        SheetTitle(Strings.tvs)
         LazyColumn(contentPadding = PaddingValues(start = 14.dp, end = 14.dp, bottom = 24.dp)) {
             item {
                 CardColumn {
@@ -703,12 +698,12 @@ fun TvsSheet(vm: RemoteViewModel, onAdd: () -> Unit, onDismiss: () -> Unit) {
                 }
             }
             item {
-                Text(L("Tap the bin to forget a TV.", "Toca no caixote para esquecer uma TV."), color = Theme.faint, fontSize = 12.sp,
+                Text(Strings.tapTheBinToForgetA, color = Theme.faint, fontSize = 12.sp,
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp))
             }
             val unpaired = found.filter { f -> vm.tvs.none { it.id == f.id } }
             if (unpaired.isNotEmpty()) {
-                item { Section(L("On this network", "Nesta rede")) }
+                item { Section(Strings.onThisNetwork) }
                 item {
                     CardColumn {
                         unpaired.forEachIndexed { i, tv ->
@@ -721,10 +716,10 @@ fun TvsSheet(vm: RemoteViewModel, onAdd: () -> Unit, onDismiss: () -> Unit) {
             item { Spacer(Modifier.height(14.dp)) }
             item {
                 CardColumn {
-                    ActionRow(Icons.Rounded.Add, L("Add a TV", "Juntar uma TV"), onAdd)
+                    ActionRow(Icons.Rounded.Add, Strings.addATv, onAdd)
                     if (vm.current != null) {
                         RowDivider()
-                        ActionRow(Icons.Rounded.Link, L("Pair this TV again", "Emparelhar esta TV outra vez")) { vm.repairCurrent() }
+                        ActionRow(Icons.Rounded.Link, Strings.pairThisTvAgain) { vm.repairCurrent() }
                     }
                 }
             }
@@ -749,7 +744,7 @@ fun ConfirmDialog(title: String, text: String?, action: String, onConfirm: () ->
         confirmButton = {
             TextButton({ onDismiss(); onConfirm() }, Modifier.testTag("confirm")) { Text(action, color = Theme.power) }
         },
-        dismissButton = { TextButton(onDismiss) { Text(L("Cancel", "Cancelar"), color = Theme.text) } },
+        dismissButton = { TextButton(onDismiss) { Text(Strings.cancel, color = Theme.text) } },
         containerColor = Theme.surface,
         titleContentColor = Color.White,
     )
@@ -762,8 +757,8 @@ private fun SavedTvRow(vm: RemoteViewModel, tv: SavedTv, onDismiss: () -> Unit) 
     if (confirmForget) {
         ConfirmDialog(
             L("Forget ${tv.name}?", "Esquecer ${tv.name}?"),
-            L("To use it again, you'll have to pair it again.", "Para a voltares a usar, tens de a emparelhar outra vez."),
-            L("Forget", "Esquecer"),
+            Strings.toUseItAgainYoullHave,
+            Strings.forget,
             onConfirm = { vm.forget(tv) },
             onDismiss = { confirmForget = false },
         )
@@ -783,7 +778,7 @@ private fun SavedTvRow(vm: RemoteViewModel, tv: SavedTv, onDismiss: () -> Unit) 
         }
         if (selected) Icon(Icons.Rounded.Check, null, tint = Theme.accent)
         IconButton(onClick = { confirmForget = true }, Modifier.testTag("forget:" + tv.name)) {
-            Icon(Icons.Rounded.Delete, L("Forget", "Esquecer"), tint = Theme.faint)
+            Icon(Icons.Rounded.Delete, Strings.forget, tint = Theme.faint)
         }
     }
 }
@@ -795,8 +790,8 @@ private fun subtitle(vm: RemoteViewModel, tv: SavedTv): String {
     val model = vm.state.model
     if (vendor != null && model != null) parts.add("$vendor $model")
     when (vm.status) {
-        RemoteViewModel.Status.Connected -> parts.add(L("connected", "ligada"))
-        RemoteViewModel.Status.Connecting -> parts.add(L("connecting", "a ligar"))
+        RemoteViewModel.Status.Connected -> parts.add(Strings.connected)
+        RemoteViewModel.Status.Connecting -> parts.add(Strings.connectingLower)
         else -> Unit
     }
     return parts.joinToString(" · ")
@@ -826,7 +821,7 @@ private fun FoundTvRow(vm: RemoteViewModel, found: FoundTv) {
             Text(found.name, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(if (found.kind == TvKind.APPLE) "Apple TV" else "Android TV · Google TV", color = Theme.faint, fontSize = 13.sp)
         }
-        Text(L("Pair", "Emparelhar"), color = Color.Black, fontSize = 14.sp, fontWeight = FontWeight.Bold,
+        Text(Strings.pair, color = Color.Black, fontSize = 14.sp, fontWeight = FontWeight.Bold,
             modifier = Modifier.clip(RoundedCornerShape(50)).background(Color.White).padding(horizontal = 14.dp, vertical = 7.dp))
     }
 }
@@ -835,7 +830,7 @@ private fun FoundTvRow(vm: RemoteViewModel, found: FoundTv) {
 @Composable
 fun AddTvSheet(vm: RemoteViewModel, onDismiss: () -> Unit) {
     GoatSheet(onDismiss) {
-        SheetTitle(L("Add a TV", "Juntar uma TV"))
+        SheetTitle(Strings.addATv)
         AddTvList(vm, Modifier)
     }
 }
@@ -847,10 +842,10 @@ fun AddTvScreen(vm: RemoteViewModel) {
     if (diagnostics) DiagnosticsSheet { diagnostics = false }
     Column(Modifier.fillMaxSize().padding(top = 24.dp)) {
         Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(L("Add a TV", "Juntar uma TV"), fontSize = 30.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
+            Text(Strings.addATv, fontSize = 30.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
             // Antes de haver uma TV não há o Mais: o diagnóstico fica aqui também.
             IconButton({ diagnostics = true }, Modifier.testTag("add:diagnostics")) {
-                Icon(Icons.Rounded.BugReport, L("Diagnostics", "Diagnóstico"), tint = Theme.dim)
+                Icon(Icons.Rounded.BugReport, Strings.diagnostics, tint = Theme.dim)
             }
         }
         Spacer(Modifier.height(12.dp))
@@ -868,13 +863,13 @@ private fun AddTvList(vm: RemoteViewModel, modifier: Modifier) {
         onDispose { vm.finder.stop() }
     }
     LazyColumn(modifier, contentPadding = PaddingValues(start = 18.dp, end = 18.dp, bottom = 24.dp)) {
-        item { Section(L("On this network", "Nesta rede")) }
+        item { Section(Strings.onThisNetwork) }
         if (found.isEmpty()) {
             item {
                 Row(Modifier.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     CircularProgressIndicator(color = Theme.dim, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(12.dp))
-                    Text(L("Looking for TVs on this network…", "À procura de TVs nesta rede…"), color = Theme.dim)
+                    Text(Strings.lookingForTvsOnThisNetwork, color = Theme.dim)
                 }
             }
         }
@@ -888,7 +883,7 @@ private fun AddTvList(vm: RemoteViewModel, modifier: Modifier) {
                                 IconTile(tvIcon(tv.kind), Theme.green)
                                 Spacer(Modifier.width(12.dp))
                                 Text(tv.name, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                                Text(L("Paired", "Emparelhada"), color = Theme.faint, fontSize = 13.sp)
+                                Text(Strings.pairedF, color = Theme.faint, fontSize = 13.sp)
                             }
                         } else {
                             FoundTvRow(vm, tv)
@@ -899,12 +894,11 @@ private fun AddTvList(vm: RemoteViewModel, modifier: Modifier) {
         }
         item {
             Text(
-                L("Android TV, Google TV (SHIELD, Sony, Philips, TCL, Chromecast…) and Apple TV. The TV and the phone must be on the same Wi-Fi.",
-                    "Android TV, Google TV (SHIELD, Sony, Philips, TCL, Chromecast…) e Apple TV. A TV e o telemóvel têm de estar na mesma rede Wi-Fi."),
+                Strings.androidTvGoogleTvShieldSony,
                 color = Theme.dim, fontSize = 12.sp, modifier = Modifier.padding(vertical = 8.dp),
             )
         }
-        item { Section(L("Or by IP address", "Ou pelo endereço IP")) }
+        item { Section(Strings.orByIpAddress) }
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(
@@ -920,7 +914,7 @@ private fun AddTvList(vm: RemoteViewModel, modifier: Modifier) {
                 Spacer(Modifier.width(10.dp))
                 val ip = manualIp.trim()
                 TextButton(onClick = { vm.startPairing(ip, ip, ip) }, enabled = ip.isNotEmpty(), modifier = Modifier.testTag("pair-ip")) {
-                    Text(L("Pair", "Emparelhar"))
+                    Text(Strings.pair)
                 }
             }
         }

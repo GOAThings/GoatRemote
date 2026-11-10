@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.sp
 import cc.slokker.goatremote.BuildConfig
 import cc.slokker.goatremote.DebugLog
 import cc.slokker.goatremote.L
+import cc.slokker.goatremote.Strings
 import cc.slokker.goatremote.data.AppUpdater
 import kotlinx.coroutines.launch
 
@@ -44,12 +45,12 @@ fun UpdateRow() {
         Modifier.fillMaxWidth().clickable(enabled = !busy) {
             if (version == null) {
                 busy = true
-                note = L("Checking…", "A procurar…")
+                note = Strings.checking
                 scope.launch {
                     note = try {
                         val found = AppUpdater.newer()
                         when {
-                            found == null -> L("You have the latest version", "Tens a versão mais recente")
+                            found == null -> Strings.youHaveTheLatestVersion
                             // As versões de teste não podem receber o APK publicado: só se diz que há.
                             !AppUpdater.enabled -> L("Version $found is out", "Já saiu a versão $found")
                             else -> {
@@ -61,25 +62,25 @@ fun UpdateRow() {
                         throw e
                     } catch (e: Exception) {
                         DebugLog.add("Update check failed: $e")
-                        L("Couldn't check for updates", "Não deu para procurar atualizações")
+                        Strings.couldntCheckForUpdates
                     }
                     busy = false
                 }
                 return@clickable
             }
             if (!AppUpdater.canInstall(context)) {
-                note = L("Allow GoatRemote to install apps, then tap again", "Autoriza o GoatRemote a instalar apps e toca outra vez")
+                note = Strings.allowGoatremoteToInstallAppsThen
                 AppUpdater.openInstallPermission(context)
                 return@clickable
             }
             busy = true
-            note = L("Downloading…", "A descarregar…")
+            note = Strings.downloading
             scope.launch {
                 runCatching { AppUpdater.install(context) }
                     .onSuccess { note = null }
                     .onFailure {
                         DebugLog.add("Update download failed: $it")
-                        note = L("Couldn't download the update", "Não foi possível descarregar a atualização")
+                        note = Strings.couldntDownloadTheUpdate
                         // Como no iPhone: a página da versão, para a descarregar à mão.
                         runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(AppUpdater.PAGE))) }
                     }
@@ -88,7 +89,7 @@ fun UpdateRow() {
         }.padding(vertical = 12.dp).testTag("opt:update"),
     ) {
         Text(
-            if (version != null) L("Update to $version", "Atualizar para $version") else L("Version", "Versão"),
+            if (version != null) L("Update to $version", "Atualizar para $version") else Strings.version,
             fontSize = 16.sp,
             color = if (version != null) Theme.accent else androidx.compose.ui.graphics.Color.White,
         )

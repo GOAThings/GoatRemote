@@ -203,3 +203,26 @@ public enum OnScreen: Sendable {
         return kind == .apple ? .appleTV : .home
     }
 }
+
+/// Porque é que o volume pelo GoatLauncher não foi (a vista diz o texto; aqui é só o motivo).
+public enum VolumeProblem: Sendable {
+    /// 404: um GoatLauncher antigo, sem o volume.
+    case updateLauncher
+    /// Ligação recusada: o GoatLauncher não está a correr.
+    case launcherNotRunning
+    case noAnswer
+
+    public static func of(status: Int, refused: Bool) -> VolumeProblem {
+        if status == 404 { return .updateLauncher }
+        return refused ? .launcherNotRunning : .noAnswer
+    }
+
+    /// O que o indicador do volume mostra.
+    public var text: String {
+        switch self {
+        case .updateLauncher: return Strings.updateGoatlauncherOnTheTvTo
+        case .launcherNotRunning: return Strings.goatlauncherIsntRunningOnTheTv
+        case .noAnswer: return Strings.theTvsLauncherDidntAnswerTry
+        }
+    }
+}

@@ -46,6 +46,7 @@ enum CoreTests {
         ("goatTVKeys", goatTVKeys),
         ("goatTVNow", goatTVNow),
         ("gestures", gestures),
+        ("strings", strings),
     ] + contracts + policies
 
     static func proto() throws {

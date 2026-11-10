@@ -183,7 +183,7 @@ final class RemoteLink: @unchecked Sendable {
             case .noLauncher:
                 break
             case .didntAnswer:
-                throw Failure.unreachable(L("The TV's launcher didn't answer", "O launcher da TV não respondeu"))
+                throw Failure.unreachable(Strings.theTvsLauncherDidntAnswer)
             }
         }
         try await once { $0.key(key) }
@@ -192,7 +192,7 @@ final class RemoteLink: @unchecked Sendable {
     /// Para os Atalhos: liga, manda e desliga.
     @MainActor
     static func once(_ action: (TVControl) -> Void) async throws {
-        guard let tv = TVStore.current else { throw Failure.unreachable(L("No TV paired yet. Open GoatRemote and add one", "Ainda não há TV emparelhada. Abre o GoatRemote e junta uma")) }
+        guard let tv = TVStore.current else { throw Failure.unreachable(Strings.noTvPairedYetOpenGoatremote) }
         let link = makeTVLink(tv)
         try await link.connect()
         action(link)

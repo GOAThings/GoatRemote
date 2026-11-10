@@ -25,7 +25,7 @@ struct UpdateRow: View {
     var body: some View {
         Button(action: tap) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(newer.map { L("Update to \($0)", "Atualizar para \($0)") } ?? L("Version", "Versão"))
+                Text(newer.map { L("Update to \($0)", "Atualizar para \($0)") } ?? Strings.version)
                     .foregroundStyle(newer != nil ? Theme.accent : .white)
                 Text(note ?? current)
                     .font(.footnote).foregroundStyle(Theme.dim)
@@ -58,22 +58,22 @@ struct UpdateRow: View {
     private func tap() {
         if newer != nil { return download() }
         busy = true
-        note = L("Checking…", "A procurar…")
+        note = Strings.checking
         Task {
             defer { busy = false }
             do {
                 newer = try await latestNewer()
-                note = newer == nil ? L("You have the latest version", "Tens a versão mais recente") : nil
+                note = newer == nil ? Strings.youHaveTheLatestVersion : nil
             } catch {
                 DebugLog.add("Update check failed: \(error)")
-                note = L("Couldn't check for updates", "Não deu para procurar atualizações")
+                note = Strings.couldntCheckForUpdates
             }
         }
     }
 
     private func download() {
         busy = true
-        note = L("Downloading…", "A descarregar…")
+        note = Strings.downloading
         Task {
             defer { busy = false }
             do {
@@ -86,7 +86,7 @@ struct UpdateRow: View {
                 note = nil
             } catch {
                 DebugLog.add("Update download failed: \(error)")
-                note = L("Couldn't download the update", "Não foi possível descarregar a atualização")
+                note = Strings.couldntDownloadTheUpdate
                 await UIApplication.shared.open(Self.page)
             }
         }

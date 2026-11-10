@@ -89,6 +89,10 @@ extension CoreTests {
             try expect(VolumeRoute.changed(old: pair(row["old"]), new: pair(row["new"]), unknown: row["unknown"] as? Bool ?? false,
                                            settled: row["settled"] as? Bool ?? false), row["changed"] as? Bool ?? false)
         }
+        for row in Contracts.list(table["problems"]) {
+            let got = VolumeProblem.of(status: row["status"] as? Int ?? -1, refused: row["refused"] as? Bool ?? false)
+            try expect("\(got)", row["problem"] as? String ?? "")
+        }
         let timings = table["timings"] as? [String: Int] ?? [:]
         try expect(timings["learnAfterMs"], VolumeRoute.learnAfterMs)
         try expect(timings["settleMs"], VolumeRoute.settleMs)

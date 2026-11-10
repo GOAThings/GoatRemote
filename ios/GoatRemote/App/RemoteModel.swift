@@ -171,7 +171,7 @@ final class RemoteModel {
                 self.retryLater(tv, delayMs: delay, retry: retry)
                 return
             }
-            self.status = .unreachable(L("The TV closed the connection", "A TV fechou a ligação"))
+            self.status = .unreachable(Strings.theTvClosedTheConnection)
         }
         self.link = link
         Task {
@@ -463,7 +463,7 @@ final class RemoteModel {
         play(group[((i + delta) % n + n) % n])
     }
 
-    var goatTVClosedLine: String { L("GoatTV has to be open on the TV", "O GoatTV tem de estar aberto na TV") }
+    var goatTVClosedLine: String { Strings.goattvHasToBeOpenOn }
 
     /// "Abrir o GoatTV" na folha dos canais: abre-o e espera (até 10 s) que dê a lista.
     func openGoatTV() {
@@ -510,12 +510,12 @@ final class RemoteModel {
                     await pollNow(tv)
                     return
                 case .notFound:
-                    playProblem = L("This channel isn't available on the TV", "Este canal não está disponível na TV")
+                    playProblem = Strings.thisChannelIsntAvailableOnThe
                     refreshChannels()
                     return
                 case .failed:
                     DebugLog.add("Play: GoatTV answered HTTP \(status)")
-                    playProblem = L("GoatTV didn't answer. Try again", "O GoatTV não respondeu. Tenta outra vez")
+                    playProblem = Strings.goattvDidntAnswerTryAgain
                     return
                 case .startWaiting:
                     // Já está à frente, só ainda não pode (a meio de mudar de canal): abri-lo outra vez não ajuda,
@@ -531,8 +531,7 @@ final class RemoteModel {
                     playProblem = goatTVClosedLine
                     return
                 case .timedOut:
-                    playProblem = L("GoatTV didn't switch channels. Check the TV and try again",
-                                    "O GoatTV não mudou de canal. Vê a TV e tenta outra vez")
+                    playProblem = Strings.goattvDidntSwitchChannelsCheckThe
                     return
                 case .keepWaiting:
                     break
@@ -678,7 +677,7 @@ final class RemoteModel {
     }
 
     /// Mostrado no indicador de volume quando o launcher não respondeu (nil: nada a dizer).
-    private(set) var volumeProblem: String? {
+    private(set) var volumeProblem: VolumeProblem? {
         get { session.volumeProblem }
         set { session.volumeProblem = newValue }
     }
@@ -701,14 +700,7 @@ final class RemoteModel {
                 if current?.id == tv.id { link?.key(key) }
             case .didntAnswer:
                 guard current?.id == tv.id else { return }
-                if sent.status == 404 {
-                    volumeProblem = L("Update GoatLauncher on the TV to change the volume from here", "Atualiza o GoatLauncher na TV para mudares o volume daqui")
-                } else if sent.refused {
-                    volumeProblem = L("GoatLauncher isn't running on the TV. Open it. If you removed it, forget this TV and pair it again",
-                                      "O GoatLauncher não está a correr na TV. Abre-o. Se o tiraste, esquece esta TV e emparelha-a outra vez")
-                } else {
-                    volumeProblem = L("The TV's launcher didn't answer. Try again", "O launcher da TV não respondeu. Tenta outra vez")
-                }
+                volumeProblem = VolumeProblem.of(status: sent.status, refused: sent.refused)
                 volumeChanged += 1
             }
         }

@@ -19,10 +19,9 @@ struct AddTVView: View {
                     if finder.found.isEmpty, finder.blocked {
                         // Sem a autorização da rede local, o iOS não deixa procurar: diz-se onde a dar.
                         VStack(alignment: .leading, spacing: 8) {
-                            Text(L("GoatRemote can't look for TVs. Allow Local Network for GoatRemote in Settings, and check that the iPhone is on Wi-Fi.",
-                                   "O GoatRemote não consegue procurar TVs. Autoriza a Rede local para o GoatRemote nas Definições, e vê se o iPhone está no Wi-Fi."))
+                            Text(Strings.goatremoteCantLookForTvsAllow)
                                 .foregroundStyle(Theme.dim)
-                            Button(L("Open Settings", "Abrir Definições")) {
+                            Button(Strings.openSettings) {
                                 if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
                             }
                             .foregroundStyle(Theme.accent)
@@ -31,7 +30,7 @@ struct AddTVView: View {
                     } else if finder.found.isEmpty {
                         HStack(spacing: 12) {
                             ProgressView()
-                            Text(L("Looking for TVs on this network…", "À procura de TVs nesta rede…")).foregroundStyle(Theme.dim)
+                            Text(Strings.lookingForTvsOnThisNetwork).foregroundStyle(Theme.dim)
                         }
                     }
                     ForEach(finder.found) { tv in
@@ -40,26 +39,25 @@ struct AddTVView: View {
                                 Image(systemName: tv.kind.symbol).foregroundStyle(Theme.accent).frame(width: 28)
                                 Text(tv.name).foregroundStyle(.white)
                                 Spacer()
-                                Text(L("Paired", "Emparelhada")).font(.caption).foregroundStyle(Theme.dim)
+                                Text(Strings.pairedF).font(.caption).foregroundStyle(Theme.dim)
                             }
                         } else {
                             FoundTVRow(found: tv)
                         }
                     }
                 } header: {
-                    Text(L("On this network", "Nesta rede"))
+                    Text(Strings.onThisNetwork)
                 } footer: {
-                    Text(L("Android TV, Google TV (SHIELD, Sony, Philips, TCL, Chromecast…) and Apple TV. The TV and the iPhone must be on the same Wi-Fi.",
-                           "Android TV, Google TV (SHIELD, Sony, Philips, TCL, Chromecast…) e Apple TV. A TV e o iPhone têm de estar na mesma rede Wi-Fi."))
+                    Text(Strings.androidTvGoogleTvShieldSony)
                 }
-                Section(L("Or by IP address", "Ou pelo endereço IP")) {
+                Section(Strings.orByIpAddress) {
                     HStack {
                         TextField("192.168.1.50", text: $manualIP)
                             .keyboardType(.numbersAndPunctuation)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                             .accessibilityIdentifier("manual-ip")
-                        Button(L("Pair", "Emparelhar")) {
+                        Button(Strings.pair) {
                             let ip = manualIP.trimmingCharacters(in: .whitespaces)
                             model.startPairing(name: ip, id: ip, host: ip, endpoint: nil)
                         }
@@ -67,15 +65,15 @@ struct AddTVView: View {
                     }
                 }
             }
-            .navigationTitle(L("Add a TV", "Juntar uma TV"))
+            .navigationTitle(Strings.addATv)
             .toolbar {
                 if let onDone, !model.tvs.isEmpty {
-                    ToolbarItem(placement: .cancellationAction) { Button(L("Close", "Fechar"), action: onDone) }
+                    ToolbarItem(placement: .cancellationAction) { Button(Strings.close, action: onDone) }
                 }
                 // Antes de haver uma TV não há o Mais: o diagnóstico fica aqui também.
                 ToolbarItem(placement: .topBarTrailing) {
                     NavigationLink { DiagnosticsView() } label: { Image(systemName: "ladybug") }
-                        .accessibilityLabel(L("Diagnostics", "Diagnóstico"))
+                        .accessibilityLabel(Strings.diagnostics)
                         .accessibilityIdentifier("add:diagnostics")
                 }
             }
@@ -105,39 +103,39 @@ struct PairingSheet: View {
             Text(pairing.name).font(.title2.weight(.semibold)).multilineTextAlignment(.center)
             switch pairing.phase {
             case .connecting:
-                ProgressView(L("Connecting to the TV…", "A ligar à TV…"))
+                ProgressView(Strings.connectingToTheTv)
             case .waitingCode(let retry):
                 Text(retry
-                     ? L("That code doesn't match. Check the one on the TV.", "Esse código não bate certo. Vê o que está na TV.")
+                     ? Strings.thatCodeDoesntMatchCheckThe
                      : pairing.kind == .apple
-                        ? L("Type the PIN shown on the TV.", "Escreve o PIN que aparece na TV.")
-                        : L("Type the code shown on the TV.", "Escreve o código que aparece na TV."))
+                        ? Strings.typeThePinShownOnThe
+                        : Strings.typeTheCodeShownOnThe)
                     .foregroundStyle(retry ? Theme.power : Theme.dim)
                     .multilineTextAlignment(.center)
                 codeField
                 // Algumas Apple TV (tvOS 26/27) entram em modo de PIN mas não o mostram: tenta-se pelo AirPlay.
                 if pairing.kind == .apple, !pairing.usingAirPlay {
-                    Button(L("No PIN on the TV?", "Não aparece o PIN na TV?")) { pairing.useAirPlay() }
+                    Button(Strings.noPinOnTheTv) { pairing.useAirPlay() }
                         .font(.subheadline)
                         .foregroundStyle(Theme.accent)
                         .accessibilityIdentifier("pairing:airplay")
                 }
             case .checking:
-                ProgressView(L("Pairing…", "A emparelhar…"))
+                ProgressView(Strings.pairing)
             case .done:
-                Label(L("Paired", "Emparelhado"), systemImage: "checkmark.circle.fill").foregroundStyle(.green).font(.title3)
+                Label(Strings.pairedM, systemImage: "checkmark.circle.fill").foregroundStyle(.green).font(.title3)
             case .failed(let why):
                 Text(why).foregroundStyle(Theme.power).multilineTextAlignment(.center)
-                Button(L("Try again", "Tentar outra vez")) { pairing.retry() }
+                Button(Strings.tryAgain) { pairing.retry() }
                     .buttonStyle(.borderedProminent)
                     .tint(Theme.accent)
-                Button(L("Send a report", "Enviar relatório")) { diagnostics = true }
+                Button(Strings.sendAReport) { diagnostics = true }
                     .font(.subheadline)
                     .foregroundStyle(Theme.accent)
                     .accessibilityIdentifier("pairing:report")
             }
             Spacer()
-            Button(L("Cancel", "Cancelar")) {
+            Button(Strings.cancel) {
                 DebugLog.add("Pairing: Cancel tapped")
                 pairing.cancel()
                 model.pairing = nil

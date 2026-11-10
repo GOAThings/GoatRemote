@@ -47,6 +47,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import cc.slokker.goatremote.DebugLog
 import cc.slokker.goatremote.L
+import cc.slokker.goatremote.Strings
 import cc.slokker.goatremote.PairingModel
 import cc.slokker.goatremote.Phase
 import cc.slokker.goatremote.RemoteViewModel
@@ -74,13 +75,13 @@ fun PairingDialog(vm: RemoteViewModel, pairing: PairingModel) {
                 Text(pairing.name, fontSize = 22.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
                 Spacer(Modifier.height(18.dp))
                 when (phase) {
-                    Phase.Connecting -> Busy(L("Connecting to the TV…", "A ligar à TV…"))
+                    Phase.Connecting -> Busy(Strings.connectingToTheTv)
                     is Phase.WaitingCode -> {
                         Text(
                             when {
-                                phase.retry -> L("That code doesn't match. Check the one on the TV.", "Esse código não bate certo. Vê o que está na TV.")
-                                pairing.kind == TvKind.APPLE -> L("Type the PIN shown on the TV.", "Escreve o PIN que aparece na TV.")
-                                else -> L("Type the code shown on the TV.", "Escreve o código que aparece na TV.")
+                                phase.retry -> Strings.thatCodeDoesntMatchCheckThe
+                                pairing.kind == TvKind.APPLE -> Strings.typeThePinShownOnThe
+                                else -> Strings.typeTheCodeShownOnThe
                             },
                             color = if (phase.retry) Theme.power else Theme.dim,
                             textAlign = TextAlign.Center,
@@ -90,29 +91,29 @@ fun PairingDialog(vm: RemoteViewModel, pairing: PairingModel) {
                         // Algumas Apple TV (tvOS 26/27) entram em modo de PIN mas não o mostram: tenta-se pelo AirPlay.
                         if (pairing.kind == TvKind.APPLE && !pairing.usingAirPlay) {
                             TextButton(pairing::useAirPlay, Modifier.testTag("pairing:airplay")) {
-                                Text(L("No PIN on the TV?", "Não aparece o PIN na TV?"), color = Theme.accent, fontSize = 15.sp)
+                                Text(Strings.noPinOnTheTv, color = Theme.accent, fontSize = 15.sp)
                             }
                         }
                     }
-                    Phase.Checking -> Busy(L("Pairing…", "A emparelhar…"))
+                    Phase.Checking -> Busy(Strings.pairing)
                     Phase.Done -> Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Rounded.CheckCircle, null, tint = Theme.green)
                         Spacer(Modifier.width(8.dp))
-                        Text(L("Paired", "Emparelhado"), color = Theme.green, fontSize = 19.sp)
+                        Text(Strings.pairedM, color = Theme.green, fontSize = 19.sp)
                     }
                     is Phase.Failed -> {
                         Text(phase.why, color = Theme.power, textAlign = TextAlign.Center)
                         Spacer(Modifier.height(14.dp))
                         Button(onClick = pairing::retry, colors = ButtonDefaults.buttonColors(containerColor = Theme.accent)) {
-                            Text(L("Try again", "Tentar outra vez"))
+                            Text(Strings.tryAgain)
                         }
                         TextButton({ diagnostics = true }, Modifier.testTag("pairing:report")) {
-                            Text(L("Send a report", "Enviar relatório"), color = Theme.accent)
+                            Text(Strings.sendAReport, color = Theme.accent)
                         }
                     }
                 }
                 Spacer(Modifier.height(18.dp))
-                TextButton(onClick = ::cancel) { Text(L("Cancel", "Cancelar"), color = Theme.dim) }
+                TextButton(onClick = ::cancel) { Text(Strings.cancel, color = Theme.dim) }
             }
         }
     }

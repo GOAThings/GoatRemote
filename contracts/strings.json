@@ -1,0 +1,1059 @@
+{
+  "_about": "Every fixed UI text, by key, on both platforms (android Strings.kt, ios RemoteCore Strings.swift): the key names are the same, the wording is byte-identical to what each platform showed before. {phone} is 'phone'/'telemóvel' on Android and 'iPhone' on iOS. 'platforms' lists where a key exists; a platform-specific en/pt overrides the shared one. Texts with values in them (counts, names, codes) are still written where they are used. Intended differences: bin vs swipe to forget a TV, Share (Android) vs the share sheet (iOS), the iOS Local Network hint and Shortcuts error, and iOS's 'Apps' and 'Close'.",
+  "phone": {
+    "android": {
+      "en": "phone",
+      "pt": "telemóvel"
+    },
+    "ios": {
+      "en": "iPhone",
+      "pt": "iPhone"
+    }
+  },
+  "strings": {
+    "aFewMinutes": {
+      "en": "a few minutes",
+      "pt": "uns minutos",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "addATv": {
+      "en": "Add a TV",
+      "pt": "Juntar uma TV",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "all": {
+      "en": "All",
+      "pt": "Todos",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "allApps": {
+      "en": "All apps",
+      "pt": "Todas as apps",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "allTheTvsAppsHere": {
+      "en": "All the TV's apps here",
+      "pt": "Todas as apps da TV aqui",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "allowGoatremoteToInstallAppsThen": {
+      "en": "Allow GoatRemote to install apps, then tap again",
+      "pt": "Autoriza o GoatRemote a instalar apps e toca outra vez",
+      "platforms": [
+        "android"
+      ]
+    },
+    "androidTvGoogleTvShieldSony": {
+      "en": "Android TV, Google TV (SHIELD, Sony, Philips, TCL, Chromecast…) and Apple TV. The TV and the {phone} must be on the same Wi-Fi.",
+      "pt": "Android TV, Google TV (SHIELD, Sony, Philips, TCL, Chromecast…) e Apple TV. A TV e o {phone} têm de estar na mesma rede Wi-Fi.",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "androidTvsDontShareTheirApp": {
+      "en": "Android TVs don't share their app list with the remote. Apps show up here as you open them on the TV, or all of them, with their banners, if the TV has GoatLauncher.",
+      "pt": "As Android TV não dão a lista de apps ao comando. As apps vão aparecendo aqui à medida que as abres na TV, ou todas, com os banners, se a TV tiver o GoatLauncher.",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "apps": {
+      "en": "Apps",
+      "pt": "Apps",
+      "platforms": [
+        "ios"
+      ]
+    },
+    "arrows": {
+      "en": "Arrows",
+      "pt": "Setas",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "audio": {
+      "en": "Audio",
+      "pt": "Áudio",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "back": {
+      "en": "Back",
+      "pt": "Voltar",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "cancel": {
+      "en": "Cancel",
+      "pt": "Cancelar",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "cantReachIt": {
+      "en": "Can't reach it",
+      "pt": "Sem ligação",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "cantReachTheTv": {
+      "en": "Can't reach the TV",
+      "pt": "Não chego à TV",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "changeTheTvsVolumeWhileThe": {
+      "en": "Change the TV's volume while the app is open",
+      "pt": "Mexem no volume da TV com a app aberta",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "channelDown": {
+      "en": "Ch −",
+      "pt": "Can −",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "channelUp": {
+      "en": "Ch +",
+      "pt": "Can +",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "channels": {
+      "en": "Channels",
+      "pt": "Canais",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "checking": {
+      "en": "Checking…",
+      "pt": "A procurar…",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "clear": {
+      "en": "Clear",
+      "pt": "Limpar",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "clearTheDiagnosticsLog": {
+      "en": "Clear the diagnostics log?",
+      "pt": "Limpar o registo de diagnóstico?",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "close": {
+      "en": "Close",
+      "pt": "Fechar",
+      "platforms": [
+        "ios"
+      ]
+    },
+    "connected": {
+      "en": "connected",
+      "pt": "ligada",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "connecting": {
+      "en": "Connecting…",
+      "pt": "A ligar…",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "connectingLower": {
+      "en": "connecting",
+      "pt": "a ligar",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "connectingToTheTv": {
+      "en": "Connecting to the TV…",
+      "pt": "A ligar à TV…",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "copy": {
+      "en": "Copy",
+      "pt": "Copiar",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "couldntCheckForUpdates": {
+      "en": "Couldn't check for updates",
+      "pt": "Não deu para procurar atualizações",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "couldntDownloadTheUpdate": {
+      "en": "Couldn't download the update",
+      "pt": "Não foi possível descarregar a atualização",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "couldntFindTheTvOnThe": {
+      "en": "Couldn't find the TV on the network",
+      "pt": "Não deu para encontrar a TV na rede",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "couldntGetTheChannelsFromGoattv": {
+      "en": "Couldn't get the channels from GoatTV.",
+      "pt": "Não deu para ter os canais do GoatTV.",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "diagnostics": {
+      "en": "Diagnostics",
+      "pt": "Diagnóstico",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "downloading": {
+      "en": "Downloading…",
+      "pt": "A descarregar…",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "favourites": {
+      "en": "Favourites",
+      "pt": "Favoritos",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "forget": {
+      "en": "Forget",
+      "pt": "Esquecer",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "forward": {
+      "en": "Forward",
+      "pt": "Avançar",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "goatlauncherIsntRunningOnTheTv": {
+      "en": "GoatLauncher isn't running on the TV. Open it. If you removed it, forget this TV and pair it again",
+      "pt": "O GoatLauncher não está a correr na TV. Abre-o. Se o tiraste, esquece esta TV e emparelha-a outra vez",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "goatremoteCantLookForTvsAllow": {
+      "en": "GoatRemote can't look for TVs. Allow Local Network for GoatRemote in Settings, and check that the {phone} is on Wi-Fi.",
+      "pt": "O GoatRemote não consegue procurar TVs. Autoriza a Rede local para o GoatRemote nas Definições, e vê se o {phone} está no Wi-Fi.",
+      "platforms": [
+        "ios"
+      ]
+    },
+    "goattvDidntAnswerTryAgain": {
+      "en": "GoatTV didn't answer. Try again",
+      "pt": "O GoatTV não respondeu. Tenta outra vez",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "goattvDidntSwitchChannelsCheckThe": {
+      "en": "GoatTV didn't switch channels. Check the TV and try again",
+      "pt": "O GoatTV não mudou de canal. Vê a TV e tenta outra vez",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "goattvHasToBeOpenOn": {
+      "en": "GoatTV has to be open on the TV",
+      "pt": "O GoatTV tem de estar aberto na TV",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "goattvIsntOpenOnTheTv": {
+      "en": "GoatTV isn't open on the TV.",
+      "pt": "O GoatTV não está aberto na TV.",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "guide": {
+      "en": "Guide",
+      "pt": "Guia",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "home": {
+      "en": "Home",
+      "pt": "Início",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "homeScreen": {
+      "en": "Home screen",
+      "pt": "Ecrã inicial",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "howCanWeReachYouOptional": {
+      "en": "How can we reach you? (optional)",
+      "pt": "Como te contactamos? (opcional)",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "input": {
+      "en": "Input",
+      "pt": "Entrada",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "isItOnAndOnThe": {
+      "en": "Is it on and on the same Wi-Fi? ",
+      "pt": "Está ligada e na mesma rede Wi-Fi? ",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "keyboard": {
+      "en": "Keyboard",
+      "pt": "Teclado",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "lastCh": {
+      "en": "Last ch",
+      "pt": "Último can",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "lookingForTvsOnThisNetwork": {
+      "en": "Looking for TVs on this network…",
+      "pt": "À procura de TVs nesta rede…",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "more": {
+      "en": "More",
+      "pt": "Mais",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "mute": {
+      "en": "Mute",
+      "pt": "Silenciar",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "neverIncludesPinsCodesOrKeys": {
+      "en": "Never includes PINs, codes or keys. Nothing is sent until you send or share it.",
+      "pt": "Nunca tem PINs, códigos nem chaves. Nada sai do telemóvel até o enviares ou partilhares.",
+      "platforms": [
+        "android",
+        "ios"
+      ],
+      "android": {
+        "pt": "Nunca tem PINs, códigos nem chaves. Nada sai do {phone} até o enviares ou partilhares."
+      }
+    },
+    "next": {
+      "en": "Next",
+      "pt": "Seguinte",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "nextChannel": {
+      "en": "Next channel",
+      "pt": "Canal seguinte",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "noChannelsFound": {
+      "en": "No channels found",
+      "pt": "Nenhum canal encontrado",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "noPinOnTheTv": {
+      "en": "No PIN on the TV?",
+      "pt": "Não aparece o PIN na TV?",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "noTvPairedYetOpenGoatremote": {
+      "en": "No TV paired yet. Open GoatRemote and add one",
+      "pt": "Ainda não há TV emparelhada. Abre o GoatRemote e junta uma",
+      "platforms": [
+        "ios"
+      ]
+    },
+    "notPaired": {
+      "en": "Not paired",
+      "pt": "Não emparelhada",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "nowPlaying": {
+      "en": "Now playing",
+      "pt": "A dar agora",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "numbers": {
+      "en": "Numbers",
+      "pt": "Números",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "onThisNetwork": {
+      "en": "On this network",
+      "pt": "Nesta rede",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "openGoattv": {
+      "en": "Open GoatTV",
+      "pt": "Abrir o GoatTV",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "openSettings": {
+      "en": "Open Settings",
+      "pt": "Abrir Definições",
+      "platforms": [
+        "ios"
+      ]
+    },
+    "openedOnThisTv": {
+      "en": "Opened on this TV",
+      "pt": "Abertas nesta TV",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "options": {
+      "en": "Options",
+      "pt": "Opções",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "orByIpAddress": {
+      "en": "Or by IP address",
+      "pt": "Ou pelo endereço IP",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "pair": {
+      "en": "Pair",
+      "pt": "Emparelhar",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "pairAgainTheTvWillShow": {
+      "en": "Pair again: the TV will show a code.",
+      "pt": "Emparelha outra vez: a TV mostra um código.",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "pairThisTvAgain": {
+      "en": "Pair this TV again",
+      "pt": "Emparelhar esta TV outra vez",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "pairedF": {
+      "en": "Paired",
+      "pt": "Emparelhada",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "pairedM": {
+      "en": "Paired",
+      "pt": "Emparelhado",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "pairing": {
+      "en": "Pairing…",
+      "pt": "A emparelhar…",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "phoneVolumeButtons": {
+      "en": "Phone volume buttons",
+      "pt": "Botões de volume do {phone}",
+      "platforms": [
+        "android",
+        "ios"
+      ],
+      "ios": {
+        "en": "{phone} volume buttons"
+      }
+    },
+    "playPause": {
+      "en": "Play/Pause",
+      "pt": "Reproduzir/pausa",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "power": {
+      "en": "Power",
+      "pt": "Ligar",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "previous": {
+      "en": "Previous",
+      "pt": "Anterior",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "previousChannel": {
+      "en": "Previous channel",
+      "pt": "Canal anterior",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "recentlyOpened": {
+      "en": "Recently opened",
+      "pt": "Abertas há pouco",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "rewind": {
+      "en": "Rewind",
+      "pt": "Recuar",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "search": {
+      "en": "Search",
+      "pt": "Pesquisa",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "searchChannels": {
+      "en": "Search channels",
+      "pt": "Procurar canais",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "searchPassword": {
+      "en": "Search, password…",
+      "pt": "Pesquisa, palavra-passe…",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "send": {
+      "en": "Send",
+      "pt": "Enviar",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "sendAReport": {
+      "en": "Send a report",
+      "pt": "Enviar relatório",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "sendReport": {
+      "en": "Send report",
+      "pt": "Enviar relatório",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "settings": {
+      "en": "Settings",
+      "pt": "Definições",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "share": {
+      "en": "Share",
+      "pt": "Partilhar",
+      "platforms": [
+        "android"
+      ]
+    },
+    "subtitles": {
+      "en": "Subtitles",
+      "pt": "Legendas",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "swipeLeftOnATvTo": {
+      "en": "Swipe left on a TV to forget it.",
+      "pt": "Desliza uma TV para a esquerda para a esquecer.",
+      "platforms": [
+        "ios"
+      ]
+    },
+    "swipeToMoveTapToSelect": {
+      "en": "Swipe to move · tap to select",
+      "pt": "Desliza para andar · toca para escolher",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "tapTheBinToForgetA": {
+      "en": "Tap the bin to forget a TV.",
+      "pt": "Toca no caixote para esquecer uma TV.",
+      "platforms": [
+        "android"
+      ]
+    },
+    "thatCodeDoesntMatchCheckThe": {
+      "en": "That code doesn't match. Check the one on the TV.",
+      "pt": "Esse código não bate certo. Vê o que está na TV.",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "theAppleTvCantChangeThis": {
+      "en": "The Apple TV can't change this TV's volume. Use its remote",
+      "pt": "A Apple TV não muda o volume desta TV. Usa o comando dela",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "theAppleTvHasTooMany": {
+      "en": "The Apple TV has too many paired devices. Remove one in Settings → Remotes and Devices → Remote App and Devices.",
+      "pt": "A Apple TV tem demasiados aparelhos emparelhados. Remove um em Definições → Comandos e dispositivos → App Remote e dispositivos.",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "theAppleTvIsBusyPairing": {
+      "en": "The Apple TV is busy pairing with another device. Try again in a moment.",
+      "pt": "A Apple TV está a emparelhar com outro aparelho. Tenta outra vez daqui a pouco.",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "theAppleTvIsntAcceptingNew": {
+      "en": "The Apple TV isn't accepting new devices. On the Apple TV, set Settings → AirPlay and HomeKit → Allow Access to “Everyone on the Same Network” and try again.",
+      "pt": "A Apple TV não está a aceitar aparelhos novos. Na Apple TV, põe Definições → AirPlay e HomeKit → Permitir acesso em “Todos na mesma rede” e tenta outra vez.",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "theListIsTooLongOnly": {
+      "en": "The list is too long: only part of it is shown here.",
+      "pt": "A lista é longa demais: aqui só aparece uma parte.",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "thePinWorkedOverAirplayBut": {
+      "en": "The PIN worked over AirPlay, but this Apple TV doesn't accept it for the remote. Send a report so we can look into it.",
+      "pt": "O PIN funcionou pelo AirPlay, mas esta Apple TV não o aceita para o comando. Envia um relatório para vermos.",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "theTvClosedTheConnection": {
+      "en": "The TV closed the connection",
+      "pt": "A TV fechou a ligação",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "theTvClosedTheConnectionTry": {
+      "en": "The TV closed the connection. Try again.",
+      "pt": "A TV fechou a ligação. Tenta outra vez.",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "theTvsCertificateIsUnreadable": {
+      "en": "The TV's certificate is unreadable",
+      "pt": "O certificado da TV não se lê",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "theTvsLauncherDidntAnswer": {
+      "en": "The TV's launcher didn't answer",
+      "pt": "O launcher da TV não respondeu",
+      "platforms": [
+        "ios"
+      ]
+    },
+    "theTvsLauncherDidntAnswerTry": {
+      "en": "The TV's launcher didn't answer. Try again",
+      "pt": "O launcher da TV não respondeu. Tenta outra vez",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "thereAreNoChannelsInGoattvs": {
+      "en": "There are no channels in GoatTV's list",
+      "pt": "A lista do GoatTV não tem canais",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "thisChannelIsntAvailableOnThe": {
+      "en": "This channel isn't available on the TV",
+      "pt": "Este canal não está disponível na TV",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "thisNetworkCantFindTheGoat": {
+      "en": "This network can't find the GOAT server (its DNS may be blocking it). Try again on mobile data, or use Share.",
+      "pt": "Esta rede não encontra o servidor GOAT (o DNS dela pode estar a bloqueá-lo). Tenta com os dados móveis, ou usa Partilhar.",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "thisTvDoesntKnowThisPhone": {
+      "en": "This TV doesn't know this {phone}",
+      "pt": "Esta TV não conhece este {phone}",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "toUseItAgainYoullHave": {
+      "en": "To use it again, you'll have to pair it again.",
+      "pt": "Para a voltares a usar, tens de a emparelhar outra vez.",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "tooManyReportsFromThisNetwork": {
+      "en": "Too many reports from this network. Try again later, or use Share.",
+      "pt": "Demasiados relatórios desta rede. Tenta mais tarde, ou usa Partilhar.",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "tooManyWrongPinsRestartThe": {
+      "en": "Too many wrong PINs. Restart the Apple TV and try again.",
+      "pt": "Demasiados PINs errados. Reinicia a Apple TV e tenta outra vez.",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "touchSurface": {
+      "en": "Touch surface",
+      "pt": "Superfície de toque",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "tryAgain": {
+      "en": "Try again",
+      "pt": "Tentar outra vez",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "tvIsOff": {
+      "en": "TV is off",
+      "pt": "A TV está desligada",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "tvs": {
+      "en": "TVs",
+      "pt": "TVs",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "typeOnTheTv": {
+      "en": "Type on the TV",
+      "pt": "Escrever na TV",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "typeTheCodeShownOnThe": {
+      "en": "Type the code shown on the TV.",
+      "pt": "Escreve o código que aparece na TV.",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "typeThePinShownOnThe": {
+      "en": "Type the PIN shown on the TV.",
+      "pt": "Escreve o PIN que aparece na TV.",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "updateGoatlauncherOnTheTvTo": {
+      "en": "Update GoatLauncher on the TV to change the volume from here",
+      "pt": "Atualiza o GoatLauncher na TV para mudares o volume daqui",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "version": {
+      "en": "Version",
+      "pt": "Versão",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "vibration": {
+      "en": "Vibration",
+      "pt": "Vibração",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "volDown": {
+      "en": "Vol −",
+      "pt": "Vol −",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "volUp": {
+      "en": "Vol +",
+      "pt": "Vol +",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "whatHappened": {
+      "en": "What happened?",
+      "pt": "O que aconteceu?",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "whatTheAppDidSoFar": {
+      "en": "What the app did so far will be gone, and can't be sent in a report.",
+      "pt": "O que a app fez até agora desaparece, e já não pode ir num relatório.",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "whatTheAppDidToSend": {
+      "en": "What the app did, to send when something fails",
+      "pt": "O que a app fez, para mandar quando algo falha",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "withGoatlauncherOnTheTvAll": {
+      "en": "With GoatLauncher on the TV, all its apps show up here, with their banners.",
+      "pt": "Com o GoatLauncher na TV, aparecem aqui todas as apps dela, com os banners.",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "wrongPinTryAgainTheTv": {
+      "en": "Wrong PIN. Try again: the TV will show a new one.",
+      "pt": "PIN errado. Tenta outra vez: a TV mostra um novo.",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "youHaveTheLatestVersion": {
+      "en": "You have the latest version",
+      "pt": "Tens a versão mais recente",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    }
+  }
+}

@@ -42,7 +42,7 @@ class TvSession(
     var nowInfo by mutableStateOf<NowInfo?>(null)
     var playProblem by mutableStateOf<String?>(null)
     var volumePressed by mutableStateOf<Key?>(null)
-    var volumeProblem by mutableStateOf<String?>(null)
+    var volumeProblem by mutableStateOf<cc.slokker.goatremote.data.VolumeProblem?>(null)
     /** Ícones das apps da Apple TV (da App Store, por bundle id). */
     val appleArtwork = mutableStateMapOf<String, String>()
 

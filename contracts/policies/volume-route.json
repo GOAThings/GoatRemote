@@ -1283,5 +1283,27 @@
   "timings": {
     "learnAfterMs": 800,
     "settleMs": 5000
-  }
+  },
+  "problems": [
+    {
+      "status": 404,
+      "refused": false,
+      "problem": "updateLauncher"
+    },
+    {
+      "status": 0,
+      "refused": true,
+      "problem": "launcherNotRunning"
+    },
+    {
+      "status": 0,
+      "refused": false,
+      "problem": "noAnswer"
+    },
+    {
+      "status": 503,
+      "refused": false,
+      "problem": "noAnswer"
+    }
+  ]
 }

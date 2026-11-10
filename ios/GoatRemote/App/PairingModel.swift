@@ -71,7 +71,7 @@ final class PairingModel: Identifiable {
         var opened: TVConnection?
         do {
             if host == nil, let endpoint { host = await TVFinder.resolve(endpoint) }
-            guard let host else { throw RemoteLink.Failure.unreachable(L("Couldn't find the TV on the network", "Não deu para encontrar a TV na rede")) }
+            guard let host else { throw RemoteLink.Failure.unreachable(Strings.couldntFindTheTvOnThe) }
             DebugLog.add("Pairing: TV at \(host):\(Pairing.port)")
             let identity = try Identity.load()
             let connection = TVConnection(host: host, port: Pairing.port, identity: identity.identity)
@@ -80,7 +80,7 @@ final class PairingModel: Identifiable {
             try await connection.open()
             DebugLog.add("Pairing: TLS open")
             guard let der = connection.serverCertificate, let server = RSAKey(certificate: der) else {
-                throw RemoteLink.Failure.unreachable(L("The TV's certificate is unreadable", "O certificado da TV não se lê"))
+                throw RemoteLink.Failure.unreachable(Strings.theTvsCertificateIsUnreadable)
             }
             try await Pairing.run(
                 clientName: UIDevice.current.name,
@@ -113,7 +113,7 @@ final class PairingModel: Identifiable {
                 port = resolved.port
             }
             guard let host, let port else {
-                throw RemoteLink.Failure.unreachable(L("Couldn't find the TV on the network", "Não deu para encontrar a TV na rede"))
+                throw RemoteLink.Failure.unreachable(Strings.couldntFindTheTvOnThe)
             }
             DebugLog.add("Pairing: Apple TV at \(host):\(port)\(usingAirPlay ? " (via AirPlay)" : "")")
             let askPIN: () async throws -> String = { [weak self] in
@@ -193,19 +193,17 @@ final class PairingModel: Identifiable {
         switch code {
         case 3:
             let wait = retryAfter.map { $0 >= 90 ? L("\(($0 + 59) / 60) minutes", "\(($0 + 59) / 60) minutos") : L("\($0) seconds", "\($0) segundos") }
-                ?? L("a few minutes", "uns minutos")
+                ?? Strings.aFewMinutes
             return L("After several tries, the Apple TV is blocking pairing for a while. Wait \(wait) (or restart the Apple TV) and try again with the Apple TV awake and on screen.",
                      "Depois de várias tentativas, a Apple TV bloqueou o emparelhamento por um bocado. Espera \(wait) (ou reinicia a Apple TV) e tenta outra vez com a Apple TV ligada e no ecrã.")
         case 4:
-            return L("The Apple TV has too many paired devices. Remove one in Settings → Remotes and Devices → Remote App and Devices.",
-                     "A Apple TV tem demasiados aparelhos emparelhados. Remove um em Definições → Comandos e dispositivos → App Remote e dispositivos.")
+            return Strings.theAppleTvHasTooMany
         case 5:
-            return L("Too many wrong PINs. Restart the Apple TV and try again.", "Demasiados PINs errados. Reinicia a Apple TV e tenta outra vez.")
+            return Strings.tooManyWrongPinsRestartThe
         case 6:
-            return L("The Apple TV isn't accepting new devices. On the Apple TV, set Settings → AirPlay and HomeKit → Allow Access to “Everyone on the Same Network” and try again.",
-                     "A Apple TV não está a aceitar aparelhos novos. Na Apple TV, põe Definições → AirPlay e HomeKit → Permitir acesso em “Todos na mesma rede” e tenta outra vez.")
+            return Strings.theAppleTvIsntAcceptingNew
         case 7:
-            return L("The Apple TV is busy pairing with another device. Try again in a moment.", "A Apple TV está a emparelhar com outro aparelho. Tenta outra vez daqui a pouco.")
+            return Strings.theAppleTvIsBusyPairing
         default:
             return L("The Apple TV refused (code \(code)). Try again.", "A Apple TV recusou (código \(code)). Tenta outra vez.")
         }
@@ -216,14 +214,13 @@ final class PairingModel: Identifiable {
         case Pairing.Failure.rejected(let status):
             return L("The TV refused (\(status)). Try again.", "A TV recusou (\(status)). Tenta outra vez.")
         case TVConnection.Failure.closed, CompanionConnection.Failure.closed:
-            return L("The TV closed the connection. Try again.", "A TV fechou a ligação. Tenta outra vez.")
+            return Strings.theTvClosedTheConnectionTry
         case AppleTVPairing.Failure.wrongPIN:
-            return L("Wrong PIN. Try again: the TV will show a new one.", "PIN errado. Tenta outra vez: a TV mostra um novo.")
+            return Strings.wrongPinTryAgainTheTv
         case AppleTVPairing.Failure.refused(let code, let retryAfter):
             return appleRefusal(code, retryAfter)
         case is AirPlayPairing.NotForRemote:
-            return L("The PIN worked over AirPlay, but this Apple TV doesn't accept it for the remote. Send a report so we can look into it.",
-                     "O PIN funcionou pelo AirPlay, mas esta Apple TV não o aceita para o comando. Envia um relatório para vermos.")
+            return Strings.thePinWorkedOverAirplayBut
         case AppleTVPairing.Failure.tv(let why):
             return L("The TV refused: \(why)", "A TV recusou: \(why)")
         case CompanionConnection.Failure.unreachable(let why):

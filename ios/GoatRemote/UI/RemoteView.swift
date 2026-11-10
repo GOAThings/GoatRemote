@@ -41,29 +41,29 @@ struct RemoteView: View {
             }
             .padding(.bottom, 18)
             HStack {
-                GlassKey(symbol: "keyboard", size: 52, tint: Theme.dim, label: L("Keyboard", "Teclado"), id: "keyboard") { model.showKeyboard = true }
+                GlassKey(symbol: "keyboard", size: 52, tint: Theme.dim, label: Strings.keyboard, id: "keyboard") { model.showKeyboard = true }
                 Spacer()
                 GlassKey(symbol: "square.grid.2x2", size: 52, tint: Theme.dim, label: "Apps", id: "apps") { sheet = .apps }
                 Spacer()
                 // Com o GoatTV a dar um canal, a lista abre-se no cartão dele.
                 if model.hasChannels, now == nil {
-                    GlassKey(symbol: "play.tv", size: 52, tint: Theme.dim, label: L("Channels", "Canais"), id: "channels") { sheet = .channels }
+                    GlassKey(symbol: "play.tv", size: 52, tint: Theme.dim, label: Strings.channels, id: "channels") { sheet = .channels }
                     Spacer()
                 }
-                GlassKey(symbol: "backward.fill", size: 52, tint: Theme.dim, label: L("Rewind", "Recuar"), id: "key:rewind") { model.press(.rewind) } onHold: { model.hold(.rewind, down: $0) }
+                GlassKey(symbol: "backward.fill", size: 52, tint: Theme.dim, label: Strings.rewind, id: "key:rewind") { model.press(.rewind) } onHold: { model.hold(.rewind, down: $0) }
                 Spacer()
-                GlassKey(symbol: "forward.fill", size: 52, tint: Theme.dim, label: L("Forward", "Avançar"), id: "key:fastForward") { model.press(.fastForward) } onHold: { model.hold(.fastForward, down: $0) }
+                GlassKey(symbol: "forward.fill", size: 52, tint: Theme.dim, label: Strings.forward, id: "key:fastForward") { model.press(.fastForward) } onHold: { model.hold(.fastForward, down: $0) }
                 Spacer()
-                GlassKey(symbol: "ellipsis", size: 52, tint: Theme.dim, label: L("More", "Mais"), id: "more") { sheet = .more }
+                GlassKey(symbol: "ellipsis", size: 52, tint: Theme.dim, label: Strings.more, id: "more") { sheet = .more }
             }
             .padding(.horizontal, 8)
             .padding(.bottom, 22)
             HStack(alignment: .center) {
-                GlassKey(symbol: "playpause", size: 74, label: L("Play/Pause", "Reproduzir/pausa"), id: "key:playPause") { model.press(.playPause) }
+                GlassKey(symbol: "playpause", size: 74, label: Strings.playPause, id: "key:playPause") { model.press(.playPause) }
                 Spacer()
-                GlassKey(symbol: "chevron.left", size: 96, filled: true, label: L("Back", "Voltar"), id: "key:back") { model.press(.back) } onHold: { model.hold(.back, down: $0) }
+                GlassKey(symbol: "chevron.left", size: 96, filled: true, label: Strings.back, id: "key:back") { model.press(.back) } onHold: { model.hold(.back, down: $0) }
                 Spacer()
-                GlassKey(symbol: "tv", size: 74, label: L("Home", "Início"), id: "key:home") { model.press(.home) } onHold: { model.hold(.home, down: $0) }
+                GlassKey(symbol: "tv", size: 74, label: Strings.home, id: "key:home") { model.press(.home) } onHold: { model.hold(.home, down: $0) }
             }
             .padding(.horizontal, 10)
         }
@@ -130,8 +130,8 @@ struct RemoteView: View {
             .buttonStyle(.plain)
             .accessibilityIdentifier("tv-menu")
             GlassKey(symbol: model.state.muted == true ? "speaker.slash.fill" : "speaker.slash", size: 42,
-                     tint: model.state.muted == true ? Theme.accent : Theme.dim, label: L("Mute", "Silenciar"), id: "key:mute") { model.press(.mute) }
-            GlassKey(symbol: "power", size: 42, tint: model.state.isOn == false ? Theme.dim : Theme.power, label: L("Power", "Ligar"), id: "key:power") { model.press(.power) }
+                     tint: model.state.muted == true ? Theme.accent : Theme.dim, label: Strings.mute, id: "key:mute") { model.press(.mute) }
+            GlassKey(symbol: "power", size: 42, tint: model.state.isOn == false ? Theme.dim : Theme.power, label: Strings.power, id: "key:power") { model.press(.power) }
         }
     }
 
@@ -147,9 +147,9 @@ struct RemoteView: View {
     private var subtitle: String {
         switch model.status {
         case .connected: return screenLabel(model)
-        case .connecting: return L("Connecting…", "A ligar…")
-        case .notPaired: return L("Not paired", "Não emparelhada")
-        case .unreachable: return L("Can't reach it", "Sem ligação")
+        case .connecting: return Strings.connecting
+        case .notPaired: return Strings.notPaired
+        case .unreachable: return Strings.cantReachIt
         case .noTV: return ""
         }
     }
@@ -178,7 +178,7 @@ struct SurfaceInfo: View {
                 Image(systemName: symbol).font(.system(size: 46, weight: .light))
                 Text(title).font(.system(size: 19, weight: .semibold, design: .rounded))
                 Spacer()
-                Text(L("Swipe to move · tap to select", "Desliza para andar · toca para escolher"))
+                Text(Strings.swipeToMoveTapToSelect)
                     .font(.caption)
                     .foregroundStyle(Theme.faint.opacity(0.6))
                     .padding(.bottom, 16)
@@ -192,17 +192,17 @@ struct SurfaceInfo: View {
         case .connecting:
             VStack(spacing: 12) {
                 ProgressView().tint(Theme.dim)
-                Text(L("Connecting to the TV…", "A ligar à TV…")).font(.footnote).foregroundStyle(Theme.dim)
+                Text(Strings.connectingToTheTv).font(.footnote).foregroundStyle(Theme.dim)
             }
             .allowsHitTesting(false)
         case .notPaired:
-            notice(symbol: "link", title: L("This TV doesn't know this iPhone", "Esta TV não conhece este iPhone"),
-                   detail: L("Pair again: the TV will show a code.", "Emparelha outra vez: a TV mostra um código."),
-                   button: L("Pair", "Emparelhar")) { model.repairCurrent() }
+            notice(symbol: "link", title: Strings.thisTvDoesntKnowThisPhone,
+                   detail: Strings.pairAgainTheTvWillShow,
+                   button: Strings.pair) { model.repairCurrent() }
         case .unreachable(let why):
-            notice(symbol: "wifi.exclamationmark", title: L("Can't reach the TV", "Não chego à TV"),
-                   detail: L("Is it on and on the same Wi-Fi? ", "Está ligada e na mesma rede Wi-Fi? ") + why,
-                   button: L("Try again", "Tentar outra vez")) { model.reconnect() }
+            notice(symbol: "wifi.exclamationmark", title: Strings.cantReachTheTv,
+                   detail: Strings.isItOnAndOnThe + why,
+                   button: Strings.tryAgain) { model.reconnect() }
         case .noTV:
             EmptyView()
         }
@@ -239,7 +239,7 @@ struct VolumeHUD: View {
 
     var body: some View {
         if let problem = model.volumeProblem {
-            Label(problem, systemImage: "exclamationmark.triangle.fill")
+            Label(problem.text, systemImage: "exclamationmark.triangle.fill")
                 .font(.footnote)
                 .foregroundStyle(.white)
                 .multilineTextAlignment(.center)
@@ -249,8 +249,7 @@ struct VolumeHUD: View {
                 .padding(.horizontal, 16)
                 .accessibilityIdentifier("volume-hud")
         } else if !model.state.volumeControl {
-            Label(L("The Apple TV can't change this TV's volume. Use its remote",
-                    "A Apple TV não muda o volume desta TV. Usa o comando dela"), systemImage: "speaker.slash.fill")
+            Label(Strings.theAppleTvCantChangeThis, systemImage: "speaker.slash.fill")
                 .font(.footnote)
                 .foregroundStyle(.white)
                 .multilineTextAlignment(.center)
@@ -327,7 +326,7 @@ struct TouchSurface: View {
             .gesture(drag(in: geo.size))
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(L("Touch surface", "Superfície de toque"))
+        .accessibilityLabel(Strings.touchSurface)
         .accessibilityAddTraits(.allowsDirectInteraction)
         .accessibilityIdentifier("touchpad")
         .onDisappear { model.keyHold.end() }
@@ -459,8 +458,8 @@ struct NowCard: View {
             }
             Spacer(minLength: 4)
             VStack(spacing: 6) {
-                zapKey("chevron.up", L("Next channel", "Canal seguinte"), "zap:next") { model.zap(1) }
-                zapKey("chevron.down", L("Previous channel", "Canal anterior"), "zap:previous") { model.zap(-1) }
+                zapKey("chevron.up", Strings.nextChannel, "zap:next") { model.zap(1) }
+                zapKey("chevron.down", Strings.previousChannel, "zap:previous") { model.zap(-1) }
             }
             Button(action: onList) {
                 Image(systemName: "list.bullet").font(.system(size: 18, weight: .semibold)).foregroundStyle(.black)
@@ -468,7 +467,7 @@ struct NowCard: View {
                     .background(Circle().fill(.white))
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(L("Channels", "Canais"))
+            .accessibilityLabel(Strings.channels)
             .accessibilityIdentifier("channels")
         }
         .padding(14)
@@ -526,8 +525,8 @@ struct LayoutSwitch: View {
 
     var body: some View {
         HStack(spacing: 2) {
-            option(.touch, "hand.point.up.left", L("Touch surface", "Superfície de toque"))
-            option(.dpad, "dpad", L("Arrows", "Setas"))
+            option(.touch, "hand.point.up.left", Strings.touchSurface)
+            option(.dpad, "dpad", Strings.arrows)
         }
         .padding(3)
         .background(Capsule().fill(Color.black.opacity(0.35)))
@@ -606,7 +605,7 @@ struct DPad: View {
         .padding(20)
         .background(HeroBackground(shape: RoundedRectangle(cornerRadius: 28, style: .continuous), glow: 0.16))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(L("Arrows", "Setas"))
+        .accessibilityLabel(Strings.arrows)
         .accessibilityAddTraits(.allowsDirectInteraction)
         .accessibilityIdentifier("dpad")
         .onDisappear { model.keyHold.end() }
@@ -713,11 +712,11 @@ private func onScreen(_ model: RemoteModel) -> OnScreen {
 @MainActor
 private func screenLabel(_ model: RemoteModel) -> String {
     switch onScreen(model) {
-    case .off: return L("TV is off", "A TV está desligada")
+    case .off: return Strings.tvIsOff
     case .app: return AppCatalog.name(model.state.currentApp ?? "")
     // A Apple TV não diz que app está aberta.
     case .appleTV: return "Apple TV"
-    case .home: return L("Home screen", "Ecrã inicial")
+    case .home: return Strings.homeScreen
     }
 }
 

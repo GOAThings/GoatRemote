@@ -90,6 +90,10 @@ class PoliciesTest {
             assertEquals(row.toString(), row.getBoolean("changed"),
                 VolumeRoute.changed(pair(row.getJSONArray("old")), pair(row.getJSONArray("new")), row.getBoolean("unknown"), row.getBoolean("settled")))
         }
+        for (row in table.getJSONArray("problems").objects()) {
+            val got = cc.slokker.goatremote.data.VolumeProblem.of(row.getInt("status"), row.getBoolean("refused"))
+            assertTrue("$row → $got", same(got, row.getString("problem")))
+        }
         val timings = table.getJSONObject("timings")
         assertEquals(timings.getLong("learnAfterMs"), VolumeRoute.LEARN_AFTER_MS)
         assertEquals(timings.getLong("settleMs"), VolumeRoute.SETTLE_MS)

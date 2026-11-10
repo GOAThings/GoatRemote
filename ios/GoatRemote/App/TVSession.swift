@@ -22,7 +22,7 @@ final class TVSession {
     var playProblem: String?
     var nowInfo: NowInfo?
     var volumePressed: Key?
-    var volumeProblem: String?
+    var volumeProblem: VolumeProblem?
     /// Ícones das apps da Apple TV (da App Store, por bundle id).
     var appleArtwork: [String: URL] = [:]
 

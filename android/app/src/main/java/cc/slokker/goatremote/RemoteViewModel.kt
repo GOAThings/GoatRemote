@@ -35,6 +35,7 @@ import cc.slokker.goatremote.data.PlayStep
 import cc.slokker.goatremote.data.RecentApps
 import cc.slokker.goatremote.data.VolumeRoute
 import cc.slokker.goatremote.data.VolumeRouter
+import cc.slokker.goatremote.data.VolumeProblem
 import cc.slokker.goatremote.data.NowInfo
 import cc.slokker.goatremote.data.PrefKeys
 import cc.slokker.goatremote.data.SavedTv
@@ -67,9 +68,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
-
-/** Inglês ou português, conforme a língua do telemóvel (como na app do iPhone). */
-fun L(en: String, pt: String) = if (Locale.getDefault().language == "pt") pt else en
 
 /** O meio do comando: a superfície de toque (deslizar) ou as setas com o OK, como num comando físico. */
 enum class RemoteLayout {
@@ -238,7 +236,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
                         status = Status.Connecting
                         retryLater(tv, decision)
                     } else {
-                        status = Status.Unreachable(L("The TV closed the connection", "A TV fechou a ligação"))
+                        status = Status.Unreachable(Strings.theTvClosedTheConnection)
                     }
                 }
             }
@@ -560,7 +558,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
         play(group[(i + delta).mod(group.size)])
     }
 
-    fun goatTvClosedLine() = L("GoatTV has to be open on the TV", "O GoatTV tem de estar aberto na TV")
+    fun goatTvClosedLine() = Strings.goattvHasToBeOpenOn
 
     fun channelLogoUrl(channel: TvChannel): String? {
         val tv = current ?: return null
@@ -593,13 +591,13 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
                         return@launch
                     }
                     PlayStep.NOT_FOUND -> {
-                        playProblem = L("This channel isn't available on the TV", "Este canal não está disponível na TV")
+                        playProblem = Strings.thisChannelIsntAvailableOnThe
                         refreshChannels()
                         return@launch
                     }
                     PlayStep.FAILED -> {
                         DebugLog.add("Play: GoatTV answered HTTP $status")
-                        playProblem = L("GoatTV didn't answer. Try again", "O GoatTV não respondeu. Tenta outra vez")
+                        playProblem = Strings.goattvDidntAnswerTryAgain
                         return@launch
                     }
                     PlayStep.START_WAITING -> {
@@ -618,8 +616,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
                         return@launch
                     }
                     PlayStep.TIMED_OUT -> {
-                        playProblem = L("GoatTV didn't switch channels. Check the TV and try again",
-                            "O GoatTV não mudou de canal. Vê a TV e tenta outra vez")
+                        playProblem = Strings.goattvDidntSwitchChannelsCheckThe
                         return@launch
                     }
                     PlayStep.KEEP_WAITING -> Unit
@@ -730,7 +727,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
         private set(value) { session.volumePressed = value }
 
     /** Mostrado no indicador de volume quando o launcher não respondeu (null: nada a dizer). */
-    var volumeProblem: String?
+    var volumeProblem: VolumeProblem?
         get() = session.volumeProblem
         private set(value) { session.volumeProblem = value }
 
@@ -753,12 +750,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 LauncherVolume.Outcome.NO_LAUNCHER -> if (current?.id == tv.id) link?.key(key)
                 LauncherVolume.Outcome.DIDNT_ANSWER -> if (current?.id == tv.id) {
-                    volumeProblem = when {
-                        sent.status == 404 -> L("Update GoatLauncher on the TV to change the volume from here", "Atualiza o GoatLauncher na TV para mudares o volume daqui")
-                        sent.refused -> L("GoatLauncher isn't running on the TV. Open it. If you removed it, forget this TV and pair it again",
-                            "O GoatLauncher não está a correr na TV. Abre-o. Se o tiraste, esquece esta TV e emparelha-a outra vez")
-                        else -> L("The TV's launcher didn't answer. Try again", "O launcher da TV não respondeu. Tenta outra vez")
-                    }
+                    volumeProblem = VolumeProblem.of(sent.status, sent.refused)
                     volumeChanged++
                 }
             }

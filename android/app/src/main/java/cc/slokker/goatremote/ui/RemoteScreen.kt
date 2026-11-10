@@ -100,6 +100,8 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cc.slokker.goatremote.L
+import cc.slokker.goatremote.Strings
+import cc.slokker.goatremote.text
 import cc.slokker.goatremote.RemoteViewModel
 import cc.slokker.goatremote.RemoteViewModel.Status
 import cc.slokker.goatremote.data.AppCatalog
@@ -164,24 +166,24 @@ fun RemoteScreen(vm: RemoteViewModel) {
         Spacer(Modifier.height(18.dp))
         val small = Theme.dim
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            GlassKey(Icons.Rounded.Keyboard, L("Keyboard", "Teclado"), "keyboard", 52.dp, small) { vm.showKeyboard = true }
+            GlassKey(Icons.Rounded.Keyboard, Strings.keyboard, "keyboard", 52.dp, small) { vm.showKeyboard = true }
             GlassKey(Icons.Rounded.Apps, "Apps", "apps", 52.dp, small) { sheet = Sheet.APPS }
             // Com o GoatTV a dar um canal, a lista abre-se no cartão dele.
-            if (vm.hasChannels && now == null) GlassKey(Icons.Rounded.LiveTv, L("Channels", "Canais"), "channels", 52.dp, small) { sheet = Sheet.CHANNELS }
-            GlassKey(Icons.Rounded.FastRewind, L("Rewind", "Recuar"), "key:rewind", 52.dp, small, onHold = { vm.hold(Key.REWIND, it) }) { vm.press(Key.REWIND) }
-            GlassKey(Icons.Rounded.FastForward, L("Forward", "Avançar"), "key:fastForward", 52.dp, small, onHold = { vm.hold(Key.FAST_FORWARD, it) }) {
+            if (vm.hasChannels && now == null) GlassKey(Icons.Rounded.LiveTv, Strings.channels, "channels", 52.dp, small) { sheet = Sheet.CHANNELS }
+            GlassKey(Icons.Rounded.FastRewind, Strings.rewind, "key:rewind", 52.dp, small, onHold = { vm.hold(Key.REWIND, it) }) { vm.press(Key.REWIND) }
+            GlassKey(Icons.Rounded.FastForward, Strings.forward, "key:fastForward", 52.dp, small, onHold = { vm.hold(Key.FAST_FORWARD, it) }) {
                 vm.press(Key.FAST_FORWARD)
             }
-            GlassKey(Icons.Rounded.MoreHoriz, L("More", "Mais"), "more", 52.dp, small) { sheet = Sheet.MORE }
+            GlassKey(Icons.Rounded.MoreHoriz, Strings.more, "more", 52.dp, small) { sheet = Sheet.MORE }
         }
         Spacer(Modifier.height(22.dp))
         Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween) {
             PlayPauseKey { vm.press(Key.PLAY_PAUSE) }
-            GlassKey(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, L("Back", "Voltar"), "key:back", 96.dp, filled = true, onHold = { vm.hold(Key.BACK, it) }) {
+            GlassKey(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, Strings.back, "key:back", 96.dp, filled = true, onHold = { vm.hold(Key.BACK, it) }) {
                 vm.press(Key.BACK)
             }
-            GlassKey(Icons.Rounded.Tv, L("Home", "Início"), "key:home", 74.dp, onHold = { vm.hold(Key.HOME, it) }) { vm.press(Key.HOME) }
+            GlassKey(Icons.Rounded.Tv, Strings.home, "key:home", 74.dp, onHold = { vm.hold(Key.HOME, it) }) { vm.press(Key.HOME) }
         }
     }
 
@@ -201,7 +203,7 @@ private fun PlayPauseKey(onTap: () -> Unit) {
     var pressed by remember { mutableStateOf(false) }
     Row(
         Modifier.size(74.dp).glass(CircleShape, pressed).pressable(onTap) { pressed = it }
-            .semantics { contentDescription = L("Play/Pause", "Reproduzir/pausa") }
+            .semantics { contentDescription = Strings.playPause }
             .testTag("key:playPause"),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
@@ -218,7 +220,7 @@ private fun Header(vm: RemoteViewModel, onTvs: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Column(
             Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).clickable(onClick = onTvs)
-                .semantics { contentDescription = L("TVs", "TVs") }
+                .semantics { contentDescription = Strings.tvs }
                 .testTag("tv-menu"),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -233,9 +235,9 @@ private fun Header(vm: RemoteViewModel, onTvs: () -> Unit) {
             }
         }
         Spacer(Modifier.width(10.dp))
-        GlassKey(Icons.Rounded.VolumeOff, L("Mute", "Silenciar"), "key:mute", 42.dp, if (muted) Theme.accent else Theme.dim) { vm.press(Key.MUTE) }
+        GlassKey(Icons.Rounded.VolumeOff, Strings.mute, "key:mute", 42.dp, if (muted) Theme.accent else Theme.dim) { vm.press(Key.MUTE) }
         Spacer(Modifier.width(8.dp))
-        GlassKey(Icons.Rounded.PowerSettingsNew, L("Power", "Ligar"), "key:power", 42.dp, if (vm.state.isOn == false) Theme.dim else Theme.power) {
+        GlassKey(Icons.Rounded.PowerSettingsNew, Strings.power, "key:power", 42.dp, if (vm.state.isOn == false) Theme.dim else Theme.power) {
             vm.press(Key.POWER)
         }
     }
@@ -276,13 +278,13 @@ private fun NowCard(vm: RemoteViewModel, channel: TvChannel, onList: () -> Unit)
         }
         Spacer(Modifier.width(8.dp))
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            ZapKey(Icons.Rounded.KeyboardArrowUp, L("Next channel", "Canal seguinte"), "zap:next") { vm.zap(1) }
-            ZapKey(Icons.Rounded.KeyboardArrowDown, L("Previous channel", "Canal anterior"), "zap:previous") { vm.zap(-1) }
+            ZapKey(Icons.Rounded.KeyboardArrowUp, Strings.nextChannel, "zap:next") { vm.zap(1) }
+            ZapKey(Icons.Rounded.KeyboardArrowDown, Strings.previousChannel, "zap:previous") { vm.zap(-1) }
         }
         Spacer(Modifier.width(10.dp))
         Box(
             Modifier.size(44.dp).clip(CircleShape).background(Color.White).clickable(onClick = onList)
-                .semantics { contentDescription = L("Channels", "Canais") }
+                .semantics { contentDescription = Strings.channels }
                 .testTag("channels"),
             contentAlignment = Alignment.Center,
         ) { Icon(Icons.AutoMirrored.Rounded.List, null, tint = Color.Black, modifier = Modifier.size(22.dp)) }
@@ -309,8 +311,8 @@ private fun ZapKey(icon: androidx.compose.ui.graphics.vector.ImageVector, label:
 private fun LayoutSwitch(vm: RemoteViewModel, modifier: Modifier) {
     Row(modifier.clip(RoundedCornerShape(50)).background(Color.Black.copy(alpha = 0.35f)).padding(3.dp)) {
         for ((layout, icon, label) in listOf(
-            Triple(RemoteLayout.TOUCH, Icons.Rounded.TouchApp, L("Touch surface", "Superfície de toque")),
-            Triple(RemoteLayout.DPAD, Icons.Rounded.Gamepad, L("Arrows", "Setas")),
+            Triple(RemoteLayout.TOUCH, Icons.Rounded.TouchApp, Strings.touchSurface),
+            Triple(RemoteLayout.DPAD, Icons.Rounded.Gamepad, Strings.arrows),
         )) {
             val on = vm.layout == layout
             Box(
@@ -333,9 +335,9 @@ private fun statusColor(vm: RemoteViewModel) = when (vm.status) {
 
 private fun subtitle(vm: RemoteViewModel): String = when (vm.status) {
     Status.Connected -> screenLabel(vm)
-    Status.Connecting -> L("Connecting…", "A ligar…")
-    Status.NotPaired -> L("Not paired", "Não emparelhada")
-    is Status.Unreachable -> L("Can't reach it", "Sem ligação")
+    Status.Connecting -> Strings.connecting
+    Status.NotPaired -> Strings.notPaired
+    is Status.Unreachable -> Strings.cantReachIt
     Status.NoTv -> ""
 }
 
@@ -343,11 +345,11 @@ private fun onScreen(vm: RemoteViewModel) = OnScreen.of(vm.state.isOn, vm.state.
 
 /** O que está no ecrã da TV: o subtítulo do cabeçalho e a marca-d'água da superfície dizem o mesmo. */
 private fun screenLabel(vm: RemoteViewModel): String = when (onScreen(vm)) {
-    OnScreen.OFF -> L("TV is off", "A TV está desligada")
+    OnScreen.OFF -> Strings.tvIsOff
     OnScreen.APP -> AppCatalog.name(vm.state.currentApp.orEmpty())
     // A Apple TV não diz que app está aberta.
     OnScreen.APPLE_TV -> "Apple TV"
-    OnScreen.HOME -> L("Home screen", "Ecrã inicial")
+    OnScreen.HOME -> Strings.homeScreen
 }
 
 /** Dentro da superfície: a app aberta em marca-d'água, ou o que se passa com a ligação (com o que fazer). */
@@ -374,7 +376,7 @@ private fun SurfaceInfo(vm: RemoteViewModel) {
                     )
                 }
                 Text(
-                    L("Swipe to move · tap to select", "Desliza para andar · toca para escolher"),
+                    Strings.swipeToMoveTapToSelect,
                     color = Theme.faint.copy(alpha = 0.25f), fontSize = 12.sp, textAlign = TextAlign.Center,
                     modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp, start = 20.dp, end = 20.dp),
                 )
@@ -382,19 +384,19 @@ private fun SurfaceInfo(vm: RemoteViewModel) {
             Status.Connecting -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 CircularProgressIndicator(color = Theme.dim, strokeWidth = 2.dp, modifier = Modifier.size(28.dp))
                 Spacer(Modifier.height(12.dp))
-                Text(L("Connecting to the TV…", "A ligar à TV…"), color = Theme.dim, fontSize = 13.sp)
+                Text(Strings.connectingToTheTv, color = Theme.dim, fontSize = 13.sp)
             }
             Status.NotPaired -> Notice(
                 Icons.Rounded.Link,
-                L("This TV doesn't know this phone", "Esta TV não conhece este telemóvel"),
-                L("Pair again: the TV will show a code.", "Emparelha outra vez: a TV mostra um código."),
-                L("Pair", "Emparelhar"),
+                Strings.thisTvDoesntKnowThisPhone,
+                Strings.pairAgainTheTvWillShow,
+                Strings.pair,
             ) { vm.repairCurrent() }
             is Status.Unreachable -> Notice(
                 Icons.Rounded.WifiOff,
-                L("Can't reach the TV", "Não chego à TV"),
-                L("Is it on and on the same Wi-Fi? ", "Está ligada e na mesma rede Wi-Fi? ") + s.why,
-                L("Try again", "Tentar outra vez"),
+                Strings.cantReachTheTv,
+                Strings.isItOnAndOnThe + s.why,
+                Strings.tryAgain,
             ) { vm.reconnect() }
             Status.NoTv -> Unit
         }
@@ -424,7 +426,7 @@ private fun VolumeHud(vm: RemoteViewModel) {
             verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Rounded.Warning, null, tint = Color.White, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(8.dp))
-            Text(problem, color = Color.White, fontSize = 13.sp, textAlign = TextAlign.Center)
+            Text(problem.text, color = Color.White, fontSize = 13.sp, textAlign = TextAlign.Center)
         }
         return
     }
@@ -433,7 +435,7 @@ private fun VolumeHud(vm: RemoteViewModel) {
             verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Rounded.VolumeOff, null, tint = Color.White, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(8.dp))
-            Text(L("The Apple TV can't change this TV's volume. Use its remote", "A Apple TV não muda o volume desta TV. Usa o comando dela"),
+            Text(Strings.theAppleTvCantChangeThis,
                 color = Color.White, fontSize = 13.sp, textAlign = TextAlign.Center)
         }
         return
@@ -487,7 +489,7 @@ private fun TouchSurface(vm: RemoteViewModel) {
 
     BoxWithConstraints(
         Modifier.fillMaxSize().hero(shape, glow = 0.16f)
-            .semantics { contentDescription = L("Touch surface", "Superfície de toque") }
+            .semantics { contentDescription = Strings.touchSurface }
             .testTag("touchpad")
             .pointerInput(Unit) {
                 awaitEachGesture {
@@ -571,7 +573,7 @@ private fun Dpad(vm: RemoteViewModel, ready: Boolean) {
         Box(
             Modifier.size(side)
                 .alpha(if (ready) 1f else 0.4f)
-                .semantics { contentDescription = L("Arrows", "Setas") }
+                .semantics { contentDescription = Strings.arrows }
                 .testTag("dpad")
                 .pointerInput(Unit) {
                     fun keyAt(p: Offset): Key? {

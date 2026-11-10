@@ -84,14 +84,14 @@ class PairingModel(
 
     private suspend fun runAndroid() {
         try {
-            val host = host ?: throw UnreachableException(L("Couldn't find the TV on the network", "Não deu para encontrar a TV na rede"))
+            val host = host ?: throw UnreachableException(Strings.couldntFindTheTvOnThe)
             DebugLog.add("Pairing: TV at $host:${Pairing.PORT}")
             val identity = withContext(Dispatchers.IO) { identities.get() }
             val socket = TvSocket.open(host, Pairing.PORT, identity)
             DebugLog.add("Pairing: TLS open")
             this.socket = socket
             val server = socket.serverCertificate?.let(RsaKey::of)
-                ?: throw UnreachableException(L("The TV's certificate is unreadable", "O certificado da TV não se lê"))
+                ?: throw UnreachableException(Strings.theTvsCertificateIsUnreadable)
             val client = RsaKey.of(identity.certificate)!!
             Pairing.run(
                 clientName = deviceName(),
@@ -121,7 +121,7 @@ class PairingModel(
             val host = host
             val port = port
             if (host == null || port == null) {
-                throw UnreachableException(L("Couldn't find the TV on the network", "Não deu para encontrar a TV na rede"))
+                throw UnreachableException(Strings.couldntFindTheTvOnThe)
             }
             DebugLog.add("Pairing: Apple TV at $host:$port${if (usingAirPlay) " (via AirPlay)" else ""}")
             if (usingAirPlay) {
@@ -211,12 +211,11 @@ class PairingModel(
     private fun explain(e: Exception): String = when (e) {
         is Pairing.Rejected -> L("The TV refused (${e.status}). Try again.", "A TV recusou (${e.status}). Tenta outra vez.")
         is NotPairedException, is java.io.EOFException ->
-            L("The TV closed the connection. Try again.", "A TV fechou a ligação. Tenta outra vez.")
-        is AppleTvPairing.WrongPin -> L("Wrong PIN. Try again: the TV will show a new one.", "PIN errado. Tenta outra vez: a TV mostra um novo.")
+            Strings.theTvClosedTheConnectionTry
+        is AppleTvPairing.WrongPin -> Strings.wrongPinTryAgainTheTv
         is AppleTvPairing.Refused -> appleRefusal(e.code, e.retryAfter)
         is AirPlayPairing.NotForRemote ->
-            L("The PIN worked over AirPlay, but this Apple TV doesn't accept it for the remote. Send a report so we can look into it.",
-                "O PIN funcionou pelo AirPlay, mas esta Apple TV não o aceita para o comando. Envia um relatório para vermos.")
+            Strings.thePinWorkedOverAirplayBut
         is CompanionConnection.TvError -> L("The TV refused: ${e.message}", "A TV recusou: ${e.message}")
         else -> describe(e)
     }
@@ -226,15 +225,13 @@ class PairingModel(
 private fun appleRefusal(code: Int, retryAfter: Int?): String = when (code) {
     3 -> {
         val wait = retryAfter?.let { if (it >= 90) L("${(it + 59) / 60} minutes", "${(it + 59) / 60} minutos") else L("$it seconds", "$it segundos") }
-            ?: L("a few minutes", "uns minutos")
+            ?: Strings.aFewMinutes
         L("After several tries, the Apple TV is blocking pairing for a while. Wait $wait (or restart the Apple TV) and try again with the Apple TV awake and on screen.",
             "Depois de várias tentativas, a Apple TV bloqueou o emparelhamento por um bocado. Espera $wait (ou reinicia a Apple TV) e tenta outra vez com a Apple TV ligada e no ecrã.")
     }
-    4 -> L("The Apple TV has too many paired devices. Remove one in Settings → Remotes and Devices → Remote App and Devices.",
-        "A Apple TV tem demasiados aparelhos emparelhados. Remove um em Definições → Comandos e dispositivos → App Remote e dispositivos.")
-    5 -> L("Too many wrong PINs. Restart the Apple TV and try again.", "Demasiados PINs errados. Reinicia a Apple TV e tenta outra vez.")
-    6 -> L("The Apple TV isn't accepting new devices. On the Apple TV, set Settings → AirPlay and HomeKit → Allow Access to “Everyone on the Same Network” and try again.",
-        "A Apple TV não está a aceitar aparelhos novos. Na Apple TV, põe Definições → AirPlay e HomeKit → Permitir acesso em “Todos na mesma rede” e tenta outra vez.")
-    7 -> L("The Apple TV is busy pairing with another device. Try again in a moment.", "A Apple TV está a emparelhar com outro aparelho. Tenta outra vez daqui a pouco.")
+    4 -> Strings.theAppleTvHasTooMany
+    5 -> Strings.tooManyWrongPinsRestartThe
+    6 -> Strings.theAppleTvIsntAcceptingNew
+    7 -> Strings.theAppleTvIsBusyPairing
     else -> L("The Apple TV refused (code $code). Try again.", "A Apple TV recusou (código $code). Tenta outra vez.")
 }
