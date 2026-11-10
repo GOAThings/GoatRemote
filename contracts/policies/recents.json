@@ -1,0 +1,132 @@
+{
+  "_about": "RecentApps.push: the app goes first, without repeats, at most 12; a home screen (contains 'launcher', or launcherx; GoatLauncher too, by design) doesn't count; null = unchanged (nothing written: D3, iOS used to rewrite on every state update). RecentApps.sanitize: only package names, no repeats, at most 12. Written from the behaviour before the move (VM/RM at origin/parity 3183ca9). Android data/Policies.kt and RemoteCore Policies.swift must both pass every row.",
+  "push": [
+    {
+      "list": [],
+      "app": null,
+      "result": null
+    },
+    {
+      "list": [
+        "a.b"
+      ],
+      "app": "a.b",
+      "result": null
+    },
+    {
+      "list": [
+        "a.b",
+        "c.d"
+      ],
+      "app": "c.d",
+      "result": [
+        "c.d",
+        "a.b"
+      ]
+    },
+    {
+      "list": [
+        "a.b"
+      ],
+      "app": "com.google.android.tvlauncher",
+      "result": null
+    },
+    {
+      "list": [],
+      "app": "com.google.android.apps.tv.launcherx",
+      "result": null
+    },
+    {
+      "list": [],
+      "app": "cc.slokker.goatlauncher",
+      "result": null
+    },
+    {
+      "list": [
+        "com.app0",
+        "com.app1",
+        "com.app2",
+        "com.app3",
+        "com.app4",
+        "com.app5",
+        "com.app6",
+        "com.app7",
+        "com.app8",
+        "com.app9",
+        "com.app10",
+        "com.app11"
+      ],
+      "app": "new.app",
+      "result": [
+        "new.app",
+        "com.app0",
+        "com.app1",
+        "com.app2",
+        "com.app3",
+        "com.app4",
+        "com.app5",
+        "com.app6",
+        "com.app7",
+        "com.app8",
+        "com.app9",
+        "com.app10"
+      ]
+    },
+    {
+      "list": [
+        "a.b"
+      ],
+      "app": "x.y",
+      "result": [
+        "x.y",
+        "a.b"
+      ]
+    }
+  ],
+  "sanitize": [
+    {
+      "saved": [
+        "a.b",
+        "a.b",
+        "../x",
+        "c d",
+        "e.f"
+      ],
+      "result": [
+        "a.b",
+        "e.f"
+      ]
+    },
+    {
+      "saved": [
+        "com.app0",
+        "com.app1",
+        "com.app2",
+        "com.app3",
+        "com.app4",
+        "com.app5",
+        "com.app6",
+        "com.app7",
+        "com.app8",
+        "com.app9",
+        "com.app10",
+        "com.app11",
+        "z.z"
+      ],
+      "result": [
+        "com.app0",
+        "com.app1",
+        "com.app2",
+        "com.app3",
+        "com.app4",
+        "com.app5",
+        "com.app6",
+        "com.app7",
+        "com.app8",
+        "com.app9",
+        "com.app10",
+        "com.app11"
+      ]
+    }
+  ]
+}

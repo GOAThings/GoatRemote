@@ -1,0 +1,82 @@
+{
+  "_about": "ChannelsOutcome.of for GET /channels: a list = ready; refused or 503 = GoatTV closed (the card goes); anything else keeps the list on screen, or fails if there is none. Written from the behaviour before the move (VM/RM at origin/parity 3183ca9). Android data/Policies.kt and RemoteCore Policies.swift must both pass every row.",
+  "rows": [
+    {
+      "status": 200,
+      "refused": false,
+      "parsed": true,
+      "hadList": false,
+      "outcome": "ready"
+    },
+    {
+      "status": 200,
+      "refused": false,
+      "parsed": true,
+      "hadList": true,
+      "outcome": "ready"
+    },
+    {
+      "status": 200,
+      "refused": false,
+      "parsed": false,
+      "hadList": false,
+      "outcome": "failed"
+    },
+    {
+      "status": 200,
+      "refused": false,
+      "parsed": false,
+      "hadList": true,
+      "outcome": "keep"
+    },
+    {
+      "status": 503,
+      "refused": false,
+      "parsed": false,
+      "hadList": true,
+      "outcome": "closed"
+    },
+    {
+      "status": 0,
+      "refused": true,
+      "parsed": false,
+      "hadList": true,
+      "outcome": "closed"
+    },
+    {
+      "status": 0,
+      "refused": true,
+      "parsed": false,
+      "hadList": false,
+      "outcome": "closed"
+    },
+    {
+      "status": 0,
+      "refused": false,
+      "parsed": false,
+      "hadList": false,
+      "outcome": "failed"
+    },
+    {
+      "status": 0,
+      "refused": false,
+      "parsed": false,
+      "hadList": true,
+      "outcome": "keep"
+    },
+    {
+      "status": 404,
+      "refused": false,
+      "parsed": false,
+      "hadList": false,
+      "outcome": "failed"
+    },
+    {
+      "status": 500,
+      "refused": false,
+      "parsed": false,
+      "hadList": true,
+      "outcome": "keep"
+    }
+  ]
+}

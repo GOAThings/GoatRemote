@@ -1,0 +1,130 @@
+{
+  "_about": "ConnectPolicy.next: not-paired retries 3x at 2/4/6 s (the SHIELD refuses for a few seconds after a channel change); any other failure retries once after 1.5 s (D1: both platforms since parity); a closed link reconnects by itself after 1.5 s, Android TVs only, at most once per 10 s. Written from the behaviour before the move (VM/RM at origin/parity 3183ca9). Android data/Policies.kt and RemoteCore Policies.swift must both pass every row.",
+  "rows": [
+    {
+      "failure": "notPaired",
+      "notPairedRetries": 0,
+      "retry": true,
+      "kind": "android",
+      "sinceAutoReconnectMs": 99999,
+      "expected": {
+        "retryMs": 2000,
+        "retryOnFailure": true
+      }
+    },
+    {
+      "failure": "notPaired",
+      "notPairedRetries": 1,
+      "retry": true,
+      "kind": "android",
+      "sinceAutoReconnectMs": 99999,
+      "expected": {
+        "retryMs": 4000,
+        "retryOnFailure": true
+      }
+    },
+    {
+      "failure": "notPaired",
+      "notPairedRetries": 2,
+      "retry": true,
+      "kind": "android",
+      "sinceAutoReconnectMs": 99999,
+      "expected": {
+        "retryMs": 6000,
+        "retryOnFailure": true
+      }
+    },
+    {
+      "failure": "notPaired",
+      "notPairedRetries": 3,
+      "retry": true,
+      "kind": "android",
+      "sinceAutoReconnectMs": 99999,
+      "expected": {
+        "show": "notPaired"
+      }
+    },
+    {
+      "failure": "failed",
+      "notPairedRetries": 0,
+      "retry": true,
+      "kind": "android",
+      "sinceAutoReconnectMs": 99999,
+      "expected": {
+        "retryMs": 1500,
+        "retryOnFailure": false
+      }
+    },
+    {
+      "failure": "failed",
+      "notPairedRetries": 0,
+      "retry": false,
+      "kind": "android",
+      "sinceAutoReconnectMs": 99999,
+      "expected": {
+        "show": "unreachable"
+      }
+    },
+    {
+      "failure": "closed",
+      "notPairedRetries": 0,
+      "retry": true,
+      "kind": "android",
+      "sinceAutoReconnectMs": 10001,
+      "expected": {
+        "retryMs": 1500,
+        "retryOnFailure": true
+      }
+    },
+    {
+      "failure": "closed",
+      "notPairedRetries": 0,
+      "retry": true,
+      "kind": "android",
+      "sinceAutoReconnectMs": 10000,
+      "expected": {
+        "show": "closed"
+      }
+    },
+    {
+      "failure": "closed",
+      "notPairedRetries": 0,
+      "retry": true,
+      "kind": "android",
+      "sinceAutoReconnectMs": 500,
+      "expected": {
+        "show": "closed"
+      }
+    },
+    {
+      "failure": "closed",
+      "notPairedRetries": 0,
+      "retry": true,
+      "kind": "apple",
+      "sinceAutoReconnectMs": 10001,
+      "expected": {
+        "show": "closed"
+      }
+    },
+    {
+      "failure": "closed",
+      "notPairedRetries": 0,
+      "retry": true,
+      "kind": "apple",
+      "sinceAutoReconnectMs": 10000,
+      "expected": {
+        "show": "closed"
+      }
+    },
+    {
+      "failure": "closed",
+      "notPairedRetries": 0,
+      "retry": true,
+      "kind": "apple",
+      "sinceAutoReconnectMs": 500,
+      "expected": {
+        "show": "closed"
+      }
+    }
+  ]
+}

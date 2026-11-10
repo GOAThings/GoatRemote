@@ -1,0 +1,85 @@
+{
+  "_about": "NowOutcome.of for GET /now (404 = an old GoatTV without /now: don't ask until the next connect; refused or 503 = closed), and NowOutcome.list: the list's current channel follows /now, a channel the list doesn't have refetches the list. Written from the behaviour before the move (VM/RM at origin/parity 3183ca9). Android data/Policies.kt and RemoteCore Policies.swift must both pass every row.",
+  "rows": [
+    {
+      "status": 200,
+      "refused": false,
+      "parsed": true,
+      "outcome": "update"
+    },
+    {
+      "status": 404,
+      "refused": false,
+      "parsed": false,
+      "outcome": "noNow"
+    },
+    {
+      "status": 503,
+      "refused": false,
+      "parsed": false,
+      "outcome": "close"
+    },
+    {
+      "status": 0,
+      "refused": true,
+      "parsed": false,
+      "outcome": "close"
+    },
+    {
+      "status": 0,
+      "refused": false,
+      "parsed": false,
+      "outcome": "nothing"
+    },
+    {
+      "status": 200,
+      "refused": false,
+      "parsed": false,
+      "outcome": "nothing"
+    },
+    {
+      "status": 500,
+      "refused": false,
+      "parsed": false,
+      "outcome": "nothing"
+    }
+  ],
+  "listRows": [
+    {
+      "nowCurrent": "a",
+      "listCurrent": "a",
+      "inList": true,
+      "list": "same"
+    },
+    {
+      "nowCurrent": null,
+      "listCurrent": "a",
+      "inList": false,
+      "list": "setCurrent"
+    },
+    {
+      "nowCurrent": "b",
+      "listCurrent": "a",
+      "inList": true,
+      "list": "setCurrent"
+    },
+    {
+      "nowCurrent": "x",
+      "listCurrent": "a",
+      "inList": false,
+      "list": "refetch"
+    },
+    {
+      "nowCurrent": null,
+      "listCurrent": null,
+      "inList": false,
+      "list": "same"
+    },
+    {
+      "nowCurrent": "a",
+      "listCurrent": null,
+      "inList": true,
+      "list": "setCurrent"
+    }
+  ]
+}

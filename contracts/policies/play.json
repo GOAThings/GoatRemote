@@ -1,0 +1,93 @@
+{
+  "_about": "PlayStep.of for POST /play: on retry (409/503/refused), an Android TV with GoatTV already in front just waits (opening it again makes the SHIELD drop the connection); otherwise GoatTV is opened and the play is retried every second for 10 s. Written from the behaviour before the move (VM/RM at origin/parity 3183ca9). Android data/Policies.kt and RemoteCore Policies.swift must both pass every row.",
+  "rows": [
+    {
+      "outcome": "done",
+      "waiting": false,
+      "timedOut": false,
+      "inFront": false,
+      "canOpen": true,
+      "step": "done"
+    },
+    {
+      "outcome": "notFound",
+      "waiting": false,
+      "timedOut": false,
+      "inFront": false,
+      "canOpen": true,
+      "step": "notFound"
+    },
+    {
+      "outcome": "failed",
+      "waiting": false,
+      "timedOut": false,
+      "inFront": false,
+      "canOpen": true,
+      "step": "failed"
+    },
+    {
+      "outcome": "retry",
+      "waiting": false,
+      "timedOut": false,
+      "inFront": true,
+      "canOpen": true,
+      "step": "startWaiting"
+    },
+    {
+      "outcome": "retry",
+      "waiting": false,
+      "timedOut": false,
+      "inFront": true,
+      "canOpen": false,
+      "step": "startWaiting"
+    },
+    {
+      "outcome": "retry",
+      "waiting": false,
+      "timedOut": false,
+      "inFront": false,
+      "canOpen": true,
+      "step": "openAndWait"
+    },
+    {
+      "outcome": "retry",
+      "waiting": false,
+      "timedOut": false,
+      "inFront": false,
+      "canOpen": false,
+      "step": "cannotOpen"
+    },
+    {
+      "outcome": "retry",
+      "waiting": true,
+      "timedOut": false,
+      "inFront": true,
+      "canOpen": true,
+      "step": "keepWaiting"
+    },
+    {
+      "outcome": "retry",
+      "waiting": true,
+      "timedOut": false,
+      "inFront": false,
+      "canOpen": false,
+      "step": "keepWaiting"
+    },
+    {
+      "outcome": "retry",
+      "waiting": true,
+      "timedOut": true,
+      "inFront": false,
+      "canOpen": true,
+      "step": "timedOut"
+    },
+    {
+      "outcome": "retry",
+      "waiting": true,
+      "timedOut": true,
+      "inFront": true,
+      "canOpen": true,
+      "step": "timedOut"
+    }
+  ]
+}

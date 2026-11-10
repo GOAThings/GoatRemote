@@ -1,0 +1,1287 @@
+{
+  "_about": "VolumeRoute.of: THE VOLUME-SAFETY RULE. On an Android TV a volume key never goes out as a protocol key unless the launcher is known to be absent (known == false); with a launcher, or not knowing yet, it goes through POST /volume (launcher-6470/volume-outcome.json decides what happens then). A protocol volume key reboots the SHIELD (Android 11) while GoatLauncher watches the keys: incidents c06672a, bcc9ca4, b272212. A TV that reports no volume control gets an explanation instead. Every entry point (tap, hold, hardware buttons, Shortcuts) goes through it. Written from the behaviour before the move (VM/RM at origin/parity 3183ca9). Android data/Policies.kt and RemoteCore Policies.swift must both pass every row.",
+  "rows": [
+    {
+      "key": "volumeUp",
+      "press": "tap",
+      "kind": "android",
+      "known": true,
+      "volumeControl": true,
+      "route": "launcher"
+    },
+    {
+      "key": "volumeUp",
+      "press": "tap",
+      "kind": "android",
+      "known": true,
+      "volumeControl": false,
+      "route": "explain"
+    },
+    {
+      "key": "volumeUp",
+      "press": "tap",
+      "kind": "android",
+      "known": false,
+      "volumeControl": true,
+      "route": "key"
+    },
+    {
+      "key": "volumeUp",
+      "press": "tap",
+      "kind": "android",
+      "known": false,
+      "volumeControl": false,
+      "route": "explain"
+    },
+    {
+      "key": "volumeUp",
+      "press": "tap",
+      "kind": "android",
+      "known": null,
+      "volumeControl": true,
+      "route": "launcher"
+    },
+    {
+      "key": "volumeUp",
+      "press": "tap",
+      "kind": "android",
+      "known": null,
+      "volumeControl": false,
+      "route": "explain"
+    },
+    {
+      "key": "volumeUp",
+      "press": "tap",
+      "kind": "apple",
+      "known": true,
+      "volumeControl": true,
+      "route": "key"
+    },
+    {
+      "key": "volumeUp",
+      "press": "tap",
+      "kind": "apple",
+      "known": true,
+      "volumeControl": false,
+      "route": "explain"
+    },
+    {
+      "key": "volumeUp",
+      "press": "tap",
+      "kind": "apple",
+      "known": false,
+      "volumeControl": true,
+      "route": "key"
+    },
+    {
+      "key": "volumeUp",
+      "press": "tap",
+      "kind": "apple",
+      "known": false,
+      "volumeControl": false,
+      "route": "explain"
+    },
+    {
+      "key": "volumeUp",
+      "press": "tap",
+      "kind": "apple",
+      "known": null,
+      "volumeControl": true,
+      "route": "key"
+    },
+    {
+      "key": "volumeUp",
+      "press": "tap",
+      "kind": "apple",
+      "known": null,
+      "volumeControl": false,
+      "route": "explain"
+    },
+    {
+      "key": "volumeUp",
+      "press": "holdDown",
+      "kind": "android",
+      "known": true,
+      "volumeControl": true,
+      "route": "launcher"
+    },
+    {
+      "key": "volumeUp",
+      "press": "holdDown",
+      "kind": "android",
+      "known": true,
+      "volumeControl": false,
+      "route": "explain"
+    },
+    {
+      "key": "volumeUp",
+      "press": "holdDown",
+      "kind": "android",
+      "known": false,
+      "volumeControl": true,
+      "route": "key"
+    },
+    {
+      "key": "volumeUp",
+      "press": "holdDown",
+      "kind": "android",
+      "known": false,
+      "volumeControl": false,
+      "route": "explain"
+    },
+    {
+      "key": "volumeUp",
+      "press": "holdDown",
+      "kind": "android",
+      "known": null,
+      "volumeControl": true,
+      "route": "launcher"
+    },
+    {
+      "key": "volumeUp",
+      "press": "holdDown",
+      "kind": "android",
+      "known": null,
+      "volumeControl": false,
+      "route": "explain"
+    },
+    {
+      "key": "volumeUp",
+      "press": "holdDown",
+      "kind": "apple",
+      "known": true,
+      "volumeControl": true,
+      "route": "key"
+    },
+    {
+      "key": "volumeUp",
+      "press": "holdDown",
+      "kind": "apple",
+      "known": true,
+      "volumeControl": false,
+      "route": "explain"
+    },
+    {
+      "key": "volumeUp",
+      "press": "holdDown",
+      "kind": "apple",
+      "known": false,
+      "volumeControl": true,
+      "route": "key"
+    },
+    {
+      "key": "volumeUp",
+      "press": "holdDown",
+      "kind": "apple",
+      "known": false,
+      "volumeControl": false,
+      "route": "explain"
+    },
+    {
+      "key": "volumeUp",
+      "press": "holdDown",
+      "kind": "apple",
+      "known": null,
+      "volumeControl": true,
+      "route": "key"
+    },
+    {
+      "key": "volumeUp",
+      "press": "holdDown",
+      "kind": "apple",
+      "known": null,
+      "volumeControl": false,
+      "route": "explain"
+    },
+    {
+      "key": "volumeUp",
+      "press": "holdUp",
+      "kind": "android",
+      "known": true,
+      "volumeControl": true,
+      "route": "nothing"
+    },
+    {
+      "key": "volumeUp",
+      "press": "holdUp",
+      "kind": "android",
+      "known": true,
+      "volumeControl": false,
+      "route": "nothing"
+    },
+    {
+      "key": "volumeUp",
+      "press": "holdUp",
+      "kind": "android",
+      "known": false,
+      "volumeControl": true,
+      "route": "key"
+    },
+    {
+      "key": "volumeUp",
+      "press": "holdUp",
+      "kind": "android",
+      "known": false,
+      "volumeControl": false,
+      "route": "key"
+    },
+    {
+      "key": "volumeUp",
+      "press": "holdUp",
+      "kind": "android",
+      "known": null,
+      "volumeControl": true,
+      "route": "nothing"
+    },
+    {
+      "key": "volumeUp",
+      "press": "holdUp",
+      "kind": "android",
+      "known": null,
+      "volumeControl": false,
+      "route": "nothing"
+    },
+    {
+      "key": "volumeUp",
+      "press": "holdUp",
+      "kind": "apple",
+      "known": true,
+      "volumeControl": true,
+      "route": "key"
+    },
+    {
+      "key": "volumeUp",
+      "press": "holdUp",
+      "kind": "apple",
+      "known": true,
+      "volumeControl": false,
+      "route": "key"
+    },
+    {
+      "key": "volumeUp",
+      "press": "holdUp",
+      "kind": "apple",
+      "known": false,
+      "volumeControl": true,
+      "route": "key"
+    },
+    {
+      "key": "volumeUp",
+      "press": "holdUp",
+      "kind": "apple",
+      "known": false,
+      "volumeControl": false,
+      "route": "key"
+    },
+    {
+      "key": "volumeUp",
+      "press": "holdUp",
+      "kind": "apple",
+      "known": null,
+      "volumeControl": true,
+      "route": "key"
+    },
+    {
+      "key": "volumeUp",
+      "press": "holdUp",
+      "kind": "apple",
+      "known": null,
+      "volumeControl": false,
+      "route": "key"
+    },
+    {
+      "key": "volumeDown",
+      "press": "tap",
+      "kind": "android",
+      "known": true,
+      "volumeControl": true,
+      "route": "launcher"
+    },
+    {
+      "key": "volumeDown",
+      "press": "tap",
+      "kind": "android",
+      "known": true,
+      "volumeControl": false,
+      "route": "explain"
+    },
+    {
+      "key": "volumeDown",
+      "press": "tap",
+      "kind": "android",
+      "known": false,
+      "volumeControl": true,
+      "route": "key"
+    },
+    {
+      "key": "volumeDown",
+      "press": "tap",
+      "kind": "android",
+      "known": false,
+      "volumeControl": false,
+      "route": "explain"
+    },
+    {
+      "key": "volumeDown",
+      "press": "tap",
+      "kind": "android",
+      "known": null,
+      "volumeControl": true,
+      "route": "launcher"
+    },
+    {
+      "key": "volumeDown",
+      "press": "tap",
+      "kind": "android",
+      "known": null,
+      "volumeControl": false,
+      "route": "explain"
+    },
+    {
+      "key": "volumeDown",
+      "press": "tap",
+      "kind": "apple",
+      "known": true,
+      "volumeControl": true,
+      "route": "key"
+    },
+    {
+      "key": "volumeDown",
+      "press": "tap",
+      "kind": "apple",
+      "known": true,
+      "volumeControl": false,
+      "route": "explain"
+    },
+    {
+      "key": "volumeDown",
+      "press": "tap",
+      "kind": "apple",
+      "known": false,
+      "volumeControl": true,
+      "route": "key"
+    },
+    {
+      "key": "volumeDown",
+      "press": "tap",
+      "kind": "apple",
+      "known": false,
+      "volumeControl": false,
+      "route": "explain"
+    },
+    {
+      "key": "volumeDown",
+      "press": "tap",
+      "kind": "apple",
+      "known": null,
+      "volumeControl": true,
+      "route": "key"
+    },
+    {
+      "key": "volumeDown",
+      "press": "tap",
+      "kind": "apple",
+      "known": null,
+      "volumeControl": false,
+      "route": "explain"
+    },
+    {
+      "key": "volumeDown",
+      "press": "holdDown",
+      "kind": "android",
+      "known": true,
+      "volumeControl": true,
+      "route": "launcher"
+    },
+    {
+      "key": "volumeDown",
+      "press": "holdDown",
+      "kind": "android",
+      "known": true,
+      "volumeControl": false,
+      "route": "explain"
+    },
+    {
+      "key": "volumeDown",
+      "press": "holdDown",
+      "kind": "android",
+      "known": false,
+      "volumeControl": true,
+      "route": "key"
+    },
+    {
+      "key": "volumeDown",
+      "press": "holdDown",
+      "kind": "android",
+      "known": false,
+      "volumeControl": false,
+      "route": "explain"
+    },
+    {
+      "key": "volumeDown",
+      "press": "holdDown",
+      "kind": "android",
+      "known": null,
+      "volumeControl": true,
+      "route": "launcher"
+    },
+    {
+      "key": "volumeDown",
+      "press": "holdDown",
+      "kind": "android",
+      "known": null,
+      "volumeControl": false,
+      "route": "explain"
+    },
+    {
+      "key": "volumeDown",
+      "press": "holdDown",
+      "kind": "apple",
+      "known": true,
+      "volumeControl": true,
+      "route": "key"
+    },
+    {
+      "key": "volumeDown",
+      "press": "holdDown",
+      "kind": "apple",
+      "known": true,
+      "volumeControl": false,
+      "route": "explain"
+    },
+    {
+      "key": "volumeDown",
+      "press": "holdDown",
+      "kind": "apple",
+      "known": false,
+      "volumeControl": true,
+      "route": "key"
+    },
+    {
+      "key": "volumeDown",
+      "press": "holdDown",
+      "kind": "apple",
+      "known": false,
+      "volumeControl": false,
+      "route": "explain"
+    },
+    {
+      "key": "volumeDown",
+      "press": "holdDown",
+      "kind": "apple",
+      "known": null,
+      "volumeControl": true,
+      "route": "key"
+    },
+    {
+      "key": "volumeDown",
+      "press": "holdDown",
+      "kind": "apple",
+      "known": null,
+      "volumeControl": false,
+      "route": "explain"
+    },
+    {
+      "key": "volumeDown",
+      "press": "holdUp",
+      "kind": "android",
+      "known": true,
+      "volumeControl": true,
+      "route": "nothing"
+    },
+    {
+      "key": "volumeDown",
+      "press": "holdUp",
+      "kind": "android",
+      "known": true,
+      "volumeControl": false,
+      "route": "nothing"
+    },
+    {
+      "key": "volumeDown",
+      "press": "holdUp",
+      "kind": "android",
+      "known": false,
+      "volumeControl": true,
+      "route": "key"
+    },
+    {
+      "key": "volumeDown",
+      "press": "holdUp",
+      "kind": "android",
+      "known": false,
+      "volumeControl": false,
+      "route": "key"
+    },
+    {
+      "key": "volumeDown",
+      "press": "holdUp",
+      "kind": "android",
+      "known": null,
+      "volumeControl": true,
+      "route": "nothing"
+    },
+    {
+      "key": "volumeDown",
+      "press": "holdUp",
+      "kind": "android",
+      "known": null,
+      "volumeControl": false,
+      "route": "nothing"
+    },
+    {
+      "key": "volumeDown",
+      "press": "holdUp",
+      "kind": "apple",
+      "known": true,
+      "volumeControl": true,
+      "route": "key"
+    },
+    {
+      "key": "volumeDown",
+      "press": "holdUp",
+      "kind": "apple",
+      "known": true,
+      "volumeControl": false,
+      "route": "key"
+    },
+    {
+      "key": "volumeDown",
+      "press": "holdUp",
+      "kind": "apple",
+      "known": false,
+      "volumeControl": true,
+      "route": "key"
+    },
+    {
+      "key": "volumeDown",
+      "press": "holdUp",
+      "kind": "apple",
+      "known": false,
+      "volumeControl": false,
+      "route": "key"
+    },
+    {
+      "key": "volumeDown",
+      "press": "holdUp",
+      "kind": "apple",
+      "known": null,
+      "volumeControl": true,
+      "route": "key"
+    },
+    {
+      "key": "volumeDown",
+      "press": "holdUp",
+      "kind": "apple",
+      "known": null,
+      "volumeControl": false,
+      "route": "key"
+    },
+    {
+      "key": "mute",
+      "press": "tap",
+      "kind": "android",
+      "known": true,
+      "volumeControl": true,
+      "route": "launcher"
+    },
+    {
+      "key": "mute",
+      "press": "tap",
+      "kind": "android",
+      "known": true,
+      "volumeControl": false,
+      "route": "explain"
+    },
+    {
+      "key": "mute",
+      "press": "tap",
+      "kind": "android",
+      "known": false,
+      "volumeControl": true,
+      "route": "key"
+    },
+    {
+      "key": "mute",
+      "press": "tap",
+      "kind": "android",
+      "known": false,
+      "volumeControl": false,
+      "route": "explain"
+    },
+    {
+      "key": "mute",
+      "press": "tap",
+      "kind": "android",
+      "known": null,
+      "volumeControl": true,
+      "route": "launcher"
+    },
+    {
+      "key": "mute",
+      "press": "tap",
+      "kind": "android",
+      "known": null,
+      "volumeControl": false,
+      "route": "explain"
+    },
+    {
+      "key": "mute",
+      "press": "tap",
+      "kind": "apple",
+      "known": true,
+      "volumeControl": true,
+      "route": "key"
+    },
+    {
+      "key": "mute",
+      "press": "tap",
+      "kind": "apple",
+      "known": true,
+      "volumeControl": false,
+      "route": "explain"
+    },
+    {
+      "key": "mute",
+      "press": "tap",
+      "kind": "apple",
+      "known": false,
+      "volumeControl": true,
+      "route": "key"
+    },
+    {
+      "key": "mute",
+      "press": "tap",
+      "kind": "apple",
+      "known": false,
+      "volumeControl": false,
+      "route": "explain"
+    },
+    {
+      "key": "mute",
+      "press": "tap",
+      "kind": "apple",
+      "known": null,
+      "volumeControl": true,
+      "route": "key"
+    },
+    {
+      "key": "mute",
+      "press": "tap",
+      "kind": "apple",
+      "known": null,
+      "volumeControl": false,
+      "route": "explain"
+    },
+    {
+      "key": "mute",
+      "press": "holdDown",
+      "kind": "android",
+      "known": true,
+      "volumeControl": true,
+      "route": "launcher"
+    },
+    {
+      "key": "mute",
+      "press": "holdDown",
+      "kind": "android",
+      "known": true,
+      "volumeControl": false,
+      "route": "explain"
+    },
+    {
+      "key": "mute",
+      "press": "holdDown",
+      "kind": "android",
+      "known": false,
+      "volumeControl": true,
+      "route": "key"
+    },
+    {
+      "key": "mute",
+      "press": "holdDown",
+      "kind": "android",
+      "known": false,
+      "volumeControl": false,
+      "route": "explain"
+    },
+    {
+      "key": "mute",
+      "press": "holdDown",
+      "kind": "android",
+      "known": null,
+      "volumeControl": true,
+      "route": "launcher"
+    },
+    {
+      "key": "mute",
+      "press": "holdDown",
+      "kind": "android",
+      "known": null,
+      "volumeControl": false,
+      "route": "explain"
+    },
+    {
+      "key": "mute",
+      "press": "holdDown",
+      "kind": "apple",
+      "known": true,
+      "volumeControl": true,
+      "route": "key"
+    },
+    {
+      "key": "mute",
+      "press": "holdDown",
+      "kind": "apple",
+      "known": true,
+      "volumeControl": false,
+      "route": "explain"
+    },
+    {
+      "key": "mute",
+      "press": "holdDown",
+      "kind": "apple",
+      "known": false,
+      "volumeControl": true,
+      "route": "key"
+    },
+    {
+      "key": "mute",
+      "press": "holdDown",
+      "kind": "apple",
+      "known": false,
+      "volumeControl": false,
+      "route": "explain"
+    },
+    {
+      "key": "mute",
+      "press": "holdDown",
+      "kind": "apple",
+      "known": null,
+      "volumeControl": true,
+      "route": "key"
+    },
+    {
+      "key": "mute",
+      "press": "holdDown",
+      "kind": "apple",
+      "known": null,
+      "volumeControl": false,
+      "route": "explain"
+    },
+    {
+      "key": "mute",
+      "press": "holdUp",
+      "kind": "android",
+      "known": true,
+      "volumeControl": true,
+      "route": "nothing"
+    },
+    {
+      "key": "mute",
+      "press": "holdUp",
+      "kind": "android",
+      "known": true,
+      "volumeControl": false,
+      "route": "nothing"
+    },
+    {
+      "key": "mute",
+      "press": "holdUp",
+      "kind": "android",
+      "known": false,
+      "volumeControl": true,
+      "route": "key"
+    },
+    {
+      "key": "mute",
+      "press": "holdUp",
+      "kind": "android",
+      "known": false,
+      "volumeControl": false,
+      "route": "key"
+    },
+    {
+      "key": "mute",
+      "press": "holdUp",
+      "kind": "android",
+      "known": null,
+      "volumeControl": true,
+      "route": "nothing"
+    },
+    {
+      "key": "mute",
+      "press": "holdUp",
+      "kind": "android",
+      "known": null,
+      "volumeControl": false,
+      "route": "nothing"
+    },
+    {
+      "key": "mute",
+      "press": "holdUp",
+      "kind": "apple",
+      "known": true,
+      "volumeControl": true,
+      "route": "key"
+    },
+    {
+      "key": "mute",
+      "press": "holdUp",
+      "kind": "apple",
+      "known": true,
+      "volumeControl": false,
+      "route": "key"
+    },
+    {
+      "key": "mute",
+      "press": "holdUp",
+      "kind": "apple",
+      "known": false,
+      "volumeControl": true,
+      "route": "key"
+    },
+    {
+      "key": "mute",
+      "press": "holdUp",
+      "kind": "apple",
+      "known": false,
+      "volumeControl": false,
+      "route": "key"
+    },
+    {
+      "key": "mute",
+      "press": "holdUp",
+      "kind": "apple",
+      "known": null,
+      "volumeControl": true,
+      "route": "key"
+    },
+    {
+      "key": "mute",
+      "press": "holdUp",
+      "kind": "apple",
+      "known": null,
+      "volumeControl": false,
+      "route": "key"
+    },
+    {
+      "key": "home",
+      "press": "tap",
+      "kind": "android",
+      "known": true,
+      "volumeControl": true,
+      "route": "key"
+    },
+    {
+      "key": "home",
+      "press": "tap",
+      "kind": "android",
+      "known": true,
+      "volumeControl": false,
+      "route": "key"
+    },
+    {
+      "key": "home",
+      "press": "tap",
+      "kind": "android",
+      "known": false,
+      "volumeControl": true,
+      "route": "key"
+    },
+    {
+      "key": "home",
+      "press": "tap",
+      "kind": "android",
+      "known": false,
+      "volumeControl": false,
+      "route": "key"
+    },
+    {
+      "key": "home",
+      "press": "tap",
+      "kind": "android",
+      "known": null,
+      "volumeControl": true,
+      "route": "key"
+    },
+    {
+      "key": "home",
+      "press": "tap",
+      "kind": "android",
+      "known": null,
+      "volumeControl": false,
+      "route": "key"
+    },
+    {
+      "key": "home",
+      "press": "tap",
+      "kind": "apple",
+      "known": true,
+      "volumeControl": true,
+      "route": "key"
+    },
+    {
+      "key": "home",
+      "press": "tap",
+      "kind": "apple",
+      "known": true,
+      "volumeControl": false,
+      "route": "key"
+    },
+    {
+      "key": "home",
+      "press": "tap",
+      "kind": "apple",
+      "known": false,
+      "volumeControl": true,
+      "route": "key"
+    },
+    {
+      "key": "home",
+      "press": "tap",
+      "kind": "apple",
+      "known": false,
+      "volumeControl": false,
+      "route": "key"
+    },
+    {
+      "key": "home",
+      "press": "tap",
+      "kind": "apple",
+      "known": null,
+      "volumeControl": true,
+      "route": "key"
+    },
+    {
+      "key": "home",
+      "press": "tap",
+      "kind": "apple",
+      "known": null,
+      "volumeControl": false,
+      "route": "key"
+    },
+    {
+      "key": "home",
+      "press": "holdDown",
+      "kind": "android",
+      "known": true,
+      "volumeControl": true,
+      "route": "key"
+    },
+    {
+      "key": "home",
+      "press": "holdDown",
+      "kind": "android",
+      "known": true,
+      "volumeControl": false,
+      "route": "key"
+    },
+    {
+      "key": "home",
+      "press": "holdDown",
+      "kind": "android",
+      "known": false,
+      "volumeControl": true,
+      "route": "key"
+    },
+    {
+      "key": "home",
+      "press": "holdDown",
+      "kind": "android",
+      "known": false,
+      "volumeControl": false,
+      "route": "key"
+    },
+    {
+      "key": "home",
+      "press": "holdDown",
+      "kind": "android",
+      "known": null,
+      "volumeControl": true,
+      "route": "key"
+    },
+    {
+      "key": "home",
+      "press": "holdDown",
+      "kind": "android",
+      "known": null,
+      "volumeControl": false,
+      "route": "key"
+    },
+    {
+      "key": "home",
+      "press": "holdDown",
+      "kind": "apple",
+      "known": true,
+      "volumeControl": true,
+      "route": "key"
+    },
+    {
+      "key": "home",
+      "press": "holdDown",
+      "kind": "apple",
+      "known": true,
+      "volumeControl": false,
+      "route": "key"
+    },
+    {
+      "key": "home",
+      "press": "holdDown",
+      "kind": "apple",
+      "known": false,
+      "volumeControl": true,
+      "route": "key"
+    },
+    {
+      "key": "home",
+      "press": "holdDown",
+      "kind": "apple",
+      "known": false,
+      "volumeControl": false,
+      "route": "key"
+    },
+    {
+      "key": "home",
+      "press": "holdDown",
+      "kind": "apple",
+      "known": null,
+      "volumeControl": true,
+      "route": "key"
+    },
+    {
+      "key": "home",
+      "press": "holdDown",
+      "kind": "apple",
+      "known": null,
+      "volumeControl": false,
+      "route": "key"
+    },
+    {
+      "key": "home",
+      "press": "holdUp",
+      "kind": "android",
+      "known": true,
+      "volumeControl": true,
+      "route": "key"
+    },
+    {
+      "key": "home",
+      "press": "holdUp",
+      "kind": "android",
+      "known": true,
+      "volumeControl": false,
+      "route": "key"
+    },
+    {
+      "key": "home",
+      "press": "holdUp",
+      "kind": "android",
+      "known": false,
+      "volumeControl": true,
+      "route": "key"
+    },
+    {
+      "key": "home",
+      "press": "holdUp",
+      "kind": "android",
+      "known": false,
+      "volumeControl": false,
+      "route": "key"
+    },
+    {
+      "key": "home",
+      "press": "holdUp",
+      "kind": "android",
+      "known": null,
+      "volumeControl": true,
+      "route": "key"
+    },
+    {
+      "key": "home",
+      "press": "holdUp",
+      "kind": "android",
+      "known": null,
+      "volumeControl": false,
+      "route": "key"
+    },
+    {
+      "key": "home",
+      "press": "holdUp",
+      "kind": "apple",
+      "known": true,
+      "volumeControl": true,
+      "route": "key"
+    },
+    {
+      "key": "home",
+      "press": "holdUp",
+      "kind": "apple",
+      "known": true,
+      "volumeControl": false,
+      "route": "key"
+    },
+    {
+      "key": "home",
+      "press": "holdUp",
+      "kind": "apple",
+      "known": false,
+      "volumeControl": true,
+      "route": "key"
+    },
+    {
+      "key": "home",
+      "press": "holdUp",
+      "kind": "apple",
+      "known": false,
+      "volumeControl": false,
+      "route": "key"
+    },
+    {
+      "key": "home",
+      "press": "holdUp",
+      "kind": "apple",
+      "known": null,
+      "volumeControl": true,
+      "route": "key"
+    },
+    {
+      "key": "home",
+      "press": "holdUp",
+      "kind": "apple",
+      "known": null,
+      "volumeControl": false,
+      "route": "key"
+    }
+  ],
+  "learn": [
+    {
+      "before": [
+        10,
+        false
+      ],
+      "after": [
+        10,
+        false
+      ],
+      "unknown": true
+    },
+    {
+      "before": [
+        10,
+        false
+      ],
+      "after": [
+        11,
+        false
+      ],
+      "unknown": false
+    },
+    {
+      "before": [
+        10,
+        false
+      ],
+      "after": [
+        10,
+        true
+      ],
+      "unknown": false
+    },
+    {
+      "before": [
+        null,
+        null
+      ],
+      "after": [
+        null,
+        null
+      ],
+      "unknown": true
+    }
+  ],
+  "changed": [
+    {
+      "old": [
+        null,
+        null
+      ],
+      "new": [
+        5,
+        false
+      ],
+      "unknown": false,
+      "settled": true,
+      "changed": false
+    },
+    {
+      "old": [
+        5,
+        false
+      ],
+      "new": [
+        6,
+        false
+      ],
+      "unknown": false,
+      "settled": true,
+      "changed": true
+    },
+    {
+      "old": [
+        5,
+        false
+      ],
+      "new": [
+        5,
+        true
+      ],
+      "unknown": false,
+      "settled": true,
+      "changed": true
+    },
+    {
+      "old": [
+        5,
+        false
+      ],
+      "new": [
+        6,
+        false
+      ],
+      "unknown": true,
+      "settled": true,
+      "changed": false
+    },
+    {
+      "old": [
+        5,
+        false
+      ],
+      "new": [
+        6,
+        false
+      ],
+      "unknown": false,
+      "settled": false,
+      "changed": false
+    },
+    {
+      "old": [
+        5,
+        false
+      ],
+      "new": [
+        5,
+        false
+      ],
+      "unknown": false,
+      "settled": true,
+      "changed": false
+    }
+  ],
+  "timings": {
+    "learnAfterMs": 800,
+    "settleMs": 5000
+  }
+}

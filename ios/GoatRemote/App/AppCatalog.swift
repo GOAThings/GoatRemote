@@ -1,4 +1,5 @@
 import Foundation
+import RemoteCore
 
 /// Apps conhecidas: nome, ícone (SF Symbol) e cor, para os atalhos. Abrem-se pelo pacote (market://launch?id=…),
 /// que funciona com qualquer app instalada na TV.
@@ -38,7 +39,5 @@ enum AppCatalog {
     }
 
     /// O ecrã inicial da TV não conta como app aberta.
-    static func isLauncher(_ package: String) -> Bool {
-        package.lowercased().contains("launcher") || package == "com.google.android.apps.tv.launcherx"
-    }
+    static func isLauncher(_ package: String) -> Bool { RecentApps.isLauncher(package) }
 }
