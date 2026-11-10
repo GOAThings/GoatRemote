@@ -102,7 +102,7 @@ public enum GoatTVChannels {
 
     /// O caminho de um pedido: a chave vai codificada (tudo menos letras e algarismos ASCII, "-", "_" e "~").
     public static func url(host: String, _ what: String, key: String? = nil) -> String {
-        "http://\(host):\(port)/\(what)" + (key.map { "/" + encodeKey($0) } ?? "")
+        LanURL.string(host: host, port: port, path: what + (key.map { "/" + encodeKey($0) } ?? ""))
     }
 
     public static func encodeKey(_ key: String) -> String {

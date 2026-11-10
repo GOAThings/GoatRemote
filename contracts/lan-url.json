@@ -1,0 +1,35 @@
+{
+  "_about": "The LAN URL builder (Android data/LanHttp.url, iOS RemoteCore LanURL): http://<host>:<port>/<path>, with IPv6 literals in brackets (bug B6: without them the URL doesn't parse, so the app list, the GoatTV card and the volume stayed broken on a TV stored with an IPv6 host). The host strings themselves are stored unchanged.",
+  "rows": [
+    {
+      "host": "192.168.1.5",
+      "port": 6470,
+      "path": "apps",
+      "url": "http://192.168.1.5:6470/apps"
+    },
+    {
+      "host": "tv.local",
+      "port": 6471,
+      "path": "channels",
+      "url": "http://tv.local:6471/channels"
+    },
+    {
+      "host": "fe80::1a2b",
+      "port": 6470,
+      "path": "volume/up",
+      "url": "http://[fe80::1a2b]:6470/volume/up"
+    },
+    {
+      "host": "2001:db8::7",
+      "port": 6471,
+      "path": "play/a%2Fb",
+      "url": "http://[2001:db8::7]:6471/play/a%2Fb"
+    },
+    {
+      "host": "[::1]",
+      "port": 6470,
+      "path": "apps",
+      "url": "http://[::1]:6470/apps"
+    }
+  ]
+}

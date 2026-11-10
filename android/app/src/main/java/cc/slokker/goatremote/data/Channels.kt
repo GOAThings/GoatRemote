@@ -71,7 +71,7 @@ object GoatTvChannels {
 
     /** O caminho de um pedido: a chave vai codificada (tudo menos letras e algarismos ASCII, "-", "_" e "~"). */
     fun url(host: String, what: String, key: String? = null): String =
-        "http://$host:$PORT/$what" + (key?.let { "/" + encodeKey(it) } ?: "")
+        LanHttp.url(host, PORT, what + (key?.let { "/" + encodeKey(it) } ?: ""))
 
     fun encodeKey(key: String): String {
         val out = StringBuilder()

@@ -12,6 +12,8 @@ import cc.slokker.goatremote.Contracts.vectorHex
 import cc.slokker.goatremote.apple.CompanionCredentials
 import cc.slokker.goatremote.apple.Crypto
 import cc.slokker.goatremote.data.GoatTvChannels
+import cc.slokker.goatremote.data.LanHttp
+import cc.slokker.goatremote.data.LauncherApi
 import cc.slokker.goatremote.data.LauncherApps
 import cc.slokker.goatremote.data.PrefKeys
 import cc.slokker.goatremote.data.Programme
@@ -147,6 +149,20 @@ class ContractsTest {
             val apps = row.getJSONObject("apps").let { o -> o.keys().asSequence().associateWith { o.getString(it) } }
             assertEquals(row.stringOrNull("expected"), GoatTvChannels.appleApp(apps))
         }
+    }
+
+    // ---- A rede de casa ----
+
+    /** B6: os IPv6 vão entre parênteses retos, senão o URL não se lê. */
+    @Test
+    fun lanUrls() {
+        for (row in Contracts.obj("lan-url.json").getJSONArray("rows").objects()) {
+            val url = LanHttp.url(row.getString("host"), row.getInt("port"), row.getString("path"))
+            assertEquals(row.getString("url"), url)
+            java.net.URL(url)
+        }
+        assertEquals("http://[fe80::1]:6471/play/a%2Fb", GoatTvChannels.url("fe80::1", "play", "a/b"))
+        assertEquals("http://[fe80::1]:6470/icon/com.x", LauncherApi("fe80::1").iconUrl("com.x"))
     }
 
     // ---- GoatLauncher (6470) ----

@@ -11,6 +11,7 @@ extension CoreTests {
         ("goatTVChannelCases", goatTVChannelCases),
         ("goatTVNowCases", goatTVNowCases),
         ("goatTVKeysAndOutcomes", goatTVKeysAndOutcomes),
+        ("lanURLs", lanURLs),
         ("launcherApps", launcherApps),
         ("launcherVolumeTable", launcherVolumeTable),
         ("savedTVs", savedTVs),
@@ -126,6 +127,18 @@ extension CoreTests {
         for row in Contracts.list(try Contracts.object("goattv-6471/apple-app.json")["rows"]) {
             try expect(GoatTVChannels.appleApp(row["apps"] as? [String: String] ?? [:]), Contracts.string(row["expected"]))
         }
+    }
+
+    // MARK: A rede de casa
+
+    /// B6: os IPv6 vão entre parênteses retos, senão o URL não se lê.
+    static func lanURLs() throws {
+        for row in Contracts.list(try Contracts.object("lan-url.json")["rows"]) {
+            let url = LanURL.string(host: row["host"] as? String ?? "", port: row["port"] as? Int ?? 0, path: row["path"] as? String ?? "")
+            try expect(url, row["url"] as? String ?? "")
+            try expect(URL(string: url) != nil, true)
+        }
+        try expect(GoatTVChannels.url(host: "fe80::1", "play", key: "a/b"), "http://[fe80::1]:6471/play/a%2Fb")
     }
 
     // MARK: GoatLauncher (6470)
