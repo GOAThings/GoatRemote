@@ -96,6 +96,14 @@ class PoliciesTest {
     }
 
     @Test
+    fun onScreen() {
+        for (row in rows("on-screen.json")) {
+            val got = cc.slokker.goatremote.data.OnScreen.of(row.boolOrNull("isOn"), row.stringOrNull("currentApp"), kind(row.getString("kind")))
+            assertTrue("$row → $got", same(got, row.getString("onScreen")))
+        }
+    }
+
+    @Test
     fun recents() {
         val table = Contracts.obj("policies/recents.json")
         for (row in table.getJSONArray("push").objects()) {

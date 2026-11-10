@@ -103,6 +103,7 @@ import cc.slokker.goatremote.L
 import cc.slokker.goatremote.RemoteViewModel
 import cc.slokker.goatremote.RemoteViewModel.Status
 import cc.slokker.goatremote.data.AppCatalog
+import cc.slokker.goatremote.data.OnScreen
 import cc.slokker.goatremote.data.TvKind
 import cc.slokker.goatremote.tv.Key
 import kotlin.math.abs
@@ -331,20 +332,22 @@ private fun statusColor(vm: RemoteViewModel) = when (vm.status) {
 }
 
 private fun subtitle(vm: RemoteViewModel): String = when (vm.status) {
-    Status.Connected -> {
-        val app = vm.state.currentApp
-        when {
-            vm.state.isOn == false -> L("TV is off", "A TV está desligada")
-            app != null && !AppCatalog.isLauncher(app) -> AppCatalog.name(app)
-            // A Apple TV não diz que app está aberta.
-            vm.current?.kind == TvKind.APPLE -> "Apple TV"
-            else -> L("Home screen", "Ecrã inicial")
-        }
-    }
+    Status.Connected -> screenLabel(vm)
     Status.Connecting -> L("Connecting…", "A ligar…")
     Status.NotPaired -> L("Not paired", "Não emparelhada")
     is Status.Unreachable -> L("Can't reach it", "Sem ligação")
     Status.NoTv -> ""
+}
+
+private fun onScreen(vm: RemoteViewModel) = OnScreen.of(vm.state.isOn, vm.state.currentApp, vm.current?.kind)
+
+/** O que está no ecrã da TV: o subtítulo do cabeçalho e a marca-d'água da superfície dizem o mesmo. */
+private fun screenLabel(vm: RemoteViewModel): String = when (onScreen(vm)) {
+    OnScreen.OFF -> L("TV is off", "A TV está desligada")
+    OnScreen.APP -> AppCatalog.name(vm.state.currentApp.orEmpty())
+    // A Apple TV não diz que app está aberta.
+    OnScreen.APPLE_TV -> "Apple TV"
+    OnScreen.HOME -> L("Home screen", "Ecrã inicial")
 }
 
 /** Dentro da superfície: a app aberta em marca-d'água, ou o que se passa com a ligação (com o que fazer). */
@@ -354,25 +357,19 @@ private fun SurfaceInfo(vm: RemoteViewModel) {
         when (val s = vm.status) {
             Status.Connected -> {
                 val watermark = Color.White.copy(alpha = 0.13f)
-                val app = vm.state.currentApp?.takeUnless(AppCatalog::isLauncher)
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(horizontal = 20.dp).testTag("status")) {
                     Icon(
-                        when {
-                            vm.state.isOn == false -> Icons.Rounded.Bedtime
-                            app != null -> Icons.Rounded.LiveTv
-                            vm.current?.kind == TvKind.APPLE -> Icons.Rounded.Tv
-                            else -> Icons.Rounded.Home
+                        when (onScreen(vm)) {
+                            OnScreen.OFF -> Icons.Rounded.Bedtime
+                            OnScreen.APP -> Icons.Rounded.LiveTv
+                            OnScreen.APPLE_TV -> Icons.Rounded.Tv
+                            OnScreen.HOME -> Icons.Rounded.Home
                         },
                         null, tint = watermark, modifier = Modifier.size(52.dp),
                     )
                     Spacer(Modifier.height(10.dp))
                     Text(
-                        when {
-                            vm.state.isOn == false -> L("TV is off", "A TV está desligada")
-                            app != null -> AppCatalog.name(app)
-                            vm.current?.kind == TvKind.APPLE -> "Apple TV"
-                            else -> L("Home screen", "Ecrã inicial")
-                        },
+                        screenLabel(vm),
                         color = watermark, fontSize = 19.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
                     )
                 }

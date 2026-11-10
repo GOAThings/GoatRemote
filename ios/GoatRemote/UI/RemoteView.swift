@@ -147,11 +147,7 @@ struct RemoteView: View {
 
     private var subtitle: String {
         switch model.status {
-        case .connected:
-            if model.state.isOn == false { return L("TV is off", "A TV está desligada") }
-            if let app = model.state.currentApp, !AppCatalog.isLauncher(app) { return AppCatalog.name(app) }
-            // A Apple TV não diz que app está aberta.
-            return model.current?.kind == .apple ? "Apple TV" : L("Home screen", "Ecrã inicial")
+        case .connected: return screenLabel(model)
         case .connecting: return L("Connecting…", "A ligar…")
         case .notPaired: return L("Not paired", "Não emparelhada")
         case .unreachable: return L("Can't reach it", "Sem ligação")
@@ -214,16 +210,15 @@ struct SurfaceInfo: View {
     }
 
     private var symbol: String {
-        if model.state.isOn == false { return "moon.zzz" }
-        if let app = model.state.currentApp, !AppCatalog.isLauncher(app) { return AppCatalog.app(app)?.symbol ?? "play.tv" }
-        return model.current?.kind == .apple ? "appletv" : "house"
+        switch onScreen(model) {
+        case .off: return "moon.zzz"
+        case .app: return model.state.currentApp.flatMap { AppCatalog.app($0)?.symbol } ?? "play.tv"
+        case .appleTV: return "appletv"
+        case .home: return "house"
+        }
     }
 
-    private var title: String {
-        if model.state.isOn == false { return L("TV is off", "A TV está desligada") }
-        if let app = model.state.currentApp, !AppCatalog.isLauncher(app) { return AppCatalog.name(app) }
-        return model.current?.kind == .apple ? "Apple TV" : L("Home screen", "Ecrã inicial")
-    }
+    private var title: String { screenLabel(model) }
 
     private func notice(symbol: String, title: String, detail: String, button: String, action: @escaping () -> Void) -> some View {
         VStack(spacing: 12) {
@@ -707,5 +702,22 @@ private struct Sector: Shape {
         p.addArc(center: c, radius: r * inner, startAngle: start + .degrees(90), endAngle: start, clockwise: true)
         p.closeSubpath()
         return p
+    }
+}
+
+@MainActor
+private func onScreen(_ model: RemoteModel) -> OnScreen {
+    OnScreen.of(isOn: model.state.isOn, currentApp: model.state.currentApp, kind: model.current?.kind)
+}
+
+/// O que está no ecrã da TV: o subtítulo do cabeçalho e a marca-d'água da superfície dizem o mesmo.
+@MainActor
+private func screenLabel(_ model: RemoteModel) -> String {
+    switch onScreen(model) {
+    case .off: return L("TV is off", "A TV está desligada")
+    case .app: return AppCatalog.name(model.state.currentApp ?? "")
+    // A Apple TV não diz que app está aberta.
+    case .appleTV: return "Apple TV"
+    case .home: return L("Home screen", "Ecrã inicial")
     }
 }

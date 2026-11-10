@@ -10,6 +10,7 @@ extension CoreTests {
         ("playStep", playStep),
         ("volumeRoute", volumeRoute),
         ("recentApps", recentApps),
+        ("onScreen", onScreen),
     ]
 
     static func rows(_ file: String, _ key: String = "rows") throws -> [[String: Any]] {
@@ -91,6 +92,13 @@ extension CoreTests {
         let timings = table["timings"] as? [String: Int] ?? [:]
         try expect(timings["learnAfterMs"], VolumeRoute.learnAfterMs)
         try expect(timings["settleMs"], VolumeRoute.settleMs)
+    }
+
+    static func onScreen() throws {
+        for row in try rows("on-screen.json") {
+            let got = OnScreen.of(isOn: Contracts.bool(row["isOn"]), currentApp: Contracts.string(row["currentApp"]), kind: kind(row["kind"]))
+            try expect("\(row): \(got)", "\(row): \(row["onScreen"] as? String ?? "")")
+        }
     }
 
     static func recentApps() throws {

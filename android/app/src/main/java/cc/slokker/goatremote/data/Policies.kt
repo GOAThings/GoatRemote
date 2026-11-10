@@ -193,3 +193,22 @@ object RecentApps {
     /** O que estava guardado: só nomes de pacote, sem repetidos, até [MAX]. */
     fun sanitize(saved: List<String>): List<String> = saved.filter { RemoteProtocol.isPackageName(it) }.distinct().take(MAX)
 }
+
+/** O que está no ecrã da TV, para o subtítulo do cabeçalho e a marca-d'água da superfície (o mesmo nos dois). */
+enum class OnScreen {
+    OFF,
+    /** Uma app (não o ecrã inicial): mostra-se o nome dela. */
+    APP,
+    /** A Apple TV não diz que app está aberta. */
+    APPLE_TV,
+    HOME;
+
+    companion object {
+        fun of(isOn: Boolean?, currentApp: String?, kind: TvKind?): OnScreen = when {
+            isOn == false -> OFF
+            currentApp != null && !AppCatalog.isLauncher(currentApp) -> APP
+            kind == TvKind.APPLE -> APPLE_TV
+            else -> HOME
+        }
+    }
+}

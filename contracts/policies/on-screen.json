@@ -1,0 +1,53 @@
+{
+  "_about": "OnScreen.of: what the header subtitle and the touch surface watermark say is on the TV (ui.md U3, both written twice per platform before). 'app' shows that app's name; the Apple TV doesn't say which app is open.",
+  "rows": [
+    {
+      "isOn": false,
+      "currentApp": "com.netflix.ninja",
+      "kind": "android",
+      "onScreen": "off"
+    },
+    {
+      "isOn": null,
+      "currentApp": "com.netflix.ninja",
+      "kind": "android",
+      "onScreen": "app"
+    },
+    {
+      "isOn": true,
+      "currentApp": "com.google.android.tvlauncher",
+      "kind": "android",
+      "onScreen": "home"
+    },
+    {
+      "isOn": true,
+      "currentApp": null,
+      "kind": "android",
+      "onScreen": "home"
+    },
+    {
+      "isOn": true,
+      "currentApp": null,
+      "kind": "apple",
+      "onScreen": "appleTV"
+    },
+    {
+      "isOn": true,
+      "currentApp": "com.google.android.tvlauncher",
+      "kind": "apple",
+      "onScreen": "appleTV"
+    },
+    {
+      "isOn": true,
+      "currentApp": "com.x.y",
+      "kind": "apple",
+      "onScreen": "app"
+    },
+    {
+      "isOn": false,
+      "currentApp": null,
+      "kind": "apple",
+      "onScreen": "off"
+    }
+  ]
+}

@@ -187,3 +187,19 @@ public enum RecentApps {
         return Array(saved.filter { RemoteProtocol.isPackageName($0) && seen.insert($0).inserted }.prefix(max))
     }
 }
+
+/// O que está no ecrã da TV, para o subtítulo do cabeçalho e a marca-d'água da superfície (o mesmo nos dois).
+public enum OnScreen: Sendable {
+    case off
+    /// Uma app (não o ecrã inicial): mostra-se o nome dela.
+    case app
+    /// A Apple TV não diz que app está aberta.
+    case appleTV
+    case home
+
+    public static func of(isOn: Bool?, currentApp: String?, kind: TVKind?) -> OnScreen {
+        if isOn == false { return .off }
+        if let app = currentApp, !RecentApps.isLauncher(app) { return .app }
+        return kind == .apple ? .appleTV : .home
+    }
+}
