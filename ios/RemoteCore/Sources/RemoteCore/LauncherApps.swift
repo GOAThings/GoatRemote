@@ -15,6 +15,18 @@ public struct TVApp: Decodable, Identifiable, Hashable, Sendable {
         self.color = color
     }
 
+    private enum CodingKeys: String, CodingKey { case package, label, banner, color }
+
+    /// Como no Android: o pacote e o nome são obrigatórios; sem banner (ou com outro tipo) é um ícone, e uma cor que
+    /// não se lê fica nil. Uma app mal descrita fica de fora (Lenient), e as outras contam.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        package = try c.decode(String.self, forKey: .package)
+        label = try c.decode(String.self, forKey: .label)
+        banner = (try? c.decodeIfPresent(Bool.self, forKey: .banner)) ?? false
+        color = (try? c.decodeIfPresent(String.self, forKey: .color)) ?? nil
+    }
+
     public var id: String { package }
     public var link: String { "market://launch?id=\(package)" }
 }

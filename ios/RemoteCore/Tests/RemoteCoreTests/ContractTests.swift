@@ -146,7 +146,7 @@ extension CoreTests {
     static func launcherApps() throws {
         let expected = try Contracts.object("launcher-6470/apps.expected.json")
         let apps = try LauncherApps.parse(try Contracts.data("launcher-6470/" + (expected["input"] as? String ?? "")))
-        let want = Contracts.list(expected["expectedIos"] ?? expected["expected"])
+        let want = Contracts.list(expected["expected"])
         try expect(apps.map(\.package), want.map { $0["package"] as? String ?? "" })
         for (w, app) in zip(want, apps) {
             try expect(app.label, w["label"] as? String ?? "")
