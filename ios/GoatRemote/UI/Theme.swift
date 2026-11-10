@@ -124,6 +124,8 @@ struct GlassKey: View {
     var size: CGFloat = 60
     var tint: Color = Theme.text
     var filled = false
+    /// O que o VoiceOver diz (o [id] é para os testes de interface).
+    let label: String
     let id: String
     let onTap: () -> Void
     var onHold: ((Bool) -> Void)?
@@ -142,6 +144,6 @@ struct GlassKey: View {
         .accessibilityElement()
         .accessibilityAddTraits(.isButton)
         .accessibilityIdentifier(id)
-        .accessibilityLabel(id)
+        .accessibilityLabel(label)
     }
 }

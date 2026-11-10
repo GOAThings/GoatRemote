@@ -16,7 +16,19 @@ struct AddTVView: View {
         NavigationStack {
             List {
                 Section {
-                    if finder.found.isEmpty {
+                    if finder.found.isEmpty, finder.blocked {
+                        // Sem a autorização da rede local, o iOS não deixa procurar: diz-se onde a dar.
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(L("GoatRemote can't look for TVs. Allow Local Network for GoatRemote in Settings, and check that the iPhone is on Wi-Fi.",
+                                   "O GoatRemote não consegue procurar TVs. Autoriza a Rede local para o GoatRemote nas Definições, e vê se o iPhone está no Wi-Fi."))
+                                .foregroundStyle(Theme.dim)
+                            Button(L("Open Settings", "Abrir Definições")) {
+                                if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+                            }
+                            .foregroundStyle(Theme.accent)
+                            .accessibilityIdentifier("add:settings")
+                        }
+                    } else if finder.found.isEmpty {
                         HStack(spacing: 12) {
                             ProgressView()
                             Text(L("Looking for TVs on this network…", "À procura de TVs nesta rede…")).foregroundStyle(Theme.dim)
@@ -70,6 +82,7 @@ struct AddTVView: View {
         }
         .onAppear { finder.start() }
         .onDisappear { finder.stop() }
+        .onChange(of: finder.found) { _, found in model.relocate(found) }
         .onChange(of: model.current?.id) { _, _ in if model.pairing == nil { onDone?() } }
     }
 }

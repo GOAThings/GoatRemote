@@ -43,29 +43,29 @@ struct RemoteView: View {
             }
             .padding(.bottom, 18)
             HStack {
-                GlassKey(symbol: "keyboard", size: 52, tint: Theme.dim, id: "keyboard") { model.showKeyboard = true }
+                GlassKey(symbol: "keyboard", size: 52, tint: Theme.dim, label: L("Keyboard", "Teclado"), id: "keyboard") { model.showKeyboard = true }
                 Spacer()
-                GlassKey(symbol: "square.grid.2x2", size: 52, tint: Theme.dim, id: "apps") { showApps = true }
+                GlassKey(symbol: "square.grid.2x2", size: 52, tint: Theme.dim, label: "Apps", id: "apps") { showApps = true }
                 Spacer()
                 // Com o GoatTV a dar um canal, a lista abre-se no cartão dele.
                 if model.hasChannels, now == nil {
-                    GlassKey(symbol: "play.tv", size: 52, tint: Theme.dim, id: "channels") { showChannels = true }
+                    GlassKey(symbol: "play.tv", size: 52, tint: Theme.dim, label: L("Channels", "Canais"), id: "channels") { showChannels = true }
                     Spacer()
                 }
-                GlassKey(symbol: "backward.fill", size: 52, tint: Theme.dim, id: "key:rewind") { model.press(.rewind) } onHold: { model.hold(.rewind, down: $0) }
+                GlassKey(symbol: "backward.fill", size: 52, tint: Theme.dim, label: L("Rewind", "Recuar"), id: "key:rewind") { model.press(.rewind) } onHold: { model.hold(.rewind, down: $0) }
                 Spacer()
-                GlassKey(symbol: "forward.fill", size: 52, tint: Theme.dim, id: "key:fastForward") { model.press(.fastForward) } onHold: { model.hold(.fastForward, down: $0) }
+                GlassKey(symbol: "forward.fill", size: 52, tint: Theme.dim, label: L("Forward", "Avançar"), id: "key:fastForward") { model.press(.fastForward) } onHold: { model.hold(.fastForward, down: $0) }
                 Spacer()
-                GlassKey(symbol: "ellipsis", size: 52, tint: Theme.dim, id: "more") { showMore = true }
+                GlassKey(symbol: "ellipsis", size: 52, tint: Theme.dim, label: L("More", "Mais"), id: "more") { showMore = true }
             }
             .padding(.horizontal, 8)
             .padding(.bottom, 22)
             HStack(alignment: .center) {
-                GlassKey(symbol: "playpause", size: 74, id: "key:playPause") { model.press(.playPause) }
+                GlassKey(symbol: "playpause", size: 74, label: L("Play/Pause", "Reproduzir/pausa"), id: "key:playPause") { model.press(.playPause) }
                 Spacer()
-                GlassKey(symbol: "chevron.left", size: 96, filled: true, id: "key:back") { model.press(.back) } onHold: { model.hold(.back, down: $0) }
+                GlassKey(symbol: "chevron.left", size: 96, filled: true, label: L("Back", "Voltar"), id: "key:back") { model.press(.back) } onHold: { model.hold(.back, down: $0) }
                 Spacer()
-                GlassKey(symbol: "tv", size: 74, id: "key:home") { model.press(.home) } onHold: { model.hold(.home, down: $0) }
+                GlassKey(symbol: "tv", size: 74, label: L("Home", "Início"), id: "key:home") { model.press(.home) } onHold: { model.hold(.home, down: $0) }
             }
             .padding(.horizontal, 10)
         }
@@ -131,8 +131,8 @@ struct RemoteView: View {
             .buttonStyle(.plain)
             .accessibilityIdentifier("tv-menu")
             GlassKey(symbol: model.state.muted == true ? "speaker.slash.fill" : "speaker.slash", size: 42,
-                     tint: model.state.muted == true ? Theme.accent : Theme.dim, id: "key:mute") { model.press(.mute) }
-            GlassKey(symbol: "power", size: 42, tint: model.state.isOn == false ? Theme.dim : Theme.power, id: "key:power") { model.press(.power) }
+                     tint: model.state.muted == true ? Theme.accent : Theme.dim, label: L("Mute", "Silenciar"), id: "key:mute") { model.press(.mute) }
+            GlassKey(symbol: "power", size: 42, tint: model.state.isOn == false ? Theme.dim : Theme.power, label: L("Power", "Ligar"), id: "key:power") { model.press(.power) }
         }
     }
 
@@ -254,18 +254,7 @@ struct VolumeHUD: View {
                 .liquidGlass(Capsule(), interactive: false)
                 .padding(.horizontal, 16)
                 .accessibilityIdentifier("volume-hud")
-        } else if let key = model.volumePressed {
-            // Sem valor para mostrar (HDMI-CEC): só o que se carregou.
-            Image(systemName: key == .mute ? "speaker.slash.fill" : key == .volumeUp ? "speaker.wave.3.fill" : "speaker.wave.1.fill")
-                .font(.footnote)
-                .foregroundStyle(.white)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 7)
-                .liquidGlass(Capsule(), interactive: false)
-                .accessibilityIdentifier("volume-hud")
-        } else if model.state.volumeControl {
-            level
-        } else {
+        } else if !model.state.volumeControl {
             Label(L("The Apple TV can't change this TV's volume. Use its remote",
                     "A Apple TV não muda o volume desta TV. Usa o comando dela"), systemImage: "speaker.slash.fill")
                 .font(.footnote)
@@ -276,6 +265,17 @@ struct VolumeHUD: View {
                 .liquidGlass(Capsule(), interactive: false)
                 .padding(.horizontal, 16)
                 .accessibilityIdentifier("volume-hud")
+        } else if let key = model.volumePressed {
+            // Sem valor para mostrar (HDMI-CEC): só o que se carregou.
+            Image(systemName: key == .mute ? "speaker.slash.fill" : key == .volumeUp ? "speaker.wave.3.fill" : "speaker.wave.1.fill")
+                .font(.footnote)
+                .foregroundStyle(.white)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 7)
+                .liquidGlass(Capsule(), interactive: false)
+                .accessibilityIdentifier("volume-hud")
+        } else {
+            level
         }
     }
 

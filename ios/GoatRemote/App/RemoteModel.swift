@@ -110,7 +110,9 @@ final class RemoteModel {
 
     // MARK: Ligação
 
-    func connect() {
+    /// Liga à TV escolhida. Uma falha que não seja "não emparelhado" tenta mais uma vez daí a 1,5 s: a SHIELD, por
+    /// exemplo, recusa a primeira ligação logo a seguir a emparelhar.
+    func connect(retry: Bool = true) {
         guard let tv = current else {
             status = .noTV
             return
@@ -176,10 +178,19 @@ final class RemoteModel {
                 self.notPairedRetries = 0
                 self.status = .notPaired
             } catch {
-                DebugLog.add("Connect failed: \(error)")
+                DebugLog.add("Connect failed\(retry ? " (will retry)" : ""): \(error)")
                 guard self.link === link else { return }
                 self.link = nil
-                self.status = .unreachable(Self.describe(error))
+                link.close()
+                guard retry else {
+                    self.status = .unreachable(Self.describe(error))
+                    return
+                }
+                self.autoReconnect = Task {
+                    try? await Task.sleep(nanoseconds: 1_500_000_000)
+                    guard !Task.isCancelled, self.link == nil, self.current?.id == tv.id else { return }
+                    self.connect(retry: false)
+                }
             }
         }
     }
@@ -555,8 +566,11 @@ final class RemoteModel {
         }
     }
 
-    /// O que se sabe dos canais volta ao início (outra TV, ou esta esquecida).
+    /// O que se sabe dos canais (e o aviso do volume) volta ao início (outra TV, ou esta esquecida).
     private func resetChannels(_ tv: SavedTV?) {
+        // O indicador do volume era da TV anterior.
+        volumePressed = nil
+        volumeProblem = nil
         playTask?.cancel()
         hasChannels = Self.hasGoatTV(tv?.id)
         channels = nil
@@ -598,9 +612,6 @@ final class RemoteModel {
         }
     }
 
-    /// A Apple TV (protocolo Companion) já emparelha.
-    static let appleTVReady = true
-
     /// Emparelhar uma TV encontrada na rede.
     func startPairing(_ found: FoundTV) {
         startPairing(name: found.name, id: found.id, host: nil, endpoint: found.endpoint, kind: found.kind)
@@ -623,6 +634,31 @@ final class RemoteModel {
             try? await Task.sleep(nanoseconds: 650_000_000)
             self?.pairing = model
             model.start()
+        }
+    }
+
+    /// Quando se viu cada TV guardada na procura (para não perguntar o endereço a cada mudança da lista).
+    @ObservationIgnored private var relocated: [String: Date] = [:]
+
+    /// A procura encontrou TVs guardadas: se alguma mudou de IP (ou de porta, na Apple TV), o endereço guardado muda,
+    /// para voltar a ligar e para "Emparelhar esta TV outra vez" irem ao sítio certo. Conta o id com que se guardou
+    /// (o nome com que se anuncia), o mesmo que marca "Emparelhada".
+    func relocate(_ found: [FoundTV]) {
+        for tv in found {
+            guard tvs.contains(where: { $0.id == tv.id }),
+                  Date().timeIntervalSince(relocated[tv.id] ?? .distantPast) > 60 else { continue }
+            relocated[tv.id] = Date()
+            Task {
+                guard let resolved = await TVFinder.resolveHostPort(tv.endpoint),
+                      let saved = TVStore.all.first(where: { $0.id == tv.id }),
+                      let moved = SavedTV.moved(saved, host: resolved.host, port: resolved.port) else { return }
+                DebugLog.add("\(saved.name) moved to \(moved.host)\(moved.port.map { ":\($0)" } ?? "")")
+                TVStore.save(moved)
+                tvs = TVStore.all
+                guard current?.id == moved.id else { return }
+                current = moved
+                if case .unreachable = status { connect() }
+            }
         }
     }
 

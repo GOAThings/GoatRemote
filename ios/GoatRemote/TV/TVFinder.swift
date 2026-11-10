@@ -18,6 +18,9 @@ struct FoundTV: Identifiable, Hashable {
 @MainActor
 final class TVFinder: ObservableObject {
     @Published private(set) var found: [FoundTV] = []
+    /// A procura não arranca (sem a autorização da rede local, ou sem rede): em vez de "à procura…" para sempre,
+    /// mostra-se como resolver.
+    @Published private(set) var blocked = false
     private var browsers: [NWBrowser] = []
     private var android: [FoundTV] = []
     private var apple: [FoundTV] = []
@@ -55,7 +58,16 @@ final class TVFinder: ObservableObject {
         for browser in [androidBrowser, appleBrowser] {
             // Sem a autorização da rede local, o browser fica em "waiting" e nunca encontra nada.
             let what = "\(browser.descriptor)"
-            browser.stateUpdateHandler = { state in DebugLog.add("Browser \(what): \(state)") }
+            browser.stateUpdateHandler = { [weak self] state in
+                DebugLog.add("Browser \(what): \(state)")
+                let blocked: Bool?
+                switch state {
+                case .waiting, .failed: blocked = true
+                case .ready: blocked = false
+                default: blocked = nil
+                }
+                if let blocked { Task { @MainActor in self?.blocked = blocked } }
+            }
             browser.start(queue: .main)
         }
         browsers = [androidBrowser, appleBrowser]

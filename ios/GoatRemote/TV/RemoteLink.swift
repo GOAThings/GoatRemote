@@ -39,6 +39,17 @@ struct SavedTV: Codable, Identifiable, Hashable, Sendable {
         port = try c.decodeIfPresent(UInt16.self, forKey: .port)
         certificate = try c.decodeIfPresent(String.self, forKey: .certificate)
     }
+
+    /// A mesma TV num endereço novo (visto na procura), ou nil se não mudou. Só a Apple TV guarda a porta: a da Android
+    /// TV é sempre a mesma. O certificado fica: continua a ser a mesma TV.
+    static func moved(_ tv: SavedTV, host: String, port: UInt16?) -> SavedTV? {
+        let newPort = tv.kind == .apple ? port ?? tv.port : tv.port
+        guard !host.isEmpty, host != tv.host || newPort != tv.port else { return nil }
+        var moved = tv
+        moved.host = host
+        moved.port = newPort
+        return moved
+    }
 }
 
 /// As TVs guardadas e a escolhida (partilhadas pela app e pelos Atalhos).
@@ -279,7 +290,7 @@ final class RemoteLink: @unchecked Sendable {
     /// Para os Atalhos: liga, manda e desliga.
     @MainActor
     static func once(_ action: (TVControl) -> Void) async throws {
-        guard let tv = TVStore.current else { throw Failure.unreachable("sem TV") }
+        guard let tv = TVStore.current else { throw Failure.unreachable(L("No TV paired yet. Open GoatRemote and add one", "Ainda não há TV emparelhada. Abre o GoatRemote e junta uma")) }
         let link = RemoteModel.makeLink(tv)
         try await link.connect()
         action(link)

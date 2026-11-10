@@ -353,8 +353,8 @@ struct ChannelsSheet: View {
     }
 }
 
-/// As teclas que não cabem no comando, os números e as opções.
-/// A versão instalada e, se houver outra mais recente, tocar para descarregar a IPA e passá-la à app que a assina.
+/// A versão instalada. Tocar procura já uma versão nova (e diz o que encontrou); com uma mais recente, tocar descarrega
+/// a IPA e passa-a à app que a assina. Se o download falhar, abre-se a página da versão no GitHub.
 struct UpdateRow: View {
     private static let latest = URL(string: "https://api.github.com/repos/GOAThings/GoatRemote/releases/latest")!
     private static let ipa = URL(string: "https://github.com/GOAThings/GoatRemote/releases/latest/download/GoatRemote.ipa")!
@@ -367,44 +367,65 @@ struct UpdateRow: View {
 
     private var current: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "" }
     @State private var newer: String?
-    @State private var downloading = false
+    @State private var busy = false
+    /// O que se diz por baixo, em vez do número da versão (a procurar, a descarregar, o resultado).
+    @State private var note: String?
     @State private var downloaded: Downloaded?
 
     var body: some View {
-        Button(action: download) {
+        Button(action: tap) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(newer.map { L("Update to \($0)", "Atualizar para \($0)") } ?? L("Version", "Versão"))
                     .foregroundStyle(newer != nil ? Theme.accent : .white)
-                Text(downloading ? L("Downloading…", "A descarregar…") : current)
+                Text(note ?? current)
                     .font(.footnote).foregroundStyle(Theme.dim)
+                    .accessibilityIdentifier("opt:update-note")
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.vertical, 12)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .disabled(newer == nil || downloading)
+        .disabled(busy)
         .accessibilityIdentifier("opt:update")
-        .task { await check() }
+        .task { newer = try? await latestNewer() }
         .sheet(item: $downloaded) { IPAShare(url: $0.url) }
     }
 
-    private func check() async {
+    /// A versão publicada, se for mais recente do que esta (nil: esta é a mais recente); erro se não deu para saber.
+    private func latestNewer() async throws -> String? {
         var request = URLRequest(url: Self.latest)
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         request.timeoutInterval = 20
-        guard let (data, response) = try? await URLSession.shared.data(for: request),
-              (response as? HTTPURLResponse)?.statusCode == 200,
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard (response as? HTTPURLResponse)?.statusCode == 200,
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let tag = json["tag_name"] as? String else { return }
+              let tag = json["tag_name"] as? String else { throw URLError(.badServerResponse) }
         let version = tag.hasPrefix("v") ? String(tag.dropFirst()) : tag
-        if version.compare(current, options: .numeric) == .orderedDescending { newer = version }
+        return version.compare(current, options: .numeric) == .orderedDescending ? version : nil
+    }
+
+    private func tap() {
+        if newer != nil { return download() }
+        busy = true
+        note = L("Checking…", "A procurar…")
+        Task {
+            defer { busy = false }
+            do {
+                newer = try await latestNewer()
+                note = newer == nil ? L("You have the latest version", "Tens a versão mais recente") : nil
+            } catch {
+                DebugLog.add("Update check failed: \(error)")
+                note = L("Couldn't check for updates", "Não deu para procurar atualizações")
+            }
+        }
     }
 
     private func download() {
-        downloading = true
+        busy = true
+        note = L("Downloading…", "A descarregar…")
         Task {
-            defer { downloading = false }
+            defer { busy = false }
             do {
                 let (file, response) = try await URLSession.shared.download(from: Self.ipa)
                 guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
@@ -412,8 +433,10 @@ struct UpdateRow: View {
                 try? FileManager.default.removeItem(at: target)
                 try FileManager.default.moveItem(at: file, to: target)
                 downloaded = Downloaded(url: target)
+                note = nil
             } catch {
                 DebugLog.add("Update download failed: \(error)")
+                note = L("Couldn't download the update", "Não foi possível descarregar a atualização")
                 await UIApplication.shared.open(Self.page)
             }
         }
@@ -430,6 +453,7 @@ private struct IPAShare: UIViewControllerRepresentable {
     func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
 }
 
+/// As teclas que não cabem no comando, os números e as opções.
 struct MoreSheet: View {
     @Environment(RemoteModel.self) private var model
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 10), count: 4)
@@ -538,6 +562,7 @@ struct DiagnosticsView: View {
     @State private var contact = ""
     @State private var sending = false
     @State private var result: String?
+    @State private var confirmClear = false
 
     var body: some View {
         ScrollView {
@@ -592,11 +617,19 @@ struct DiagnosticsView: View {
                     .accessibilityIdentifier("diagnostics:share")
             }
             ToolbarItem(placement: .bottomBar) {
-                Button(L("Clear", "Limpar"), role: .destructive) {
-                    DebugLog.clear()
-                    text = DebugLog.text
-                }
+                Button(L("Clear", "Limpar"), role: .destructive) { confirmClear = true }
+                    .accessibilityIdentifier("diagnostics:clear")
             }
+        }
+        .alert(L("Clear the diagnostics log?", "Limpar o registo de diagnóstico?"), isPresented: $confirmClear) {
+            Button(L("Clear", "Limpar"), role: .destructive) {
+                DebugLog.clear()
+                text = DebugLog.text
+            }
+            Button(L("Cancel", "Cancelar"), role: .cancel) {}
+        } message: {
+            Text(L("What the app did so far will be gone, and can't be sent in a report.",
+                   "O que a app fez até agora desaparece, e já não pode ir num relatório."))
         }
         .onAppear { text = DebugLog.text }
     }
@@ -630,6 +663,8 @@ struct TVsSheet: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var finder = TVFinder()
     @State private var adding = false
+    /// A TV que se vai esquecer, à espera da confirmação.
+    @State private var forgetting: SavedTV?
 
     var body: some View {
         NavigationStack {
@@ -650,8 +685,9 @@ struct TVsSheet: View {
                                 if tv.id == model.current?.id { Image(systemName: "checkmark").foregroundStyle(Theme.accent) }
                             }
                         }
-                        .swipeActions {
-                            Button(role: .destructive) { model.forget(tv) } label: { Label(L("Forget", "Esquecer"), systemImage: "trash") }
+                        // Sem o deslizar até ao fim: esquecer pede sempre confirmação.
+                        .swipeActions(allowsFullSwipe: false) {
+                            Button(role: .destructive) { forgetting = tv } label: { Label(L("Forget", "Esquecer"), systemImage: "trash") }
                         }
                         .listRowBackground(Theme.card)
                     }
@@ -679,9 +715,18 @@ struct TVsSheet: View {
             .navigationTitle(L("TVs", "TVs"))
             .navigationBarTitleDisplayMode(.inline)
             .sheet(isPresented: $adding) { AddTVView(onDone: { adding = false }) }
+            .alert(forgetting.map { L("Forget \($0.name)?", "Esquecer \($0.name)?") } ?? "",
+                   isPresented: Binding(get: { forgetting != nil }, set: { if !$0 { forgetting = nil } }),
+                   presenting: forgetting) { tv in
+                Button(L("Forget", "Esquecer"), role: .destructive) { model.forget(tv) }
+                Button(L("Cancel", "Cancelar"), role: .cancel) {}
+            } message: { _ in
+                Text(L("To use it again, you'll have to pair it again.", "Para a voltares a usar, tens de a emparelhar outra vez."))
+            }
         }
         .onAppear { finder.start() }
         .onDisappear { finder.stop() }
+        .onChange(of: finder.found) { _, found in model.relocate(found) }
     }
 
     private func actionLabel(_ title: String, _ symbol: String) -> some View {
@@ -720,14 +765,9 @@ struct FoundTVRow: View {
                     Text(found.kind == .apple ? "Apple TV" : "Android TV · Google TV").font(.footnote).foregroundStyle(Theme.faint)
                 }
                 Spacer()
-                if found.kind == .apple && !RemoteModel.appleTVReady {
-                    Text(L("Soon", "Em breve")).font(.caption).foregroundStyle(Theme.dim)
-                } else {
-                    Text(L("Pair", "Emparelhar")).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.accent)
-                }
+                Text(L("Pair", "Emparelhar")).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.accent)
             }
         }
-        .disabled(found.kind == .apple && !RemoteModel.appleTVReady)
         .accessibilityIdentifier("found:\(found.name)")
     }
 }
