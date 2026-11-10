@@ -595,7 +595,7 @@ final class RemoteModel {
         }
         closeSheets += 1
         Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: 650_000_000)
+            try? await Task.sleep(nanoseconds: SheetHandoff.nanoseconds)
             self?.pairing = model
             model.start()
         }

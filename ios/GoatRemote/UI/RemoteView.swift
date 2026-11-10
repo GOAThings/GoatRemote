@@ -6,10 +6,8 @@ import SwiftUI
 /// uma fila com teclado, apps, recuar/avançar e mais.
 struct RemoteView: View {
     @Environment(RemoteModel.self) private var model
-    @State private var showApps = false
-    @State private var showChannels = false
-    @State private var showMore = false
-    @State private var showTVs = false
+    /// A folha aberta por cima do comando (uma de cada vez). O teclado e o emparelhamento vêm do modelo e substituem-na.
+    @State private var sheet: RemoteSheet?
     @State private var volumeVisible = false
     @State private var volumeToken = 0
 
@@ -22,7 +20,7 @@ struct RemoteView: View {
             header
                 .padding(.bottom, now == nil ? 12 : 14)
             if let now {
-                NowCard(channel: now) { showChannels = true }
+                NowCard(channel: now) { sheet = .channels }
                     .padding(.bottom, 12)
             }
             Group {
@@ -45,18 +43,18 @@ struct RemoteView: View {
             HStack {
                 GlassKey(symbol: "keyboard", size: 52, tint: Theme.dim, label: L("Keyboard", "Teclado"), id: "keyboard") { model.showKeyboard = true }
                 Spacer()
-                GlassKey(symbol: "square.grid.2x2", size: 52, tint: Theme.dim, label: "Apps", id: "apps") { showApps = true }
+                GlassKey(symbol: "square.grid.2x2", size: 52, tint: Theme.dim, label: "Apps", id: "apps") { sheet = .apps }
                 Spacer()
                 // Com o GoatTV a dar um canal, a lista abre-se no cartão dele.
                 if model.hasChannels, now == nil {
-                    GlassKey(symbol: "play.tv", size: 52, tint: Theme.dim, label: L("Channels", "Canais"), id: "channels") { showChannels = true }
+                    GlassKey(symbol: "play.tv", size: 52, tint: Theme.dim, label: L("Channels", "Canais"), id: "channels") { sheet = .channels }
                     Spacer()
                 }
                 GlassKey(symbol: "backward.fill", size: 52, tint: Theme.dim, label: L("Rewind", "Recuar"), id: "key:rewind") { model.press(.rewind) } onHold: { model.hold(.rewind, down: $0) }
                 Spacer()
                 GlassKey(symbol: "forward.fill", size: 52, tint: Theme.dim, label: L("Forward", "Avançar"), id: "key:fastForward") { model.press(.fastForward) } onHold: { model.hold(.fastForward, down: $0) }
                 Spacer()
-                GlassKey(symbol: "ellipsis", size: 52, tint: Theme.dim, label: L("More", "Mais"), id: "more") { showMore = true }
+                GlassKey(symbol: "ellipsis", size: 52, tint: Theme.dim, label: L("More", "Mais"), id: "more") { sheet = .more }
             }
             .padding(.horizontal, 8)
             .padding(.bottom, 22)
@@ -81,36 +79,37 @@ struct RemoteView: View {
         }
         .onChange(of: model.volumeChanged) { _, _ in showVolume() }
         .onChange(of: model.closeSheets) { _, _ in
-            showApps = false
-            showChannels = false
-            showMore = false
-            showTVs = false
+            sheet = nil
             model.showKeyboard = false
         }
         .onChange(of: model.showKeyboard) { _, show in
             // A TV pediu o teclado com outra folha aberta: fecha-se essa e abre-se o teclado a seguir.
-            guard show, showApps || showChannels || showMore || showTVs else { return }
+            guard show, sheet != nil else { return }
             model.showKeyboard = false
-            showApps = false
-            showChannels = false
-            showMore = false
-            showTVs = false
+            sheet = nil
             Task {
-                try? await Task.sleep(nanoseconds: 650_000_000)
+                try? await Task.sleep(nanoseconds: SheetHandoff.nanoseconds)
                 model.showKeyboard = true
             }
         }
         .sheet(isPresented: $model.showKeyboard) { KeyboardSheet().presentationDetents([.height(250)]).presentationBackground(Theme.surface) }
-        .sheet(isPresented: $showApps) { AppsSheet().presentationDetents([.medium, .large]).presentationBackground(Theme.surface) }
-        .sheet(isPresented: $showChannels) { ChannelsSheet().presentationDetents([.medium, .large]).presentationBackground(Theme.surface) }
-        .sheet(isPresented: $showMore) { MoreSheet().presentationDetents([.medium, .large]).presentationBackground(Theme.surface) }
-        .sheet(isPresented: $showTVs) { TVsSheet().presentationDetents([.medium, .large]).presentationBackground(Theme.surface) }
+        .sheet(isPresented: shown(.apps)) { AppsSheet().presentationDetents([.medium, .large]).presentationBackground(Theme.surface) }
+        .sheet(isPresented: shown(.channels)) { ChannelsSheet().presentationDetents([.medium, .large]).presentationBackground(Theme.surface) }
+        .sheet(isPresented: shown(.more)) { MoreSheet().presentationDetents([.medium, .large]).presentationBackground(Theme.surface) }
+        .sheet(isPresented: shown(.tvs)) { TVsSheet().presentationDetents([.medium, .large]).presentationBackground(Theme.surface) }
+    }
+
+    /// Aberta enquanto for esta a folha; fechá-la (deslizar para baixo) deixa o comando sem folha.
+    private func shown(_ which: RemoteSheet) -> Binding<Bool> {
+        Binding(get: { sheet == which }, set: { open in
+            if open { sheet = which } else if sheet == which { sheet = nil }
+        })
     }
 
     /// O nome da TV em grande (tocar abre as TVs), com o estado por baixo; à direita, som e ligar.
     private var header: some View {
         HStack(alignment: .center, spacing: 8) {
-            Button { showTVs = true } label: {
+            Button { sheet = .tvs } label: {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 4) {
                         Text(model.current?.name ?? "GoatRemote")
@@ -720,4 +719,16 @@ private func screenLabel(_ model: RemoteModel) -> String {
     case .appleTV: return "Apple TV"
     case .home: return L("Home screen", "Ecrã inicial")
     }
+}
+
+/// As folhas do comando: só uma de cada vez. Uma folha nova junta-se aqui, e o teclado e o emparelhamento fecham-na
+/// sem mais listas (antes havia quatro booleanos repetidos em dois sítios, U2).
+enum RemoteSheet: Equatable {
+    case apps, channels, more, tvs
+}
+
+/// O SwiftUI não mostra uma folha enquanto outra está a fechar: o teclado e o emparelhamento esperam isto.
+enum SheetHandoff {
+    static let delayMs = 650
+    static var nanoseconds: UInt64 { UInt64(delayMs) * 1_000_000 }
 }
