@@ -20,10 +20,14 @@ import cc.slokker.goatremote.apple.CompanionConnection
 import cc.slokker.goatremote.apple.CompanionCredentials
 import cc.slokker.goatremote.apple.RawHttp
 import cc.slokker.goatremote.data.AppCatalog
+import cc.slokker.goatremote.data.AppStoreArtwork
+import cc.slokker.goatremote.data.GoatTvApi
+import cc.slokker.goatremote.data.LauncherApi
 import cc.slokker.goatremote.data.ChannelList
 import cc.slokker.goatremote.data.FoundTv
 import cc.slokker.goatremote.data.GoatTvChannels
 import cc.slokker.goatremote.data.LauncherApps
+import cc.slokker.goatremote.data.LauncherMemory
 import cc.slokker.goatremote.data.NowInfo
 import cc.slokker.goatremote.data.PrefKeys
 import cc.slokker.goatremote.data.SavedTv
@@ -45,11 +49,7 @@ import cc.slokker.goatremote.tv.TvControl
 import cc.slokker.goatremote.tv.TvSocket
 import cc.slokker.goatremote.tv.TvState
 import cc.slokker.goatremote.tv.UnreachableException
-import cc.slokker.goatremote.tv.readLimited
 import java.io.File
-import java.net.HttpURLConnection
-import java.net.URL
-import java.net.URLEncoder
 import java.util.Locale
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -60,7 +60,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
-import org.json.JSONObject
 
 /** Em que passo vai um emparelhamento. */
 sealed interface Phase {
@@ -100,6 +99,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
     private val context: Context get() = appContext
     private val store = TvStore(app)
     private val prefs = app.getSharedPreferences(PrefKeys.OPTIONS_PREFS, Context.MODE_PRIVATE)
+    private val launcherMemory = LauncherMemory(prefs)
     internal val identities = IdentityStore(File(app.filesDir, "identity"))
     val finder = TvFinder(app)
 
@@ -336,13 +336,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
         for (app in installedApps) {
             if (appleArtwork.containsKey(app.pkg) || app.pkg.startsWith("com.apple.")) continue
             viewModelScope.launch {
-                val art = withContext(Dispatchers.IO) {
-                    runCatching {
-                        val url = URL("https://itunes.apple.com/lookup?bundleId=" + URLEncoder.encode(app.pkg, "UTF-8"))
-                        val json = JSONObject(url.readText())
-                        json.getJSONArray("results").optJSONObject(0)?.let { it.optString("artworkUrl512").ifEmpty { it.optString("artworkUrl100") } }
-                    }.getOrNull()
-                }
+                val art = AppStoreArtwork.lookup(app.pkg)
                 if (!art.isNullOrEmpty()) appleArtwork[app.pkg] = art
             }
         }
@@ -358,19 +352,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
         if (haptic && haptics) vibrate(false)
         DebugLog.add("Open app via launcher: ${app.pkg}")
         viewModelScope.launch {
-            val status = withContext(Dispatchers.IO) {
-                runCatching {
-                    val c = URL("http://${tv.host}:$LAUNCHER_PORT/open/${app.pkg}").openConnection() as HttpURLConnection
-                    c.requestMethod = "POST"
-                    c.connectTimeout = 3000
-                    c.readTimeout = 3000
-                    try {
-                        c.responseCode
-                    } finally {
-                        c.disconnect()
-                    }
-                }.getOrDefault(0)
-            }
+            val status = LauncherApi(tv.host).open(app.pkg)
             if (LauncherApps.openFallsBack(status)) {
                 DebugLog.add("Launcher didn't open it (HTTP $status), using the remote's link")
                 if (current?.id == tv.id) open(app.link, haptic = false)
@@ -383,19 +365,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
         val tv = current ?: return
         if (tv.kind == TvKind.APPLE) return
         viewModelScope.launch {
-            val apps = withContext(Dispatchers.IO) {
-                runCatching {
-                    val c = URL("http://${tv.host}:$LAUNCHER_PORT/apps").openConnection() as HttpURLConnection
-                    c.connectTimeout = 4000
-                    c.readTimeout = 4000
-                    try {
-                        if (c.responseCode != 200) return@runCatching null
-                        LauncherApps.parse(String(c.inputStream.readLimited(LauncherApps.MAX_BYTES), Charsets.UTF_8))
-                    } finally {
-                        c.disconnect()
-                    }
-                }.getOrNull()
-            }
+            val apps = LauncherApi(tv.host).apps()
             if (apps != null) setLauncher(tv.id, true)
             if (apps != null && current?.id == tv.id) installedApps = apps
         }
@@ -404,7 +374,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
     /** O banner (ou ícone) de uma app, dado pelo GoatLauncher (ou, na Apple TV, o da App Store). */
     fun iconUrl(pkg: String): String? {
         val tv = current ?: return null
-        return if (tv.kind == TvKind.APPLE) appleArtwork[pkg] else "http://${tv.host}:$LAUNCHER_PORT/icon/$pkg"
+        return if (tv.kind == TvKind.APPLE) appleArtwork[pkg] else LauncherApi(tv.host).iconUrl(pkg)
     }
 
     // ---- Canais do GoatTV (porta 6471) ----
@@ -429,28 +399,11 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
 
     /** true se veio a lista. */
     private suspend fun loadChannels(tv: SavedTv): Boolean {
-        var refused = false
-        var status = 0
-        val list = withContext(Dispatchers.IO) {
-            try {
-                val c = URL(GoatTvChannels.url(tv.host, "channels")).openConnection() as HttpURLConnection
-                c.connectTimeout = 4000
-                c.readTimeout = 8000
-                try {
-                    status = c.responseCode
-                    if (status != 200) null
-                    else GoatTvChannels.parse(String(c.inputStream.readLimited(GoatTvChannels.MAX_BYTES), Charsets.UTF_8))
-                } finally {
-                    c.disconnect()
-                }
-            } catch (e: java.net.ConnectException) {
-                refused = true
-                null
-            } catch (e: Exception) {
-                DebugLog.add("Channels: $e")
-                null
-            }
-        }
+        val fetched = GoatTvApi(tv.host).channels()
+        fetched.error?.let { DebugLog.add("Channels: $it") }
+        val list = fetched.value
+        val refused = fetched.refused
+        val status = fetched.status
         if (current?.id != tv.id) return false
         when {
             list != null -> {
@@ -519,27 +472,10 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
      */
     private suspend fun pollNow(tv: SavedTv) {
         if (tv.id in withoutNow) return
-        var status = 0
-        var refused = false
-        val info = withContext(Dispatchers.IO) {
-            try {
-                val c = URL(GoatTvChannels.url(tv.host, "now")).openConnection() as HttpURLConnection
-                c.connectTimeout = 2000
-                c.readTimeout = 3000
-                try {
-                    status = c.responseCode
-                    if (status != 200) null
-                    else GoatTvChannels.parseNow(String(c.inputStream.readLimited(GoatTvChannels.MAX_NOW_BYTES), Charsets.UTF_8))
-                } finally {
-                    c.disconnect()
-                }
-            } catch (e: java.net.ConnectException) {
-                refused = true
-                null
-            } catch (e: Exception) {
-                null
-            }
-        }
+        val fetched = GoatTvApi(tv.host).now()
+        val info = fetched.value
+        val status = fetched.status
+        val refused = fetched.refused
         if (current?.id != tv.id) return
         when {
             info != null -> {
@@ -604,7 +540,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
 
     fun channelLogoUrl(channel: TvChannel): String? {
         val tv = current ?: return null
-        return if (channel.logo) GoatTvChannels.url(tv.host, "logo", channel.key) else null
+        return if (channel.logo) GoatTvApi(tv.host).logoUrl(channel.key) else null
     }
 
     /**
@@ -666,23 +602,10 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    private suspend fun postPlay(tv: SavedTv, key: String): Pair<Int, Boolean> = withContext(Dispatchers.IO) {
-        try {
-            val c = URL(GoatTvChannels.url(tv.host, "play", key)).openConnection() as HttpURLConnection
-            c.requestMethod = "POST"
-            c.connectTimeout = 3000
-            c.readTimeout = 4000
-            try {
-                c.responseCode to false
-            } finally {
-                c.disconnect()
-            }
-        } catch (e: java.net.ConnectException) {
-            0 to true
-        } catch (e: Exception) {
-            DebugLog.add("Play failed: $e")
-            0 to false
-        }
+    private suspend fun postPlay(tv: SavedTv, key: String): Pair<Int, Boolean> {
+        val r = GoatTvApi(tv.host).play(key)
+        r.error?.let { DebugLog.add("Play failed: $it") }
+        return r.status to r.refused
     }
 
     // ---- TVs ----
@@ -786,10 +709,9 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
      * launcher: 404, ou ligação recusada na porta dele, numa TV onde nunca se viu nenhum. Onde já se viu, isso é só não
      * ter respondido; esquecer a TV limpa o que se sabe, se o launcher saiu mesmo de lá.
      */
-    private fun hasLauncher(tvId: String): Boolean? =
-        if (prefs.contains(PrefKeys.launcher(tvId))) prefs.getBoolean(PrefKeys.launcher(tvId), false) else null
+    private fun hasLauncher(tvId: String): Boolean? = launcherMemory.known(tvId)
 
-    private fun setLauncher(tvId: String, value: Boolean) = prefs.edit().putBoolean(PrefKeys.launcher(tvId), value).apply()
+    private fun setLauncher(tvId: String, value: Boolean) = launcherMemory.set(tvId, value)
 
     /**
      * Com HDMI-CEC, o volume está na TV e a box não sabe o valor: o que reporta não diz nada. Descobre-se ao
@@ -816,26 +738,10 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
         val beforeVolume = state.volume
         val beforeMuted = state.muted
         viewModelScope.launch {
-            var refused = false
-            val status = withContext(Dispatchers.IO) {
-                try {
-                    val c = URL("http://${tv.host}:$LAUNCHER_PORT/volume/$what").openConnection() as HttpURLConnection
-                    c.requestMethod = "POST"
-                    c.connectTimeout = 3000
-                    c.readTimeout = 3000
-                    try {
-                        c.responseCode
-                    } finally {
-                        c.disconnect()
-                    }
-                } catch (e: java.net.ConnectException) {
-                    refused = true
-                    0
-                } catch (e: Exception) {
-                    DebugLog.add("Volume via launcher failed: $e")
-                    0
-                }
-            }
+            val r = LauncherApi(tv.host).volume(what)
+            r.error?.let { DebugLog.add("Volume via launcher failed: $it") }
+            val refused = r.refused
+            val status = r.status
             when (LauncherVolume.outcome(hasLauncher(tv.id), status, refused)) {
                 LauncherVolume.Outcome.DONE -> {
                     setLauncher(tv.id, true)
@@ -928,10 +834,6 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     internal fun describe(e: Throwable): String = e.message?.takeIf { it.isNotBlank() } ?: e.javaClass.simpleName
-
-    companion object {
-        const val LAUNCHER_PORT = LauncherApps.PORT
-    }
 }
 
 /** Um emparelhamento: liga à TV, a TV mostra o código e espera-se que a pessoa o escreva. */

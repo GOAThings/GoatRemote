@@ -220,18 +220,18 @@ final class RemoteLink: @unchecked Sendable {
         connection?.close()
     }
 
-    /// Para os Atalhos e a Siri: uma tecla, e o volume pelo mesmo caminho que no comando (ver RemoteModel.hasLauncher).
+    /// Para os Atalhos e a Siri: uma tecla, e o volume pelo mesmo caminho que no comando (ver LauncherMemory).
     @MainActor
     static func press(_ key: Key) async throws {
-        if let what = LauncherVolume.path(key), let tv = TVStore.current, tv.kind == .android, RemoteModel.hasLauncher(tv.id) != false {
-            let (status, refused) = await RemoteModel.launcherVolume(tv, what)
-            switch LauncherVolume.outcome(known: RemoteModel.hasLauncher(tv.id), status: status, refused: refused) {
+        if let what = LauncherVolume.path(key), let tv = TVStore.current, tv.kind == .android, LauncherMemory.known(tv.id) != false {
+            let (status, refused) = await LauncherApi(host: tv.host).volume(what)
+            switch LauncherVolume.outcome(known: LauncherMemory.known(tv.id), status: status, refused: refused) {
             case .done:
-                RemoteModel.setLauncher(tv.id, true)
+                LauncherMemory.set(tv.id, true)
                 return
             case .noLauncher:
                 DebugLog.add("Volume: no launcher on \(tv.name) (\(refused ? "refused" : "404")), using keys")
-                RemoteModel.setLauncher(tv.id, false)
+                LauncherMemory.set(tv.id, false)
             case .didntAnswer:
                 DebugLog.add("Volume: launcher on \(tv.name) didn't answer (HTTP \(status)), not sending the key")
                 throw Failure.unreachable(L("The TV's launcher didn't answer", "O launcher da TV não respondeu"))
@@ -244,10 +244,15 @@ final class RemoteLink: @unchecked Sendable {
     @MainActor
     static func once(_ action: (TVControl) -> Void) async throws {
         guard let tv = TVStore.current else { throw Failure.unreachable(L("No TV paired yet. Open GoatRemote and add one", "Ainda não há TV emparelhada. Abre o GoatRemote e junta uma")) }
-        let link = RemoteModel.makeLink(tv)
+        let link = makeTVLink(tv)
         try await link.connect()
         action(link)
         try? await Task.sleep(nanoseconds: 400_000_000)
         link.close()
     }
+}
+
+/// A ligação certa para o tipo de TV.
+func makeTVLink(_ tv: SavedTV) -> TVControl {
+    tv.kind == .apple ? AppleTVLink(tv: tv) : RemoteLink(tv: tv)
 }

@@ -242,9 +242,7 @@ final class RemoteModel {
     }
 
     /// A ligação certa para o tipo de TV.
-    static func makeLink(_ tv: SavedTV) -> TVControl {
-        tv.kind == .apple ? AppleTVLink(tv: tv) : RemoteLink(tv: tv)
-    }
+    static func makeLink(_ tv: SavedTV) -> TVControl { makeTVLink(tv) }
 
     static func isNotPaired(_ error: Error) -> Bool {
         if case RemoteLink.Failure.notPaired = error { return true }
@@ -261,12 +259,7 @@ final class RemoteModel {
             .sorted { $0.label.localizedCaseInsensitiveCompare($1.label) == .orderedAscending }
         for app in installedApps where appleArtwork[app.package] == nil && !app.package.hasPrefix("com.apple.") {
             Task {
-                guard let url = URL(string: "https://itunes.apple.com/lookup?bundleId=\(app.package)"),
-                      let (data, _) = try? await URLSession.shared.data(from: url),
-                      let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                      let first = (json["results"] as? [[String: Any]])?.first,
-                      let art = (first["artworkUrl512"] ?? first["artworkUrl100"]) as? String,
-                      let artURL = URL(string: art) else { return }
+                guard let artURL = await AppStoreArtwork.lookup(app.package) else { return }
                 appleArtwork[app.package] = artURL
             }
         }
@@ -275,19 +268,16 @@ final class RemoteModel {
     /// Abre uma app da lista (Android: pelo pacote; Apple TV: pelo bundle id).
     func launch(_ app: TVApp, haptic: Bool = true) {
         guard let tv = current, tv.kind == .android, Self.hasLauncher(tv.id) != false,
-              let url = URL(string: "http://\(tv.host):\(Self.launcherPort)/open/\(app.package)") else {
+              LanHttp.url(tv.host, LauncherApps.port, "open/\(app.package)") != nil else {
             return open(current?.kind == .apple ? app.package : app.link, haptic: haptic)
         }
         // Pelo GoatLauncher: a SHIELD recusa o link do comando e fecha a ligação.
         if haptic, haptics { lightHaptics.impactOccurred() }
         DebugLog.add("Open app via launcher: \(app.package)")
         Task {
-            var request = URLRequest(url: url)
-            request.httpMethod = "POST"
-            request.timeoutInterval = 3
-            let status = (try? await URLSession.shared.data(for: request))?.1 as? HTTPURLResponse
-            if !LauncherApps.openFallsBack(status: status?.statusCode ?? 0) { return }
-            DebugLog.add("Launcher didn't open it (HTTP \(status?.statusCode ?? 0)), using the remote's link")
+            let status = await LauncherApi(host: tv.host).open(app.package) ?? 0
+            if !LauncherApps.openFallsBack(status: status) { return }
+            DebugLog.add("Launcher didn't open it (HTTP \(status)), using the remote's link")
             if current?.id == tv.id { open(app.link, haptic: false) }
         }
     }
@@ -295,12 +285,9 @@ final class RemoteModel {
     /// Pede a lista de apps ao GoatLauncher da TV (porta 6470). Sem ele, fica vazia e usam-se as apps vistas.
     func refreshApps() {
         guard current?.kind != .apple else { return }
-        guard let tv = current, let url = URL(string: "http://\(tv.host):\(Self.launcherPort)/apps") else { return }
+        guard let tv = current, LanHttp.url(tv.host, LauncherApps.port, "apps") != nil else { return }
         Task {
-            var request = URLRequest(url: url)
-            request.timeoutInterval = 4
-            guard let (data, status) = try? await BoundedHTTP.get(request, limit: LauncherApps.maxBytes), status == 200,
-                  let apps = try? LauncherApps.parse(data) else { return }
+            guard let apps = await LauncherApi(host: tv.host).apps() else { return }
             Self.setLauncher(tv.id, true)
             guard current?.id == tv.id else { return }
             installedApps = apps
@@ -311,10 +298,8 @@ final class RemoteModel {
     func iconURL(_ package: String) -> URL? {
         guard let tv = current else { return nil }
         if tv.kind == .apple { return appleArtwork[package] }
-        return URL(string: "http://\(tv.host):\(Self.launcherPort)/icon/\(package)")
+        return LauncherApi(host: tv.host).iconURL(package)
     }
-
-    static let launcherPort = LauncherApps.port
 
     // MARK: Canais do GoatTV (porta 6471)
 
@@ -350,24 +335,14 @@ final class RemoteModel {
     /// true se veio a lista.
     @discardableResult
     private func loadChannels(_ tv: SavedTV) async -> Bool {
-        guard let url = URL(string: GoatTVChannels.url(host: tv.host, "channels")) else { return false }
-        var request = URLRequest(url: url)
-        request.timeoutInterval = 8
+        guard let fetched = await GoatTvApi(host: tv.host).channels() else { return false }
+        if let error = fetched.error { DebugLog.add("Channels: \(error)") }
+        let list = fetched.value
         var outcome = ChannelsStatus.failed
-        var list: ChannelList?
-        do {
-            let (data, status) = try await BoundedHTTP.get(request, limit: GoatTVChannels.maxBytes)
-            if status == 200 {
-                // Até 8 MiB de JSON: lê-se fora da thread principal.
-                list = try await Task.detached(priority: .userInitiated) { try GoatTVChannels.parse(data) }.value
-                outcome = .ready
-            } else if status == 503 {
-                outcome = .closed
-            }
-        } catch let error as URLError where error.code == .cannotConnectToHost {
+        if list != nil {
+            outcome = .ready
+        } else if fetched.refused || fetched.status == 503 {
             outcome = .closed
-        } catch {
-            DebugLog.add("Channels: \(error)")
         }
         guard current?.id == tv.id else { return false }
         switch outcome {
@@ -392,19 +367,10 @@ final class RemoteModel {
     /// Pergunta ao GoatTV o que está a dar (GET /now, pequeno). Se o canal mudou (pelo comando da TV, por exemplo), o
     /// cartão muda; um canal que a lista não tem pede a lista outra vez. Fechado (Apple TV em segundo plano), o cartão sai.
     private func pollNow(_ tv: SavedTV) async {
-        guard !withoutNow.contains(tv.id), let url = URL(string: GoatTVChannels.url(host: tv.host, "now")) else { return }
-        var request = URLRequest(url: url)
-        request.timeoutInterval = 3
-        var info: NowInfo?
-        var status = 0
-        var refused = false
-        do {
-            let (data, code) = try await BoundedHTTP.get(request, limit: GoatTVChannels.maxNowBytes)
-            status = code
-            if code == 200 { info = try GoatTVChannels.parseNow(data) }
-        } catch let error as URLError where error.code == .cannotConnectToHost {
-            refused = true
-        } catch {}
+        guard !withoutNow.contains(tv.id), let fetched = await GoatTvApi(host: tv.host).now() else { return }
+        let info = fetched.value
+        let status = fetched.status
+        let refused = fetched.refused
         guard current?.id == tv.id else { return }
         if let info {
             nowInfo = info
@@ -490,7 +456,7 @@ final class RemoteModel {
 
     func channelLogoURL(_ channel: TVChannel) -> URL? {
         guard let tv = current, channel.logo else { return nil }
-        return URL(string: GoatTVChannels.url(host: tv.host, "logo", key: channel.key))
+        return GoatTvApi(host: tv.host).logoURL(channel.key)
     }
 
     /// Muda de canal no GoatTV. Se ele não estiver à frente (409, 503 ou ligação recusada), abre-se e tenta-se outra
@@ -550,18 +516,7 @@ final class RemoteModel {
 
     /// POST /play/<key> no GoatTV da TV: o estado HTTP e se a ligação foi recusada.
     static func postPlay(_ tv: SavedTV, _ key: String) async -> (status: Int, refused: Bool) {
-        guard let url = URL(string: GoatTVChannels.url(host: tv.host, "play", key: key)) else { return (0, false) }
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.timeoutInterval = 4
-        do {
-            return (((try await URLSession.shared.data(for: request)).1 as? HTTPURLResponse)?.statusCode ?? 0, false)
-        } catch let error as URLError where error.code == .cannotConnectToHost {
-            return (0, true)
-        } catch {
-            DebugLog.add("Play failed: \(error)")
-            return (0, false)
-        }
+        await GoatTvApi(host: tv.host).play(key)
     }
 
     /// O que é de uma TV (canais, volume, tentativas) volta ao início: outra TV, esta emparelhada outra vez, ou esquecida.
@@ -702,13 +657,9 @@ final class RemoteModel {
     /// GoatLauncher vê as teclas (botões a abrir apps). Só se manda tecla quando se tem a certeza de que não há
     /// launcher: 404, ou ligação recusada na porta dele, numa TV onde nunca se viu nenhum. Onde já se viu, isso é só não
     /// ter respondido; esquecer a TV limpa o que se sabe, se o launcher saiu mesmo de lá.
-    static func hasLauncher(_ tvID: String) -> Bool? {
-        UserDefaults.standard.object(forKey: StoreKeys.perTV(StoreKeys.launcher, tvID)) as? Bool
-    }
+    static func hasLauncher(_ tvID: String) -> Bool? { LauncherMemory.known(tvID) }
 
-    static func setLauncher(_ tvID: String, _ value: Bool) {
-        UserDefaults.standard.set(value, forKey: StoreKeys.perTV(StoreKeys.launcher, tvID))
-    }
+    static func setLauncher(_ tvID: String, _ value: Bool) { LauncherMemory.set(tvID, value) }
 
     /// Com HDMI-CEC, o volume está na TV e a box não sabe o valor: o que reporta não diz nada. Descobre-se ao
     /// carregar: o launcher mudou o volume e o valor não mexeu. Fica guardado por TV.
@@ -727,7 +678,7 @@ final class RemoteModel {
         guard let what = LauncherVolume.path(key), let tv = current, tv.kind == .android, Self.hasLauncher(tv.id) != false else { return false }
         let before = (state.volume, state.muted)
         Task {
-            let (status, refused) = await Self.launcherVolume(tv, what)
+            let (status, refused) = await LauncherApi(host: tv.host).volume(what)
             switch LauncherVolume.outcome(known: Self.hasLauncher(tv.id), status: status, refused: refused) {
             case .done:
                 Self.setLauncher(tv.id, true)
@@ -757,23 +708,6 @@ final class RemoteModel {
             }
         }
         return true
-    }
-
-    /// POST /volume/… no GoatLauncher da TV: o estado HTTP e se a ligação foi recusada. Um endereço que não dá um URL
-    /// conta como recusa (o launcher não se alcança).
-    static func launcherVolume(_ tv: SavedTV, _ what: String) async -> (status: Int, refused: Bool) {
-        guard let url = URL(string: "http://\(tv.host):\(launcherPort)/volume/\(what)") else { return (0, true) }
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.timeoutInterval = 3
-        do {
-            return (((try await URLSession.shared.data(for: request)).1 as? HTTPURLResponse)?.statusCode ?? 0, false)
-        } catch let error as URLError where error.code == .cannotConnectToHost {
-            return (0, true)
-        } catch {
-            DebugLog.add("Volume via launcher failed: \(error)")
-            return (0, false)
-        }
     }
 
     /// Volume numa TV que não o controla: em vez de não fazer nada, o indicador explica porquê.
@@ -1034,25 +968,6 @@ final class PairingModel: Identifiable {
         default:
             return RemoteModel.describe(error)
         }
-    }
-}
-
-/// Um GET com limites de bytes e de tempo: uma resposta que passe deles é erro, não fica em memória.
-enum BoundedHTTP {
-    static func get(_ request: URLRequest, limit: Int) async throws -> (data: Data, status: Int) {
-        let (stream, response) = try await URLSession.shared.bytes(for: request)
-        defer { stream.task.cancel() }
-        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-        guard status == 200 else { return (Data(), status) }
-        guard response.expectedContentLength <= Int64(limit) else { throw URLError(.dataLengthExceedsMaximum) }
-        let deadline = Date().addingTimeInterval(20)
-        var data = Data()
-        for try await byte in stream {
-            guard data.count < limit else { throw URLError(.dataLengthExceedsMaximum) }
-            guard Date() < deadline else { throw URLError(.timedOut) }
-            data.append(byte)
-        }
-        return (data, status)
     }
 }
 
