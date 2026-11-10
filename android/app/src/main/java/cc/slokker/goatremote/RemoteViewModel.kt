@@ -534,6 +534,8 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         watchNow()
+        // As credenciais da Apple TV que ainda estão em claro passam para o Keystore (C6), fora da thread principal.
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) { cc.slokker.goatremote.apple.CompanionStore.of(appContext).migrateAll() }
     }
 
     /** Com o GoatTV à frente e a lista dele, a cada 3 s: o canal pode mudar pelo comando da TV. Um por sessão. */

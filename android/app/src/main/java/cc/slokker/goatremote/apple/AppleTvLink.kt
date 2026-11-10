@@ -23,7 +23,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import org.json.JSONObject
 
-/** O que fica guardado depois de emparelhar com uma Apple TV (num ficheiro privado da app, por TV). */
+/** O que fica guardado depois de emparelhar com uma Apple TV (por TV, cifrado com o Android Keystore: [CompanionStore]). */
 class CompanionCredentials(
     /** A chave pública Ed25519 da TV. */
     val tvPublicKey: ByteArray,
@@ -52,7 +52,6 @@ class CompanionCredentials(
     }
 
     companion object {
-        private fun prefs(context: Context) = context.getSharedPreferences(PrefKeys.COMPANION_PREFS, Context.MODE_PRIVATE)
         // O mesmo que o Base64.NO_WRAP do Android (alfabeto normal, com "=", sem quebras), mas também nos testes da JVM.
         private fun b64(b: ByteArray) = java.util.Base64.getEncoder().encodeToString(b)
         private fun bytes(s: String) = java.util.Base64.getDecoder().decode(s)
@@ -61,17 +60,12 @@ class CompanionCredentials(
             bytes(json.getString("tvID")), bytes(json.getString("clientID")), json.optBoolean("viaAirPlay", false),
             json.optString("companionID").ifEmpty { null }?.let(::bytes))
 
-        fun load(context: Context, tvId: String): CompanionCredentials? = runCatching {
-            fromJson(JSONObject(prefs(context).getString(tvId, null) ?: return null))
-        }.getOrNull()
+        /** No Android Keystore (ver [CompanionStore]); as antigas, em claro, passam para lá ao ler-se. */
+        fun load(context: Context, tvId: String): CompanionCredentials? = CompanionStore.of(context).load(tvId)
 
-        fun save(context: Context, tvId: String, c: CompanionCredentials) {
-            prefs(context).edit().putString(tvId, c.toJson().toString()).apply()
-        }
+        fun save(context: Context, tvId: String, c: CompanionCredentials) = CompanionStore.of(context).save(tvId, c)
 
-        fun delete(context: Context, tvId: String) {
-            prefs(context).edit().remove(tvId).apply()
-        }
+        fun delete(context: Context, tvId: String) = CompanionStore.of(context).delete(tvId)
     }
 }
 

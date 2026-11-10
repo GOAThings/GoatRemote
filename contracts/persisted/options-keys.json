@@ -28,6 +28,10 @@
       "name": "companion",
       "keys": "<tvId> = companion.json"
     },
+    "companionKeystorePrefs": {
+      "name": "companion.keystore",
+      "keys": "<tvId> = Base64(12-byte IV + AES-256-GCM ciphertext of companion.json), key alias cc.slokker.goatremote.companion in the Android Keystore. Entries in 'companion' move here (C6: read old, write new, read back, then remove old); 'companion' stays readable."
+    },
     "files": {
       "identity": "filesDir/identity: int length + PKCS#8 RSA key + int length + certificate DER, written via identity.tmp",
       "updates/GoatRemote.apk": "cacheDir, the downloaded update"

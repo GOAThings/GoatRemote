@@ -22,6 +22,8 @@ object PrefKeys {
 
     /** As SharedPreferences das credenciais da Apple TV (uma chave por TV, o id dela). */
     const val COMPANION_PREFS = "companion"
+    /** As mesmas credenciais, cifradas com uma chave do Android Keystore (ver CompanionStore); as de cima migram para aqui. */
+    const val COMPANION_KEYSTORE_PREFS = "companion.keystore"
 
     const val RECENTS = "recents"
     const val LAUNCHER = "launcher"

@@ -249,6 +249,7 @@ class ContractsTest {
             options.getJSONObject("global").keyNames())
         assertEquals(options.getJSONObject("perTv").keyNames(), PrefKeys.PER_TV.toSet())
         assertEquals(PrefKeys.COMPANION_PREFS, android.getJSONObject("companionPrefs").getString("name"))
+        assertEquals(PrefKeys.COMPANION_KEYSTORE_PREFS, android.getJSONObject("companionKeystorePrefs").getString("name"))
         assertEquals(listOf("recents.x", "launcher.x", "volumeUnknown.x", "goattv.x"), PrefKeys.perTvKeys("x"))
         assertEquals(android.getJSONArray("layoutValues").strings(), RemoteLayout.entries.map { it.name })
     }
