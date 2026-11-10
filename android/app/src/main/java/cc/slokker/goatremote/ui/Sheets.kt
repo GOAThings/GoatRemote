@@ -651,7 +651,7 @@ private fun MoreKey(vm: RemoteViewModel, key: Key, icon: ImageVector, title: Str
             .pressable({ vm.press(key) }, { vm.hold(key, it) }) { pressed = it }
             .padding(vertical = 12.dp)
             .semantics { contentDescription = title }
-            .testTag("key:" + key.name),
+            .testTag("key:" + key.id),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
@@ -666,7 +666,8 @@ private fun DigitKey(vm: RemoteViewModel, digit: Int) {
     var pressed by remember { mutableStateOf(false) }
     Box(
         Modifier.fillMaxWidth().height(50.dp).card(RoundedCornerShape(14.dp), pressed)
-            .pressable({ vm.press(Key.digit(digit)) }) { pressed = it },
+            .pressable({ vm.press(Key.digit(digit)) }) { pressed = it }
+            .testTag("num:$digit"),
         contentAlignment = Alignment.Center,
     ) { Text("$digit", fontSize = 20.sp, fontWeight = FontWeight.SemiBold) }
 }

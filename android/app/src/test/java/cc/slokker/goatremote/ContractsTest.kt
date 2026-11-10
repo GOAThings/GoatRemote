@@ -73,6 +73,16 @@ class ContractsTest {
         assertEquals(vectorHex("remote.appLink_netflix"), r.appLink("market://launch?id=com.netflix.ninja").hex())
     }
 
+    /** Os ids dos testes de interface são os nomes do enum Key do iPhone. */
+    @Test
+    fun keyIds() {
+        assertEquals("volumeUp", Key.VOLUME_UP.id)
+        assertEquals("playPause", Key.PLAY_PAUSE.id)
+        assertEquals("num7", Key.NUM7.id)
+        assertEquals("lastChannel", Key.LAST_CHANNEL.id)
+        assertEquals("home", Key.HOME.id)
+    }
+
     @Test
     fun companionCrypto() {
         val key = ByteArray(32) { it.toByte() }

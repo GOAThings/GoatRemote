@@ -80,11 +80,11 @@ class RemoteUiTest {
 
         // Mais: volume e pesquisa (a TV pede o teclado sozinha).
         rule.onNodeWithTag("more").performClick()
-        rule.waitUntilExactlyOneExists(hasTestTag("key:VOLUME_UP"), 5_000)
-        rule.onNodeWithTag("key:VOLUME_UP").performClick()
+        rule.waitUntilExactlyOneExists(hasTestTag("key:volumeUp"), 5_000)
+        rule.onNodeWithTag("key:volumeUp").performClick()
         pause(0.5)
         shot("more")
-        rule.onNodeWithTag("key:SEARCH").performClick()
+        rule.onNodeWithTag("key:search").performClick()
         rule.waitUntilExactlyOneExists(hasTestTag("keyboard-field"), 8_000)
         pause(0.6)
         rule.onNodeWithTag("keyboard-field").performTextInput("hello")

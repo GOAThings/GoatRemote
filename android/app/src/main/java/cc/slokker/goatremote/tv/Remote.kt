@@ -13,6 +13,10 @@ enum class Key(val code: Int) {
     CAPTIONS(175), SETTINGS(176), INPUT(178),
     AUDIO_TRACK(222), LAST_CHANNEL(229);
 
+    /** O nome partilhado com o iPhone (o caso do enum Key de lá): "VOLUME_UP" → "volumeUp". Usado nos ids dos testes. */
+    val id: String
+        get() = name.lowercase().split('_').mapIndexed { i, part -> if (i == 0) part else part.replaceFirstChar { it.uppercase() } }.joinToString("")
+
     companion object {
         fun digit(n: Int): Key = entries.first { it.code == NUM0.code + n }
     }
