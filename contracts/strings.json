@@ -431,6 +431,38 @@
         "ios"
       ]
     },
+    "moveDown": {
+      "en": "Down",
+      "pt": "Baixo",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "moveLeft": {
+      "en": "Left",
+      "pt": "Esquerda",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "moveRight": {
+      "en": "Right",
+      "pt": "Direita",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "moveUp": {
+      "en": "Up",
+      "pt": "Cima",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
     "mute": {
       "en": "Mute",
       "pt": "Silenciar",
@@ -686,6 +718,14 @@
     "searchPassword": {
       "en": "Search, password…",
       "pt": "Pesquisa, palavra-passe…",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "select": {
+      "en": "Select",
+      "pt": "Escolher",
       "platforms": [
         "android",
         "ios"

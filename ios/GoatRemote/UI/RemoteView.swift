@@ -327,6 +327,12 @@ struct TouchSurface: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Strings.touchSurface)
+        // O VoiceOver não faz os gestos (U10): as mesmas teclas como ações.
+        .accessibilityAction(named: Strings.moveUp) { model.press(.up) }
+        .accessibilityAction(named: Strings.moveDown) { model.press(.down) }
+        .accessibilityAction(named: Strings.moveLeft) { model.press(.left) }
+        .accessibilityAction(named: Strings.moveRight) { model.press(.right) }
+        .accessibilityAction(named: Strings.select) { model.press(.center) }
         .accessibilityAddTraits(.allowsDirectInteraction)
         .accessibilityIdentifier("touchpad")
         .onDisappear { model.keyHold.end() }
@@ -606,6 +612,12 @@ struct DPad: View {
         .background(HeroBackground(shape: RoundedRectangle(cornerRadius: 28, style: .continuous), glow: 0.16))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Strings.arrows)
+        // O VoiceOver não faz os gestos (U10): as mesmas teclas como ações.
+        .accessibilityAction(named: Strings.moveUp) { model.press(.up) }
+        .accessibilityAction(named: Strings.moveDown) { model.press(.down) }
+        .accessibilityAction(named: Strings.moveLeft) { model.press(.left) }
+        .accessibilityAction(named: Strings.moveRight) { model.press(.right) }
+        .accessibilityAction(named: Strings.select) { model.press(.center) }
         .accessibilityAddTraits(.allowsDirectInteraction)
         .accessibilityIdentifier("dpad")
         .onDisappear { model.keyHold.end() }

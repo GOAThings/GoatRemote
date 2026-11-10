@@ -4,6 +4,11 @@ import Foundation
 /// um escolhe a língua quando se lê, como o L() que estava em cada sítio (inglês ou português, conforme a língua do iPhone).
 public enum Strings {
     /// Só para os testes (em Linux não há língua do iPhone).
+    public static var moveUp: String { pick("Up", "Cima") }
+    public static var moveDown: String { pick("Down", "Baixo") }
+    public static var moveLeft: String { pick("Left", "Esquerda") }
+    public static var moveRight: String { pick("Right", "Direita") }
+    public static var select: String { pick("Select", "Escolher") }
     public static var language: String?
 
     public static func pick(_ en: String, _ pt: String) -> String {
@@ -141,6 +146,11 @@ public enum Strings {
 
     /// Todos, para o teste que os confere com contracts/strings.json.
     public static let table: [(String, () -> String)] = [
+        ("moveUp", { moveUp }),
+        ("moveDown", { moveDown }),
+        ("moveLeft", { moveLeft }),
+        ("moveRight", { moveRight }),
+        ("select", { select }),
         ("aFewMinutes", { aFewMinutes }),
         ("addATv", { addATv }),
         ("all", { all }),

@@ -10,6 +10,11 @@ fun L(en: String, pt: String) = if (Locale.getDefault().language == "pt") pt els
  * Cada um escolhe a língua quando se lê, como o L() que estava em cada sítio.
  */
 object Strings {
+    val moveUp: String get() = L("Up", "Cima")
+    val moveDown: String get() = L("Down", "Baixo")
+    val moveLeft: String get() = L("Left", "Esquerda")
+    val moveRight: String get() = L("Right", "Direita")
+    val select: String get() = L("Select", "Escolher")
     val aFewMinutes: String get() = L("a few minutes", "uns minutos")
     val addATv: String get() = L("Add a TV", "Juntar uma TV")
     val all: String get() = L("All", "Todos")
@@ -137,6 +142,11 @@ object Strings {
 
     /** Todos, para o teste que os confere com contracts/strings.json. */
     val table: List<Pair<String, () -> String>> = listOf(
+        "moveUp" to { moveUp },
+        "moveDown" to { moveDown },
+        "moveLeft" to { moveLeft },
+        "moveRight" to { moveRight },
+        "select" to { select },
         "aFewMinutes" to { aFewMinutes },
         "addATv" to { addATv },
         "all" to { all },

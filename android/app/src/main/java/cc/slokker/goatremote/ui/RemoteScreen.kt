@@ -91,7 +91,9 @@ import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -489,7 +491,7 @@ private fun TouchSurface(vm: RemoteViewModel) {
 
     BoxWithConstraints(
         Modifier.fillMaxSize().hero(shape, glow = 0.16f)
-            .semantics { contentDescription = Strings.touchSurface }
+            .semantics { contentDescription = Strings.touchSurface; customActions = moveActions(vm) }
             .testTag("touchpad")
             .pointerInput(Unit) {
                 awaitEachGesture {
@@ -573,7 +575,7 @@ private fun Dpad(vm: RemoteViewModel, ready: Boolean) {
         Box(
             Modifier.size(side)
                 .alpha(if (ready) 1f else 0.4f)
-                .semantics { contentDescription = Strings.arrows }
+                .semantics { contentDescription = Strings.arrows; customActions = moveActions(vm) }
                 .testTag("dpad")
                 .pointerInput(Unit) {
                     fun keyAt(p: Offset): Key? {
@@ -667,6 +669,15 @@ private fun Dpad(vm: RemoteViewModel, ready: Boolean) {
         }
     }
 }
+
+/**
+ * O TalkBack não faz os gestos da superfície nem das setas (U10): as mesmas teclas como ações (cima, baixo, esquerda,
+ * direita e escolher), no menu de ações dele.
+ */
+private fun moveActions(vm: RemoteViewModel) = listOf(
+    Strings.moveUp to Key.UP, Strings.moveDown to Key.DOWN, Strings.moveLeft to Key.LEFT, Strings.moveRight to Key.RIGHT,
+    Strings.select to Key.CENTER,
+).map { (label, key) -> CustomAccessibilityAction(label) { vm.press(key); true } }
 
 private const val DPAD_INNER = Gestures.Dpad.OK_RADIUS
 private const val LIT_MIN_MS = Gestures.Dpad.LIT_MIN_MS
