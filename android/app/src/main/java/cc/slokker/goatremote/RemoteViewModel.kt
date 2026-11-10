@@ -114,41 +114,50 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var current by mutableStateOf(store.current)
         private set
-    private var statusValue by mutableStateOf<Status>(if (store.current == null) Status.NoTv else Status.Connecting)
+    /** A sessão da TV escolhida: tudo o que é dela (ver [TvSession]). */
+    private var session by mutableStateOf(TvSession(store.current?.id, loadRecents(store.current?.id), hasGoatTv(store.current?.id)))
+
     var status: Status
-        get() = statusValue
+        get() = session.status
         private set(value) {
-            if (value != statusValue) DebugLog.add("Status: $value" + (current?.let { " (${it.name}, ${it.kind})" } ?: ""))
-            statusValue = value
+            if (value != session.status) DebugLog.add("Status: $value" + (current?.let { " (${it.name}, ${it.kind})" } ?: ""))
+            session.status = value
         }
-    var state by mutableStateOf(TvState())
-        private set
+    var state: TvState
+        get() = session.state
+        private set(value) { session.state = value }
     /** As apps que se viu abertas nesta TV (as mais recentes primeiro), para as abrir com um toque. */
-    var recentApps by mutableStateOf(loadRecents(store.current?.id))
-        private set
+    var recentApps: List<String>
+        get() = session.recentApps
+        private set(value) { session.recentApps = value }
     /** As apps instaladas na TV, se ela tiver o GoatLauncher (que as dá na rede de casa); vazio sem ele. */
-    var installedApps by mutableStateOf<List<TvApp>>(emptyList())
-        private set
+    var installedApps: List<TvApp>
+        get() = session.installedApps
+        private set(value) { session.installedApps = value }
 
     /** A TV tem o GoatTV com os canais para o telemóvel (já respondeu a /channels): mostra-se o botão Canais. */
-    var hasChannels by mutableStateOf(store.current?.let { prefs.getBoolean(PrefKeys.goatTv(it.id), false) } ?: false)
-        private set
+    var hasChannels: Boolean
+        get() = session.hasChannels
+        private set(value) { session.hasChannels = value }
     /** A lista de canais do GoatTV (null enquanto não veio, ou com o GoatTV fechado). */
-    var channels by mutableStateOf<ChannelList?>(null)
-        private set
-    var channelsStatus by mutableStateOf(ChannelsStatus.UNKNOWN)
-        private set
+    var channels: ChannelList?
+        get() = session.channels
+        private set(value) { session.channels = value }
+    var channelsStatus: ChannelsStatus
+        get() = session.channelsStatus
+        private set(value) { session.channelsStatus = value }
     /** A abrir o GoatTV na TV, à espera de que dê os canais. */
-    var openingGoatTv by mutableStateOf(false)
-        private set
+    var openingGoatTv: Boolean
+        get() = session.openingGoatTv
+        private set(value) { session.openingGoatTv = value }
     /** O programa do canal que o GoatTV está a dar (null sem guia, ou num GoatTV antigo, sem o /now). */
-    var nowInfo by mutableStateOf<NowInfo?>(null)
-        private set
-    /** TVs cujo GoatTV não tem o /now (responde 404): até voltar a ligar, não se pergunta. */
-    private val withoutNow = HashSet<String>()
+    var nowInfo: NowInfo?
+        get() = session.nowInfo
+        private set(value) { session.nowInfo = value }
     /** Porque é que o último canal não mudou (null: nada a dizer). */
-    var playProblem by mutableStateOf<String?>(null)
-        private set
+    var playProblem: String?
+        get() = session.playProblem
+        private set(value) { session.playProblem = value }
 
     /** O emparelhamento em curso (o diálogo mostra-o). */
     var pairing by mutableStateOf<PairingModel?>(null)
@@ -177,22 +186,32 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
     fun changeVolumeButtons(on: Boolean) { volumeButtons = on; prefs.edit().putBoolean(PrefKeys.VOLUME_BUTTONS, on).apply() }
     fun changeLayout(new: RemoteLayout) { layout = new; prefs.edit().putString(PrefKeys.LAYOUT, new.name).remove(PrefKeys.DPAD_TAPS).apply() }
 
-    private var link: TvControl? = null
+    private var link: TvControl?
+        get() = session.link
         set(value) {
             // A ligação mudou: o teclado fecha-se e o que lá estava escrito não passa para a próxima.
-            if (value !== field) {
+            if (value !== session.link) {
                 showKeyboard = false
                 state = state.copy(textValue = "", textLabel = null, keyboardRequests = 0)
             }
-            field = value
+            session.link = value
         }
-    private var stateJob: Job? = null
-    private var autoReconnect: Job? = null
-    private var lastAutoReconnect = 0L
-    /** Recusas seguidas desta TV que ainda não se mostraram (ver [connect]). */
-    private var notPairedRetries = 0
-    /** Ícones das apps da Apple TV (da App Store, por bundle id). */
-    private val appleArtwork = mutableStateMapOf<String, String>()
+    private var autoReconnect: Job?
+        get() = session.autoReconnect
+        set(value) { session.autoReconnect = value }
+    private val appleArtwork get() = session.appleArtwork
+    private val scope get() = session.scope
+
+    /** Fecha a sessão da TV que estava e começa a de [tv]: nada passa de uma TV para a outra. */
+    private fun startSession(tv: SavedTv?) {
+        session.close()
+        showKeyboard = false
+        session = TvSession(tv?.id, loadRecents(tv?.id), hasGoatTv(tv?.id))
+        watchNow()
+    }
+
+    private fun hasGoatTv(tvId: String?) = tvId?.let { prefs.getBoolean(PrefKeys.goatTv(it), false) } ?: false
+
     private val vibrator = app.getSystemService(Vibrator::class.java)
 
     val deviceName: String
@@ -215,16 +234,17 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
         status = Status.Connecting
         val link = makeLink(tv)
         this.link = link
-        (link as? AppleTvLink)?.onApps = { apps -> viewModelScope.launch { appleApps(apps, tv) } }
+        val session = session
+        (link as? AppleTvLink)?.onApps = { apps -> scope.launch { appleApps(apps, tv) } }
         link.onClose = {
-            viewModelScope.launch {
+            session.scope.launch {
                 if (this@RemoteViewModel.link === link) {
                     this@RemoteViewModel.link = null
                     // Liga outra vez sem incomodar; se voltar a fechar logo a seguir, aí sim mostra-se o aviso.
-                    val decision = ConnectPolicy.next(ConnectPolicy.Failure.CLOSED, notPairedRetries, true, tv.kind,
-                        System.currentTimeMillis() - lastAutoReconnect)
+                    val decision = ConnectPolicy.next(ConnectPolicy.Failure.CLOSED, session.notPairedRetries, true, tv.kind,
+                        System.currentTimeMillis() - session.lastAutoReconnect)
                     if (decision is ConnectPolicy.Decision.Retry) {
-                        lastAutoReconnect = System.currentTimeMillis()
+                        session.lastAutoReconnect = System.currentTimeMillis()
                         DebugLog.add("Reconnecting to ${tv.name}")
                         status = Status.Connecting
                         retryLater(tv, decision)
@@ -234,16 +254,16 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
         }
-        stateJob?.cancel()
-        stateJob = viewModelScope.launch { link.state.collect { if (this@RemoteViewModel.link === link) update(it) } }
-        viewModelScope.launch {
+        session.stateJob?.cancel()
+        session.stateJob = scope.launch { link.state.collect { if (this@RemoteViewModel.link === link) update(it) } }
+        scope.launch {
             try {
                 link.connect()
                 if (this@RemoteViewModel.link !== link) return@launch
                 (link as? AndroidTvLink)?.certificate?.let { store.pinCertificate(tv.id, it) }
-                notPairedRetries = 0
+                session.notPairedRetries = 0
                 status = Status.Connected
-                withoutNow.remove(tv.id)
+                session.withoutNow = false
                 update(link.state.value)
                 refreshApps()
                 refreshChannels()
@@ -251,21 +271,21 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
                 DebugLog.add("Connect: not paired ($e)")
                 if (this@RemoteViewModel.link !== link) return@launch
                 this@RemoteViewModel.link = null
-                val decision = ConnectPolicy.next(ConnectPolicy.Failure.NOT_PAIRED, notPairedRetries, retry, tv.kind, 0)
+                val decision = ConnectPolicy.next(ConnectPolicy.Failure.NOT_PAIRED, session.notPairedRetries, retry, tv.kind, 0)
                 if (decision is ConnectPolicy.Decision.Retry) {
-                    notPairedRetries++
-                    DebugLog.add("Not paired: trying again ($notPairedRetries)")
+                    session.notPairedRetries++
+                    DebugLog.add("Not paired: trying again (${session.notPairedRetries})")
                     retryLater(tv, decision)
                     return@launch
                 }
-                notPairedRetries = 0
+                session.notPairedRetries = 0
                 status = Status.NotPaired
             } catch (e: Exception) {
                 DebugLog.add("Connect failed${if (retry) " (will retry)" else ""}: $e")
                 if (this@RemoteViewModel.link !== link) return@launch
                 this@RemoteViewModel.link = null
                 link.close()
-                when (val decision = ConnectPolicy.next(ConnectPolicy.Failure.FAILED, notPairedRetries, retry, tv.kind, 0)) {
+                when (val decision = ConnectPolicy.next(ConnectPolicy.Failure.FAILED, session.notPairedRetries, retry, tv.kind, 0)) {
                     is ConnectPolicy.Decision.Retry -> retryLater(tv, decision)
                     is ConnectPolicy.Decision.Give -> status = Status.Unreachable(describe(e))
                 }
@@ -275,7 +295,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
 
     /** No autoReconnect: ir para segundo plano (disconnect) ou mudar de TV cancela esta tentativa. */
     private fun retryLater(tv: SavedTv, decision: ConnectPolicy.Decision.Retry) {
-        autoReconnect = viewModelScope.launch {
+        autoReconnect = scope.launch {
             delay(decision.delayMs)
             if (this@RemoteViewModel.link == null && current?.id == tv.id) connect(retry = decision.retryOnFailure)
         }
@@ -299,9 +319,9 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
         state = new
         if (new.keyboardRequests > old.keyboardRequests) showKeyboard = true
         // Ao ligar, a TV manda vários valores seguidos (na SHIELD, com HDMI-CEC, acaba em 0): isso não é mudar o volume.
-        if (old.volume == null && new.volume != null) volumeSettlesAt = System.currentTimeMillis() + VolumeRoute.SETTLE_MS
+        if (old.volume == null && new.volume != null) session.volumeSettlesAt = System.currentTimeMillis() + VolumeRoute.SETTLE_MS
         if (VolumeRoute.changed(old.volume to old.muted, new.volume to new.muted, volumeUnknown,
-                System.currentTimeMillis() >= volumeSettlesAt)) volumeChanged++
+                System.currentTimeMillis() >= session.volumeSettlesAt)) volumeChanged++
         val app = new.currentApp
         // O GoatTV veio para a frente: o canal que está a dar pode ter mudado.
         if (app == GoatTvChannels.ANDROID_PACKAGE && app != old.currentApp && hasChannels) refreshChannels()
@@ -342,7 +362,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
         installedApps = apps.map { (id, name) -> TvApp(id, name.replace(' ', ' ')) }.sortedBy { it.label.lowercase() }
         for (app in installedApps) {
             if (appleArtwork.containsKey(app.pkg) || app.pkg.startsWith("com.apple.")) continue
-            viewModelScope.launch {
+            scope.launch {
                 val art = AppStoreArtwork.lookup(app.pkg)
                 if (!art.isNullOrEmpty()) appleArtwork[app.pkg] = art
             }
@@ -358,7 +378,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
         // Pelo GoatLauncher: a SHIELD recusa o link do comando e fecha a ligação.
         if (haptic && haptics) vibrate(false)
         DebugLog.add("Open app via launcher: ${app.pkg}")
-        viewModelScope.launch {
+        scope.launch {
             val status = LauncherApi(tv.host).open(app.pkg)
             if (LauncherApps.openFallsBack(status)) {
                 DebugLog.add("Launcher didn't open it (HTTP $status), using the remote's link")
@@ -371,7 +391,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
     fun refreshApps() {
         val tv = current ?: return
         if (tv.kind == TvKind.APPLE) return
-        viewModelScope.launch {
+        scope.launch {
             val apps = LauncherApi(tv.host).apps()
             if (apps != null) setLauncher(tv.id, true)
             if (apps != null && current?.id == tv.id) installedApps = apps
@@ -394,14 +414,12 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
         FAILED,
     }
 
-    private var channelsJob: Job? = null
-    private var playJob: Job? = null
 
     /** Pede a lista ao GoatTV da TV. Ao ligar e ao abrir a folha. */
     fun refreshChannels() {
         val tv = current ?: return
-        if (channelsJob?.isActive == true) return
-        channelsJob = viewModelScope.launch { loadChannels(tv) }
+        if (session.channelsJob?.isActive == true) return
+        session.channelsJob = scope.launch { loadChannels(tv) }
     }
 
     /** true se veio a lista. */
@@ -452,7 +470,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
         DebugLog.add("Opening GoatTV for the channels")
         launch(app)
         openingGoatTv = true
-        viewModelScope.launch {
+        scope.launch {
             try {
                 repeat(10) {
                     delay(1000)
@@ -480,7 +498,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
      * cartão muda; um canal que a lista não tem pede a lista outra vez. Fechado (Apple TV em segundo plano), o cartão sai.
      */
     private suspend fun pollNow(tv: SavedTv) {
-        if (tv.id in withoutNow) return
+        if (session.withoutNow) return
         val fetched = GoatTvApi(tv.host).now()
         val info = fetched.value
         val status = fetched.status
@@ -499,7 +517,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
             }
             NowOutcome.NO_NOW -> {
                 DebugLog.add("GoatTV on ${tv.name} has no /now")
-                withoutNow.add(tv.id)
+                session.withoutNow = true
             }
             NowOutcome.CLOSE -> {
                 channels = null
@@ -528,10 +546,14 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     init {
-        // Com o GoatTV à frente e a lista dele, a cada 3 s: o canal pode mudar pelo comando da TV.
-        viewModelScope.launch {
+        watchNow()
+    }
+
+    /** Com o GoatTV à frente e a lista dele, a cada 3 s: o canal pode mudar pelo comando da TV. Um por sessão. */
+    private fun watchNow() {
+        scope.launch {
             while (true) {
-                delay(3000)
+                delay(NOW_EVERY_MS)
                 val tv = current ?: continue
                 val front = tv.kind == TvKind.APPLE || state.currentApp == GoatTvChannels.ANDROID_PACKAGE
                 if (status == Status.Connected && channels != null && front) pollNow(tv)
@@ -565,8 +587,8 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
         if (haptics) vibrate(false)
         playProblem = null
         DebugLog.add("Play channel ${channel.num ?: "-"} via GoatTV")
-        playJob?.cancel()
-        playJob = viewModelScope.launch {
+        session.playJob?.cancel()
+        session.playJob = scope.launch {
             var deadline = 0L
             while (true) {
                 val (status, refused) = postPlay(tv, channel.key)
@@ -628,35 +650,10 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
 
     fun select(tv: SavedTv) {
         if (tv.id == current?.id) return
-        link?.close()
-        link = null
         current = tv
         store.currentId = tv.id
-        resetFor(tv)
+        startSession(tv)
         connect()
-    }
-
-    /** Tudo o que é de uma TV volta ao início (outra TV, esta emparelhada outra vez, ou esquecida). */
-    private fun resetFor(tv: SavedTv?) {
-        autoReconnect?.cancel()
-        notPairedRetries = 0
-        volumeSettlesAt = 0L
-        state = TvState()
-        recentApps = loadRecents(tv?.id)
-        installedApps = emptyList()
-        playJob?.cancel()
-        // Uma lista a meio de vir da TV anterior não pode impedir a desta (ver refreshChannels).
-        channelsJob?.cancel()
-        channelsJob = null
-        nowInfo = null
-        hasChannels = tv?.let { prefs.getBoolean(PrefKeys.goatTv(it.id), false) } ?: false
-        channels = null
-        channelsStatus = ChannelsStatus.UNKNOWN
-        openingGoatTv = false
-        playProblem = null
-        // O indicador do volume era da TV anterior.
-        volumePressed = null
-        volumeProblem = null
     }
 
     fun forget(tv: SavedTv) {
@@ -667,11 +664,8 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
         edit.apply()
         tvs = store.all
         if (current?.id == tv.id) {
-            link?.close()
-            link = null
             current = store.current
-            resetFor(current)
-            status = if (current == null) Status.NoTv else Status.Connecting
+            startSession(current)
             connect()
         }
     }
@@ -698,11 +692,8 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
         store.save(tv)
         store.currentId = tv.id
         tvs = store.all
-        link?.close()
-        link = null
         current = tv
-        resetFor(tv)
-        status = Status.Connecting
+        startSession(tv)
         connect()
     }
 
@@ -742,21 +733,22 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
     private val volumeUnknown: Boolean
         get() = current?.let { prefs.getBoolean(PrefKeys.volumeUnknown(it.id), false) } ?: false
 
-    private var volumeSettlesAt = 0L
 
     /** A última tecla, para o indicador numa TV sem valor de volume (null: mostra-se a barra). */
-    var volumePressed by mutableStateOf<Key?>(null)
-        private set
+    var volumePressed: Key?
+        get() = session.volumePressed
+        private set(value) { session.volumePressed = value }
 
     /** Mostrado no indicador de volume quando o launcher não respondeu (null: nada a dizer). */
-    var volumeProblem by mutableStateOf<String?>(null)
-        private set
+    var volumeProblem: String?
+        get() = session.volumeProblem
+        private set(value) { session.volumeProblem = value }
 
     /** O volume pelo GoatLauncher (POST /volume/…) em vez de tecla. A tecla só vai se ele disser que não há launcher. */
     private fun volumeViaLauncher(tv: SavedTv, key: Key) {
         val beforeVolume = state.volume
         val beforeMuted = state.muted
-        viewModelScope.launch {
+        scope.launch {
             val sent = volume.viaLauncher(tv, key) ?: return@launch
             when (sent.outcome) {
                 LauncherVolume.Outcome.DONE -> {
@@ -829,12 +821,16 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     override fun onCleared() {
-        link?.close()
+        session.close()
         pairing?.cancel()
         finder.stop()
     }
 
     internal fun describe(e: Throwable): String = e.message?.takeIf { it.isNotBlank() } ?: e.javaClass.simpleName
+
+    private companion object {
+        const val NOW_EVERY_MS = 3000L
+    }
 }
 
 /** Um emparelhamento: liga à TV, a TV mostra o código e espera-se que a pessoa o escreva. */

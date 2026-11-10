@@ -20,28 +20,60 @@ final class RemoteModel {
 
     private(set) var tvs: [SavedTV] = []
     private(set) var current: SavedTV?
-    private(set) var status: Status = .noTV {
-        didSet { if status != oldValue { DebugLog.add("Status: \(status)" + (current.map { " (\($0.name), \($0.kind))" } ?? "")) } }
+    /// A sessão da TV escolhida: tudo o que é dela (ver TVSession).
+    private var session = TVSession(tvID: nil, status: .noTV, recents: [], hasChannels: false)
+
+    private(set) var status: Status {
+        get { session.status }
+        set {
+            if newValue != session.status { DebugLog.add("Status: \(newValue)" + (current.map { " (\($0.name), \($0.kind))" } ?? "")) }
+            session.status = newValue
+        }
     }
-    private(set) var state = TVState()
+    private(set) var state: TVState {
+        get { session.state }
+        set { session.state = newValue }
+    }
     /// As apps que se viu abertas nesta TV (as mais recentes primeiro), para as abrir com um toque.
-    private(set) var recentApps: [String] = []
+    private(set) var recentApps: [String] {
+        get { session.recentApps }
+        set { session.recentApps = newValue }
+    }
     /// As apps instaladas na TV, se ela tiver o GoatLauncher (que as dá na rede de casa); vazio sem ele.
-    private(set) var installedApps: [TVApp] = []
+    private(set) var installedApps: [TVApp] {
+        get { session.installedApps }
+        set { session.installedApps = newValue }
+    }
 
     /// A TV tem o GoatTV com os canais para o telemóvel (já respondeu a /channels): mostra-se o botão Canais.
-    private(set) var hasChannels = false
+    private(set) var hasChannels: Bool {
+        get { session.hasChannels }
+        set { session.hasChannels = newValue }
+    }
     /// A lista de canais do GoatTV (nil enquanto não veio, ou com o GoatTV fechado).
-    private(set) var channels: ChannelList?
-    private(set) var channelsStatus: ChannelsStatus = .unknown
+    private(set) var channels: ChannelList? {
+        get { session.channels }
+        set { session.channels = newValue }
+    }
+    private(set) var channelsStatus: ChannelsStatus {
+        get { session.channelsStatus }
+        set { session.channelsStatus = newValue }
+    }
     /// A abrir o GoatTV na TV, à espera de que dê os canais.
-    private(set) var openingGoatTV = false
+    private(set) var openingGoatTV: Bool {
+        get { session.openingGoatTV }
+        set { session.openingGoatTV = newValue }
+    }
     /// Porque é que o último canal não mudou (nil: nada a dizer).
-    private(set) var playProblem: String?
+    private(set) var playProblem: String? {
+        get { session.playProblem }
+        set { session.playProblem = newValue }
+    }
     /// O programa do canal que o GoatTV está a dar (nil sem guia, ou num GoatTV antigo, sem o /now).
-    private(set) var nowInfo: NowInfo?
-    /// TVs cujo GoatTV não tem o /now (responde 404): até voltar a ligar, não se pergunta.
-    @ObservationIgnored private var withoutNow = Set<String>()
+    private(set) var nowInfo: NowInfo? {
+        get { session.nowInfo }
+        set { session.nowInfo = newValue }
+    }
 
     /// O emparelhamento em curso (a folha mostra-o).
     var pairing: PairingModel?
@@ -70,22 +102,23 @@ final class RemoteModel {
         }
     }
 
-    @ObservationIgnored private var link: TVControl? {
-        didSet {
+    private var link: TVControl? {
+        get { session.link }
+        set {
             // A ligação mudou: o teclado fecha-se e o que lá estava escrito não passa para a próxima.
-            guard link !== oldValue else { return }
+            guard newValue !== session.link else { return }
+            session.link = newValue
             showKeyboard = false
             state.textValue = ""
             state.textLabel = nil
             state.keyboardRequests = 0
         }
     }
-    @ObservationIgnored private var autoReconnect: Task<Void, Never>?
-    @ObservationIgnored private var lastAutoReconnect = Date.distantPast
-    /// Recusas seguidas desta TV que ainda não se mostraram (ver connect()).
-    @ObservationIgnored private var notPairedRetries = 0
     /// Ícones das apps da Apple TV (da App Store, por bundle id).
-    private var appleArtwork: [String: URL] = [:]
+    private var appleArtwork: [String: URL] {
+        get { session.appleArtwork }
+        set { session.appleArtwork = newValue }
+    }
     @ObservationIgnored private let lightHaptics = UIImpactFeedbackGenerator(style: .light)
     @ObservationIgnored private let heavyHaptics = UIImpactFeedbackGenerator(style: .medium)
 
@@ -98,8 +131,7 @@ final class RemoteModel {
         #endif
         tvs = TVStore.all
         current = TVStore.current
-        recentApps = Self.loadRecents(current?.id)
-        hasChannels = Self.hasGoatTV(current?.id)
+        session = TVSession(tvID: current?.id, status: .noTV, recents: Self.loadRecents(current?.id), hasChannels: Self.hasGoatTV(current?.id))
         watchNow()
     }
 
@@ -113,7 +145,7 @@ final class RemoteModel {
             return
         }
         if link != nil, status == .connected || status == .connecting { return }
-        autoReconnect?.cancel()
+        session.autoReconnect?.cancel()
         link?.close()
         DebugLog.add("Connecting to \(tv.name) (\(tv.kind), \(tv.host)\(tv.port.map { ":\($0)" } ?? ""))")
         status = .connecting
@@ -128,10 +160,10 @@ final class RemoteModel {
             guard let self, let link, self.link === link else { return }
             self.link = nil
             // Liga outra vez sem incomodar; se voltar a fechar logo a seguir, aí sim mostra-se o aviso.
-            let since = Int(Date().timeIntervalSince(self.lastAutoReconnect) * 1000)
-            if case .retry(let delay, let retry) = ConnectPolicy.next(.closed, notPairedRetries: self.notPairedRetries, retry: true,
+            let since = Int(Date().timeIntervalSince(session.lastAutoReconnect) * 1000)
+            if case .retry(let delay, let retry) = ConnectPolicy.next(.closed, notPairedRetries: session.notPairedRetries, retry: true,
                                                                       kind: tv.kind, sinceAutoReconnectMs: since) {
-                self.lastAutoReconnect = Date()
+                session.lastAutoReconnect = Date()
                 DebugLog.add("Reconnecting to \(tv.name)")
                 self.status = .connecting
                 self.retryLater(tv, delayMs: delay, retry: retry)
@@ -144,9 +176,9 @@ final class RemoteModel {
             do {
                 try await link.connect()
                 guard self.link === link else { return }
-                self.notPairedRetries = 0
+                session.notPairedRetries = 0
                 self.status = .connected
-                self.withoutNow.remove(tv.id)
+                self.session.withoutNow = false
                 self.update(link.state)
                 self.refreshApps()
                 self.refreshChannels()
@@ -157,21 +189,21 @@ final class RemoteModel {
                 // A TV às vezes recusa uma ligação de um iPhone que conhece: a SHIELD, logo a seguir a mudar de canal,
                 // fecha a ligação e recusa as seguintes durante uns segundos. Só se pede para emparelhar se ainda
                 // recusar passados uns 12 s (três tentativas).
-                if case .retry(let delay, let again) = ConnectPolicy.next(.notPaired, notPairedRetries: self.notPairedRetries, retry: retry,
+                if case .retry(let delay, let again) = ConnectPolicy.next(.notPaired, notPairedRetries: session.notPairedRetries, retry: retry,
                                                                            kind: tv.kind, sinceAutoReconnectMs: 0) {
-                    self.notPairedRetries += 1
-                    DebugLog.add("Not paired: trying again (\(self.notPairedRetries))")
+                    session.notPairedRetries += 1
+                    DebugLog.add("Not paired: trying again (\(session.notPairedRetries))")
                     self.retryLater(tv, delayMs: delay, retry: again)
                     return
                 }
-                self.notPairedRetries = 0
+                session.notPairedRetries = 0
                 self.status = .notPaired
             } catch {
                 DebugLog.add("Connect failed\(retry ? " (will retry)" : ""): \(error)")
                 guard self.link === link else { return }
                 self.link = nil
                 link.close()
-                switch ConnectPolicy.next(.failed, notPairedRetries: self.notPairedRetries, retry: retry, kind: tv.kind, sinceAutoReconnectMs: 0) {
+                switch ConnectPolicy.next(.failed, notPairedRetries: session.notPairedRetries, retry: retry, kind: tv.kind, sinceAutoReconnectMs: 0) {
                 case .retry(let delay, let again): self.retryLater(tv, delayMs: delay, retry: again)
                 case .give: self.status = .unreachable(Self.describe(error))
                 }
@@ -181,7 +213,7 @@ final class RemoteModel {
 
     /// No autoReconnect: ir para segundo plano (disconnect) ou mudar de TV cancela esta tentativa.
     private func retryLater(_ tv: SavedTV, delayMs: Int, retry: Bool) {
-        autoReconnect = Task {
+        session.autoReconnect = Task {
             try? await Task.sleep(nanoseconds: UInt64(delayMs) * 1_000_000)
             guard !Task.isCancelled, self.link == nil, self.current?.id == tv.id else { return }
             self.connect(retry: retry)
@@ -189,7 +221,7 @@ final class RemoteModel {
     }
 
     func disconnect() {
-        autoReconnect?.cancel()
+        session.autoReconnect?.cancel()
         link?.close()
         link = nil
         if current != nil { status = .connecting }
@@ -201,16 +233,15 @@ final class RemoteModel {
         connect()
     }
 
-    private var volumeSettlesAt = Date.distantPast
 
     private func update(_ new: TVState) {
         let old = state
         state = new
         if new.keyboardRequests > old.keyboardRequests { showKeyboard = true }
         // Ao ligar, a TV manda vários valores seguidos (na SHIELD, com HDMI-CEC, acaba em 0): isso não é mudar o volume.
-        if old.volume == nil, new.volume != nil { volumeSettlesAt = Date().addingTimeInterval(Double(VolumeRoute.settleMs) / 1000) }
+        if old.volume == nil, new.volume != nil { session.volumeSettlesAt = Date().addingTimeInterval(Double(VolumeRoute.settleMs) / 1000) }
         if VolumeRoute.changed(old: (old.volume, old.muted), new: (new.volume, new.muted), unknown: volumeUnknown,
-                               settled: Date() >= volumeSettlesAt) { volumeChanged += 1 }
+                               settled: Date() >= session.volumeSettlesAt) { volumeChanged += 1 }
         // O GoatTV veio para a frente: o canal que está a dar pode ter mudado.
         if new.currentApp == GoatTVChannels.androidPackage, old.currentApp != new.currentApp, hasChannels { refreshChannels() }
         // Só muda (e só se escreve) se a app não for já a primeira: antes reescrevia a cada volume ou tecla (D3).
@@ -309,8 +340,6 @@ final class RemoteModel {
     }
 
     /// O pedido da lista em curso, e de que TV: trocar de TV substitui-o em vez de esperar por ele.
-    @ObservationIgnored private var channelsTask: (tv: String, id: UUID, task: Task<Void, Never>)?
-    @ObservationIgnored private var playTask: Task<Void, Never>?
 
     private static func hasGoatTV(_ tvID: String?) -> Bool {
         tvID.map { UserDefaults.standard.bool(forKey: StoreKeys.perTV(StoreKeys.goatTV, $0)) } ?? false
@@ -319,14 +348,14 @@ final class RemoteModel {
     /// Pede a lista ao GoatTV da TV. Ao ligar e ao abrir a folha.
     func refreshChannels() {
         guard let tv = current else { return }
-        if let running = channelsTask, running.tv == tv.id { return }
-        channelsTask?.task.cancel()
+        let session = session
+        if session.channelsTask != nil { return }
         let id = UUID()
         let task = Task {
             await loadChannels(tv)
-            if channelsTask?.id == id { channelsTask = nil }
+            if session.channelsTask?.id == id { session.channelsTask = nil }
         }
-        channelsTask = (tv.id, id, task)
+        session.channelsTask = (id, task)
     }
 
     /// true se veio a lista.
@@ -360,7 +389,7 @@ final class RemoteModel {
     /// Pergunta ao GoatTV o que está a dar (GET /now, pequeno). Se o canal mudou (pelo comando da TV, por exemplo), o
     /// cartão muda; um canal que a lista não tem pede a lista outra vez. Fechado (Apple TV em segundo plano), o cartão sai.
     private func pollNow(_ tv: SavedTV) async {
-        guard !withoutNow.contains(tv.id), let fetched = await GoatTvApi(host: tv.host).now() else { return }
+        guard !session.withoutNow, let fetched = await GoatTvApi(host: tv.host).now() else { return }
         let info = fetched.value
         let status = fetched.status
         let refused = fetched.refused
@@ -376,7 +405,7 @@ final class RemoteModel {
             }
         case .noNow:
             DebugLog.add("GoatTV on \(tv.name) has no /now")
-            withoutNow.insert(tv.id)
+            session.withoutNow = true
         case .close:
             channels = nil
             channelsStatus = .closed
@@ -463,8 +492,8 @@ final class RemoteModel {
         playProblem = nil
         let number = channel.num.map { String($0) } ?? "-"
         DebugLog.add("Play channel \(number) via GoatTV")
-        playTask?.cancel()
-        playTask = Task {
+        session.playTask?.cancel()
+        session.playTask = Task {
             var deadline: Date?
             while !Task.isCancelled {
                 let (status, refused) = await Self.postPlay(tv, channel.key)
@@ -516,37 +545,20 @@ final class RemoteModel {
         await GoatTvApi(host: tv.host).play(key)
     }
 
-    /// O que é de uma TV (canais, volume, tentativas) volta ao início: outra TV, esta emparelhada outra vez, ou esquecida.
-    private func resetChannels(_ tv: SavedTV?) {
-        // O indicador do volume (e o ícone do HDMI-CEC), as tentativas e o que estava a dar eram da TV anterior.
-        volumePressed = nil
-        volumeProblem = nil
-        volumeSettlesAt = .distantPast
-        notPairedRetries = 0
-        autoReconnect?.cancel()
-        nowInfo = nil
-        channelsTask?.task.cancel()
-        channelsTask = nil
-        playTask?.cancel()
-        hasChannels = Self.hasGoatTV(tv?.id)
-        channels = nil
-        channelsStatus = .unknown
-        openingGoatTV = false
-        playProblem = nil
+    /// Fecha a sessão da TV que estava e começa a de `tv`: nada passa de uma TV para a outra.
+    private func startSession(_ tv: SavedTV?, status: Status) {
+        session.close()
+        showKeyboard = false
+        session = TVSession(tvID: tv?.id, status: status, recents: Self.loadRecents(tv?.id), hasChannels: Self.hasGoatTV(tv?.id))
     }
 
     // MARK: TVs
 
     func select(_ tv: SavedTV) {
         guard tv.id != current?.id else { return }
-        link?.close()
-        link = nil
         current = tv
         TVStore.currentID = tv.id
-        state = TVState()
-        recentApps = Self.loadRecents(tv.id)
-        installedApps = []
-        resetChannels(tv)
+        startSession(tv, status: status)
         connect()
     }
 
@@ -556,14 +568,8 @@ final class RemoteModel {
         for key in StoreKeys.perTVKeys(tv.id) { UserDefaults.standard.removeObject(forKey: key) }
         tvs = TVStore.all
         if current?.id == tv.id {
-            link?.close()
-            link = nil
             current = TVStore.current
-            state = TVState()
-            recentApps = Self.loadRecents(current?.id)
-            installedApps = []
-            resetChannels(current)
-            status = current == nil ? .noTV : .connecting
+            startSession(current, status: current == nil ? .noTV : .connecting)
             connect()
         }
     }
@@ -628,14 +634,8 @@ final class RemoteModel {
         TVStore.save(tv)
         TVStore.currentID = tv.id
         tvs = TVStore.all
-        link?.close()
-        link = nil
         current = tv
-        state = TVState()
-        recentApps = Self.loadRecents(tv.id)
-        installedApps = []
-        resetChannels(tv)
-        status = .connecting
+        startSession(tv, status: .connecting)
         connect()
     }
 
@@ -670,10 +670,16 @@ final class RemoteModel {
     }
 
     /// A última tecla, para o indicador numa TV sem valor de volume (nil: mostra-se a barra).
-    private(set) var volumePressed: Key?
+    private(set) var volumePressed: Key? {
+        get { session.volumePressed }
+        set { session.volumePressed = newValue }
+    }
 
     /// Mostrado no indicador de volume quando o launcher não respondeu (nil: nada a dizer).
-    private(set) var volumeProblem: String?
+    private(set) var volumeProblem: String? {
+        get { session.volumeProblem }
+        set { session.volumeProblem = newValue }
+    }
 
     /// O volume pelo GoatLauncher (POST /volume/…) em vez de tecla. A tecla só vai se ele disser que não há launcher.
     private func volumeViaLauncher(_ tv: SavedTV, _ key: Key) {
