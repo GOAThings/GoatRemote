@@ -87,6 +87,12 @@ fun PairingDialog(vm: RemoteViewModel, pairing: PairingModel) {
                         )
                         Spacer(Modifier.height(14.dp))
                         CodeField(pairing, phase)
+                        // Algumas Apple TV (tvOS 26/27) entram em modo de PIN mas não o mostram: tenta-se pelo AirPlay.
+                        if (pairing.kind == TvKind.APPLE && !pairing.usingAirPlay) {
+                            TextButton(pairing::useAirPlay, Modifier.testTag("pairing:airplay")) {
+                                Text(L("No PIN on the TV?", "Não aparece o PIN na TV?"), color = Theme.accent, fontSize = 15.sp)
+                            }
+                        }
                     }
                     Phase.Checking -> Busy(L("Pairing…", "A emparelhar…"))
                     Phase.Done -> Row(verticalAlignment = Alignment.CenterVertically) {

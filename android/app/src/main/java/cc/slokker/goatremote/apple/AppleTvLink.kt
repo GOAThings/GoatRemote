@@ -33,7 +33,14 @@ class CompanionCredentials(
     val tvId: ByteArray,
     /** O nosso identificador (UUID em texto, 36 bytes ASCII). */
     val clientId: ByteArray,
+    /** Emparelhada pelo AirPlay (ver [AirPlayPairing]): a identidade da TV no Companion pode ser outra. */
+    val viaAirPlay: Boolean = false,
+    /** O id que a TV mostrou no Companion na primeira verificação, se não for a identidade do AirPlay. */
+    val companionId: ByteArray? = null,
 ) {
+    fun copy(viaAirPlay: Boolean = this.viaAirPlay, companionId: ByteArray? = this.companionId) =
+        CompanionCredentials(tvPublicKey, privateKey, tvId, clientId, viaAirPlay, companionId)
+
     companion object {
         private fun prefs(context: Context) = context.getSharedPreferences("companion", Context.MODE_PRIVATE)
         private fun b64(b: ByteArray) = Base64.encodeToString(b, Base64.NO_WRAP)
@@ -42,13 +49,16 @@ class CompanionCredentials(
         fun load(context: Context, tvId: String): CompanionCredentials? = runCatching {
             val json = JSONObject(prefs(context).getString(tvId, null) ?: return null)
             CompanionCredentials(bytes(json.getString("tvPublicKey")), bytes(json.getString("privateKey")),
-                bytes(json.getString("tvID")), bytes(json.getString("clientID")))
+                bytes(json.getString("tvID")), bytes(json.getString("clientID")), json.optBoolean("viaAirPlay", false),
+                json.optString("companionID").ifEmpty { null }?.let(::bytes))
         }.getOrNull()
 
         fun save(context: Context, tvId: String, c: CompanionCredentials) {
             val json = JSONObject()
                 .put("tvPublicKey", b64(c.tvPublicKey)).put("privateKey", b64(c.privateKey))
                 .put("tvID", b64(c.tvId)).put("clientID", b64(c.clientId))
+            if (c.viaAirPlay) json.put("viaAirPlay", true)
+            c.companionId?.let { json.put("companionID", b64(it)) }
             prefs(context).edit().putString(tvId, json.toString()).apply()
         }
 
@@ -68,72 +78,88 @@ object AppleTvPairing {
      */
     class Refused(val code: Int, val retryAfter: Int?) : Exception("refused $code")
 
+    /** Uma troca do emparelhamento: manda os TLV e devolve os da resposta. */
+    fun interface Exchange {
+        suspend fun send(tlv: List<Pair<Int, ByteArray>>): Map<Int, ByteArray>
+    }
+
     suspend fun pair(host: String, port: Int, name: String, askPin: suspend () -> String): CompanionCredentials {
         val conn = CompanionConnection(host, port)
         conn.open()
         DebugLog.add("Apple pairing: connected to $host:$port")
         try {
-            fun pd(message: Opack): Map<Int, ByteArray> {
-                val tlv = Tlv8.decode(message["_pd"]?.data ?: ByteArray(0))
+            var first = true
+            // A primeira trama é PS_Start; as outras, PS_Next.
+            val exchange = Exchange { tlv ->
+                val frame = if (first) CompanionConnection.Frame.PAIR_SETUP_START else CompanionConnection.Frame.PAIR_SETUP_NEXT
+                first = false
+                conn.send(frame, Opack.dict("_pd" to Opack.Data(Tlv8.encode(*tlv.toTypedArray())), "_pwTy" to Opack.Int(1),
+                    "_x" to Opack.Int(conn.nextXid())))
+                val message = kotlinx.coroutines.withContext(Dispatchers.IO) { conn.receive().second }
+                val reply = Tlv8.decode(message["_pd"]?.data ?: ByteArray(0))
                 // Só os tipos e tamanhos: os valores são o sal, as chaves e as provas.
-                DebugLog.add("Apple pairing: got ${AppleTvLink.keys(message)} TLV ${tlv.keys.sorted().map { "$it:${tlv[it]!!.size}" }}")
-                tlv[7]?.firstOrNull()?.let { error ->
-                    if (error.toInt() == 2) throw WrongPin()
-                    val delay = tlv[8]?.let(Tlv8::retryDelay)
-                    DebugLog.add("Apple pairing: refused, code ${error.toInt() and 0xFF}, retry after ${delay ?: "-"}")
-                    throw Refused(error.toInt() and 0xFF, delay)
-                }
-                return tlv
+                DebugLog.add("Apple pairing: got ${AppleTvLink.keys(message)} TLV ${describe(reply)}")
+                check(reply)
             }
-            suspend fun send(frame: CompanionConnection.Frame, vararg tlv: Pair<Int, ByteArray>) =
-                conn.send(frame, Opack.dict("_pd" to Opack.Data(Tlv8.encode(*tlv)), "_pwTy" to Opack.Int(1), "_x" to Opack.Int(conn.nextXid())))
-            suspend fun receive() = kotlinx.coroutines.withContext(Dispatchers.IO) { conn.receive().second }
-
             // M1 → M2: o sal e o B; a TV mostra o PIN. O nome vai já no M1 (além do M5): no tvOS 26/27 a Apple TV 4K
             // de 3.ª geração entrava em modo de PIN mas não o mostrava, e no AirPlay isso era a falta do nome do
             // cliente no início do emparelhamento (pyatv #2837, Home Assistant #173352).
-            send(CompanionConnection.Frame.PAIR_SETUP_START, 0 to byteArrayOf(0), 6 to byteArrayOf(1),
-                0x11 to Opack.dict("name" to Opack.Str(name)).encoded)
-            DebugLog.add("Apple pairing: M1 sent as \"$name\", waiting for the TV to show the PIN")
-            val m2 = pd(receive())
-            val salt = m2[2] ?: throw CompanionConnection.TvError("M2 sem sal")
-            val serverKey = m2[3] ?: throw CompanionConnection.TvError("M2 sem B")
+            DebugLog.add("Apple pairing: sending M1 as \"$name\", then the TV should show the PIN")
+            val m2 = exchange.send(listOf(0 to byteArrayOf(0), 6 to byteArrayOf(1), 0x11 to Opack.dict("name" to Opack.Str(name)).encoded))
             val pin = askPin()
             DebugLog.add("Apple pairing: PIN entered, sending M3")
-            // M3 → M4: as provas do SRP.
-            val srp = SrpClient(Crypto.randomBytes(32))
-            val result = srp.process(salt, serverKey, pin) ?: throw CompanionConnection.TvError("B inválido")
-            send(CompanionConnection.Frame.PAIR_SETUP_NEXT, 6 to byteArrayOf(3), 3 to srp.publicKey, 4 to result.proof)
-            val m4 = pd(receive())
-            if (!(m4[4] ?: ByteArray(0)).contentEquals(result.expectedServerProof)) throw WrongPin()
-            DebugLog.add("Apple pairing: PIN accepted, sending M5")
-            // M5 → M6: trocam-se as identidades (Ed25519), cifradas com a chave do SRP.
-            val k = result.sessionKey
-            val encKey = Crypto.hkdf("Pair-Setup-Encrypt-Salt", "Pair-Setup-Encrypt-Info", k)
-            val signing = Crypto.SigningKey.generate()
-            val ltpk = signing.publicKey
-            val clientId = UUID.randomUUID().toString().lowercase().toByteArray()
-            val deviceX = Crypto.hkdf("Pair-Setup-Controller-Sign-Salt", "Pair-Setup-Controller-Sign-Info", k)
-            val signature = signing.sign(deviceX + clientId + ltpk)
-            val sub = Tlv8.encode(1 to clientId, 3 to ltpk, 10 to signature, 0x11 to Opack.dict("name" to Opack.Str(name)).encoded)
-            send(CompanionConnection.Frame.PAIR_SETUP_NEXT, 6 to byteArrayOf(5), 5 to Crypto.seal(encKey, Crypto.pairingNonce("PS-Msg05"), sub))
-            val m6 = pd(receive())
-            val encrypted = m6[5]?.takeIf { it.size > 16 } ?: throw CompanionConnection.TvError("M6 sem dados")
-            val tv = Tlv8.decode(Crypto.open(encKey, Crypto.pairingNonce("PS-Msg06"), encrypted))
-            val tvId = tv[1]
-            val tvKey = tv[3]
-            val tvSignature = tv[10]
-            if (tvId == null || tvKey == null || tvSignature == null) throw CompanionConnection.TvError("M6 incompleta")
-            val accessoryX = Crypto.hkdf("Pair-Setup-Accessory-Sign-Salt", "Pair-Setup-Accessory-Sign-Info", k)
-            if (!Crypto.verify(tvKey, tvSignature, accessoryX + tvId + tvKey)) {
-                throw CompanionConnection.TvError("a assinatura da TV não bate certo")
-            }
-            DebugLog.add("Apple pairing: done")
-            return CompanionCredentials(tvKey, signing.raw, tvId, clientId)
+            return finish(m2, pin, name, exchange)
         } finally {
             conn.close()
         }
     }
+
+    /** M3 a M6, iguais no Companion e no AirPlay: as provas do SRP com o PIN e a troca das identidades (Ed25519). */
+    suspend fun finish(m2: Map<Int, ByteArray>, pin: String, name: String, exchange: Exchange): CompanionCredentials {
+        val salt = m2[2] ?: throw CompanionConnection.TvError("M2 sem sal")
+        val serverKey = m2[3] ?: throw CompanionConnection.TvError("M2 sem B")
+        // M3 → M4: as provas do SRP.
+        val srp = SrpClient(Crypto.randomBytes(32))
+        val result = srp.process(salt, serverKey, pin) ?: throw CompanionConnection.TvError("B inválido")
+        val m4 = exchange.send(listOf(6 to byteArrayOf(3), 3 to srp.publicKey, 4 to result.proof))
+        if (!(m4[4] ?: ByteArray(0)).contentEquals(result.expectedServerProof)) throw WrongPin()
+        DebugLog.add("Apple pairing: PIN accepted, sending M5")
+        // M5 → M6: trocam-se as identidades (Ed25519), cifradas com a chave do SRP.
+        val k = result.sessionKey
+        val encKey = Crypto.hkdf("Pair-Setup-Encrypt-Salt", "Pair-Setup-Encrypt-Info", k)
+        val signing = Crypto.SigningKey.generate()
+        val ltpk = signing.publicKey
+        val clientId = UUID.randomUUID().toString().lowercase().toByteArray()
+        val deviceX = Crypto.hkdf("Pair-Setup-Controller-Sign-Salt", "Pair-Setup-Controller-Sign-Info", k)
+        val signature = signing.sign(deviceX + clientId + ltpk)
+        val sub = Tlv8.encode(1 to clientId, 3 to ltpk, 10 to signature, 0x11 to Opack.dict("name" to Opack.Str(name)).encoded)
+        val m6 = exchange.send(listOf(6 to byteArrayOf(5), 5 to Crypto.seal(encKey, Crypto.pairingNonce("PS-Msg05"), sub)))
+        val encrypted = m6[5]?.takeIf { it.size > 16 } ?: throw CompanionConnection.TvError("M6 sem dados")
+        val tv = Tlv8.decode(Crypto.open(encKey, Crypto.pairingNonce("PS-Msg06"), encrypted))
+        val tvId = tv[1]
+        val tvKey = tv[3]
+        val tvSignature = tv[10]
+        if (tvId == null || tvKey == null || tvSignature == null) throw CompanionConnection.TvError("M6 incompleta")
+        val accessoryX = Crypto.hkdf("Pair-Setup-Accessory-Sign-Salt", "Pair-Setup-Accessory-Sign-Info", k)
+        if (!Crypto.verify(tvKey, tvSignature, accessoryX + tvId + tvKey)) {
+            throw CompanionConnection.TvError("a assinatura da TV não bate certo")
+        }
+        DebugLog.add("Apple pairing: done")
+        return CompanionCredentials(tvKey, signing.raw, tvId, clientId)
+    }
+
+    /** Os erros que a TV manda no TLV 7 (e o tempo de espera no 8). */
+    fun check(tlv: Map<Int, ByteArray>): Map<Int, ByteArray> {
+        tlv[7]?.firstOrNull()?.let { error ->
+            if (error.toInt() == 2) throw WrongPin()
+            val delay = tlv[8]?.let(Tlv8::retryDelay)
+            DebugLog.add("Apple pairing: refused, code ${error.toInt() and 0xFF}, retry after ${delay ?: "-"}")
+            throw Refused(error.toInt() and 0xFF, delay)
+        }
+        return tlv
+    }
+
+    fun describe(tlv: Map<Int, ByteArray>) = "${tlv.keys.sorted().map { "$it:${tlv[it]!!.size}" }}"
 }
 
 /** O comando ligado a uma Apple TV: verifica (com as credenciais guardadas), abre a sessão e manda teclas. */
@@ -141,6 +167,8 @@ class AppleTvLink(
     private val host: String,
     private val port: Int,
     private val credentials: () -> CompanionCredentials?,
+    /** Guarda as credenciais quando a verificação as muda (a identidade do Companion de uma TV emparelhada pelo AirPlay). */
+    private val saveCredentials: (CompanionCredentials) -> Unit,
     private val deviceName: String,
     /** Um id estável por instalação (sem ele a TV não manda os eventos de ligada/desligada). */
     private val stableId: String,
@@ -212,9 +240,13 @@ class AppleTvLink(
         val inner = Tlv8.decode(Crypto.open(pvKey, Crypto.pairingNonce("PV-Msg02"), encrypted))
         val id = inner[1]
         val signature = inner[10]
-        if (id == null || !id.contentEquals(creds.tvId) || signature == null ||
-            !Crypto.verify(creds.tvPublicKey, signature, tvEph + id + epk)
-        ) throw NotPairedException()
+        if (id == null || signature == null) throw NotPairedException()
+        val proven = id.contentEquals(creds.tvId) && Crypto.verify(creds.tvPublicKey, signature, tvEph + id + epk)
+        // Emparelhada pelo AirPlay, a identidade da TV no Companion pode ser outra, e a M2 não traz a chave dela: fica o
+        // id da primeira verificação, e um id diferente daí em diante obriga a emparelhar outra vez.
+        val identity = CompanionIdentity.check(id, proven, creds.viaAirPlay, creds.companionId)
+        if (identity == CompanionIdentity.Verdict.REJECTED) throw NotPairedException()
+        if (!proven) DebugLog.add("Apple TV: Companion identity differs from AirPlay's ($identity), trying the AirPlay key")
         val mySignature = Crypto.SigningKey(creds.privateKey).sign(epk + creds.clientId + tvEph)
         val box = Crypto.seal(pvKey, Crypto.pairingNonce("PV-Msg03"), Tlv8.encode(1 to creds.clientId, 10 to mySignature))
         conn.send(CompanionConnection.Frame.PAIR_VERIFY_NEXT,
@@ -222,6 +254,11 @@ class AppleTvLink(
         val m4 = Tlv8.decode(receive()["_pd"]?.data ?: ByteArray(0))
         m4[7]?.firstOrNull()?.let { DebugLog.add("Apple TV: verify M4 refused, code ${it.toInt() and 0xFF}") }
         if (m4[7] != null) throw NotPairedException()
+        when {
+            // A identidade do AirPlay serve no Companion: daqui em diante é tão estrito como o emparelhamento normal.
+            identity == CompanionIdentity.Verdict.VERIFIED && creds.viaAirPlay -> saveCredentials(creds.copy(viaAirPlay = false, companionId = null))
+            identity == CompanionIdentity.Verdict.FIRST_SEEN -> saveCredentials(creds.copy(companionId = id))
+        }
         conn.encrypt(Crypto.hkdf("", "ClientEncrypt-main", secret), Crypto.hkdf("", "ServerEncrypt-main", secret))
     }
 

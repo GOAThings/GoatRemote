@@ -1,6 +1,8 @@
 package cc.slokker.goatremote
 
+import cc.slokker.goatremote.apple.AirPlayHead
 import cc.slokker.goatremote.apple.BPlist
+import cc.slokker.goatremote.apple.CompanionIdentity
 import cc.slokker.goatremote.apple.Crypto
 import cc.slokker.goatremote.apple.Opack
 import cc.slokker.goatremote.apple.Plist
@@ -512,5 +514,28 @@ class CoreTest {
         assertEquals("cc.slokker.goattv", GoatTvChannels.appleApp(mapOf("x.goattv" to "GoatTV", "cc.slokker.goattv" to "GoatTV")))
         assertEquals("x.goattv", GoatTvChannels.appleApp(mapOf("com.netflix" to "Netflix", "x.goattv" to "GoatTV")))
         assertNull(GoatTvChannels.appleApp(mapOf("com.netflix" to "Netflix")))
+    }
+
+    /** O emparelhamento pelo AirPlay: a cabeça HTTP com limites, e a identidade do Companion. */
+    @Test
+    fun airPlay() {
+        fun head(length: String) = AirPlayHead.parse("HTTP/1.1 200 OK\r\nCONTENT-length: $length\r\nX: y".toByteArray())
+        assertEquals(200, head("12").first)
+        assertEquals(12, head(" 12 ").second)
+        assertEquals(0, AirPlayHead.parse("HTTP/1.1 404 Not Found".toByteArray()).second)
+        malformed { head("-1") }
+        malformed { head("${Int.MAX_VALUE}") }
+        malformed { head("${AirPlayHead.MAX_BODY + 1}") }
+        malformed { head("99999999999999999999999") }
+        // A identidade: a chave guardada basta; só o AirPlay tolera outra, e só até ver a primeira.
+        val one = byteArrayOf(1)
+        val two = byteArrayOf(2)
+        assertEquals(CompanionIdentity.Verdict.VERIFIED, CompanionIdentity.check(one, true, false, null))
+        assertEquals(CompanionIdentity.Verdict.VERIFIED, CompanionIdentity.check(one, true, true, two))
+        assertEquals(CompanionIdentity.Verdict.REJECTED, CompanionIdentity.check(one, false, false, null))
+        assertEquals(CompanionIdentity.Verdict.REJECTED, CompanionIdentity.check(one, false, false, one))
+        assertEquals(CompanionIdentity.Verdict.FIRST_SEEN, CompanionIdentity.check(one, false, true, null))
+        assertEquals(CompanionIdentity.Verdict.PINNED, CompanionIdentity.check(one, false, true, byteArrayOf(1)))
+        assertEquals(CompanionIdentity.Verdict.REJECTED, CompanionIdentity.check(one, false, true, two))
     }
 }

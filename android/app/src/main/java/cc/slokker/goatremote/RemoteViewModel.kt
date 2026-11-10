@@ -13,10 +13,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import cc.slokker.goatremote.apple.AirPlayPairing
 import cc.slokker.goatremote.apple.AppleTvLink
 import cc.slokker.goatremote.apple.AppleTvPairing
 import cc.slokker.goatremote.apple.CompanionConnection
 import cc.slokker.goatremote.apple.CompanionCredentials
+import cc.slokker.goatremote.apple.RawHttp
 import cc.slokker.goatremote.data.AppCatalog
 import cc.slokker.goatremote.data.ChannelList
 import cc.slokker.goatremote.data.FoundTv
@@ -50,6 +52,8 @@ import java.util.Locale
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -303,11 +307,11 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
     /** A ligação certa para o tipo de TV. */
     private fun makeLink(tv: SavedTv): TvControl = when (tv.kind) {
         TvKind.APPLE -> AppleTvLink(tv.host, tv.port ?: AppleTvLink.DEFAULT_PORT, { CompanionCredentials.load(context, tv.id) },
-            deviceName, stableId())
+            { CompanionCredentials.save(context, tv.id, it) }, deviceName, stableId())
         TvKind.ANDROID -> AndroidTvLink(tv.host, identities::get, BuildConfig.VERSION_NAME, Build.MODEL, store.certificate(tv.id))
     }
 
-    private fun stableId(): String = prefs.getString("companion.id", null) ?: (0 until 6)
+    internal fun stableId(): String = prefs.getString("companion.id", null) ?: (0 until 6)
         .joinToString("") { "%02x".format((0..255).random()) }
         .also { prefs.edit().putString("companion.id", it).apply() }
 
@@ -906,9 +910,14 @@ class PairingModel(private val vm: RemoteViewModel, val name: String, private va
     /** O código que a TV mostra: 6 caracteres hexadecimais (Android TV) ou um PIN de 4 algarismos (Apple TV). */
     val codeLength: Int get() = if (kind == TvKind.APPLE) 4 else Pairing.CODE_LENGTH
 
+    /** A emparelhar pelo AirPlay (depois de "Não aparece o PIN?"). */
+    var usingAirPlay by mutableStateOf(false)
+        private set
+
     private var code: CompletableDeferred<String>? = null
     private var job: Job? = null
     private var socket: TvSocket? = null
+    private var airPlay: RawHttp? = null
 
     fun start() {
         DebugLog.add("Pairing $name ($kind) started")
@@ -944,7 +953,7 @@ class PairingModel(private val vm: RemoteViewModel, val name: String, private va
         } catch (e: Exception) {
             DebugLog.add("Pairing failed: $e")
             socket?.close()
-            phase = Phase.Failed(explain(e))
+            if (currentCoroutineContext().isActive) phase = Phase.Failed(explain(e))
         }
     }
 
@@ -956,9 +965,33 @@ class PairingModel(private val vm: RemoteViewModel, val name: String, private va
             if (host == null || port == null) {
                 throw UnreachableException(L("Couldn't find the TV on the network", "Não deu para encontrar a TV na rede"))
             }
-            DebugLog.add("Pairing: Apple TV at $host:$port")
-            val creds = AppleTvPairing.pair(host, port, vm.deviceName) { askCode(false) }
-            CompanionCredentials.save(vm.appContext, tvId, creds)
+            DebugLog.add("Pairing: Apple TV at $host:$port${if (usingAirPlay) " (via AirPlay)" else ""}")
+            if (usingAirPlay) {
+                val previous = CompanionCredentials.load(vm.appContext, tvId)
+                val http = RawHttp(host, AirPlayPairing.PORT).also { airPlay = it }
+                val creds = AirPlayPairing.pair(http, vm.deviceName) { askCode(false) }
+                CompanionCredentials.save(vm.appContext, tvId, creds)
+                // A experiência: a chave do AirPlay serve no Companion (o comando)? Liga-se já para saber.
+                phase = Phase.Checking
+                val link = AppleTvLink(host, port, { CompanionCredentials.load(vm.appContext, tvId) },
+                    { CompanionCredentials.save(vm.appContext, tvId, it) }, vm.deviceName, vm.stableId())
+                try {
+                    link.connect()
+                    link.close()
+                    DebugLog.add("AirPlay pairing: the Apple TV accepts the AirPlay key for the remote")
+                } catch (e: Exception) {
+                    link.close()
+                    if (e is kotlinx.coroutines.CancellationException) throw e
+                    // Uma tentativa falhada não estraga um emparelhamento que já funcionava.
+                    if (previous != null) CompanionCredentials.save(vm.appContext, tvId, previous)
+                    else CompanionCredentials.delete(vm.appContext, tvId)
+                    DebugLog.add("AirPlay pairing: the Apple TV doesn't accept the AirPlay key for the remote: $e")
+                    throw AirPlayPairing.NotForRemote()
+                }
+            } else {
+                val creds = AppleTvPairing.pair(host, port, vm.deviceName) { askCode(false) }
+                CompanionCredentials.save(vm.appContext, tvId, creds)
+            }
             phase = Phase.Done
             vm.paired(SavedTv(tvId, name, host, TvKind.APPLE, port))
             delay(700)
@@ -968,7 +1001,8 @@ class PairingModel(private val vm: RemoteViewModel, val name: String, private va
             return
         } catch (e: Exception) {
             DebugLog.add("Pairing failed: $e")
-            phase = Phase.Failed(explain(e))
+            // Um "tentar outra vez" (ou o AirPlay) já começou outro: este não mexe no ecrã.
+            if (currentCoroutineContext().isActive) phase = Phase.Failed(explain(e))
         }
     }
 
@@ -987,6 +1021,15 @@ class PairingModel(private val vm: RemoteViewModel, val name: String, private va
         deferred.complete(value)
     }
 
+    /** "Não aparece o PIN?": emparelhar pelo AirPlay (ver [AirPlayPairing]). */
+    fun useAirPlay() {
+        DebugLog.add("Pairing: switching to AirPlay")
+        cancel()
+        usingAirPlay = true
+        phase = Phase.Connecting
+        start()
+    }
+
     /** Recomeça (a TV volta a mostrar um código novo). */
     fun retry() {
         cancel()
@@ -999,6 +1042,7 @@ class PairingModel(private val vm: RemoteViewModel, val name: String, private va
         code = null
         job?.cancel()
         socket?.close()
+        airPlay?.close()
     }
 
     private fun explain(e: Exception): String = when (e) {
@@ -1007,6 +1051,9 @@ class PairingModel(private val vm: RemoteViewModel, val name: String, private va
             L("The TV closed the connection. Try again.", "A TV fechou a ligação. Tenta outra vez.")
         is AppleTvPairing.WrongPin -> L("Wrong PIN. Try again: the TV will show a new one.", "PIN errado. Tenta outra vez: a TV mostra um novo.")
         is AppleTvPairing.Refused -> appleRefusal(e.code, e.retryAfter)
+        is AirPlayPairing.NotForRemote ->
+            L("The PIN worked over AirPlay, but this Apple TV doesn't accept it for the remote. Send a report so we can look into it.",
+                "O PIN funcionou pelo AirPlay, mas esta Apple TV não o aceita para o comando. Envia um relatório para vermos.")
         is CompanionConnection.TvError -> L("The TV refused: ${e.message}", "A TV recusou: ${e.message}")
         else -> vm.describe(e)
     }
