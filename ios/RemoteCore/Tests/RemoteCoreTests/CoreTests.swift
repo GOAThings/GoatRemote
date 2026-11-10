@@ -18,7 +18,8 @@ func expectMalformed(_ line: Int = #line, _ body: () throws -> Void) throws {
     throw Failed(description: "linha \(line): devia ter dado erro")
 }
 
-/// Corre com um runner simples em Linux (sem XCTest; ver .github/workflows/ios.yml). Os vetores e as amostras vêm de
+/// Corre com um runner simples em Linux (sem XCTest; ver .github/workflows/ios.yml) e com `swift test` no Mac
+/// (XCTestRunner.swift). Os vetores e as amostras vêm de
 /// contracts/, os mesmos que os testes do Android lêem.
 enum CoreTests {
     static let all: [(String, () throws -> Void)] = [

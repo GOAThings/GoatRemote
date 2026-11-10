@@ -24,7 +24,11 @@ jobs:
         run: |
           swift --version
           mkdir -p /tmp/run
-          for f in Tests/RemoteCoreTests/*.swift; do sed '/@testable import RemoteCore/d' "$f" > /tmp/run/$(basename "$f"); done
+          # O XCTestRunner.swift é só para o `swift test` no Mac.
+          for f in Tests/RemoteCoreTests/*.swift; do
+            case "$f" in *XCTestRunner.swift) continue ;; esac
+            sed '/@testable import RemoteCore/d' "$f" > /tmp/run/$(basename "$f")
+          done
           cat > /tmp/run/main.swift <<'M'
           import Foundation
           @main struct Runner {
