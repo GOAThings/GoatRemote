@@ -68,15 +68,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 
-/** Em que passo vai um emparelhamento. */
-sealed interface Phase {
-    data object Connecting : Phase
-    data class WaitingCode(val retry: Boolean) : Phase
-    data object Checking : Phase
-    data object Done : Phase
-    data class Failed(val why: String) : Phase
-}
-
 /** Inglês ou português, conforme a língua do telemóvel (como na app do iPhone). */
 fun L(en: String, pt: String) = if (Locale.getDefault().language == "pt") pt else en
 
@@ -676,7 +667,8 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
     fun startPairing(name: String, id: String, host: String?, kind: TvKind = TvKind.ANDROID, port: Int? = null) {
         pairing?.cancel()
         pairing = null
-        val model = PairingModel(this, name, id, host, kind, port)
+        val model = PairingModel(name, id, host, kind, port, viewModelScope, appContext, identities, { deviceName }, ::stableId,
+            onPaired = ::paired, onDone = { if (pairing === it) pairing = null })
         if (tvs.isNotEmpty()) closeSheets++
         pairing = model
         model.start()
@@ -826,188 +818,12 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
         finder.stop()
     }
 
-    internal fun describe(e: Throwable): String = e.message?.takeIf { it.isNotBlank() } ?: e.javaClass.simpleName
+    internal fun describe(e: Throwable): String = cc.slokker.goatremote.describe(e)
 
     private companion object {
         const val NOW_EVERY_MS = 3000L
     }
 }
 
-/** Um emparelhamento: liga à TV, a TV mostra o código e espera-se que a pessoa o escreva. */
-class PairingModel(private val vm: RemoteViewModel, val name: String, private val tvId: String, private var host: String?, val kind: TvKind, private var port: Int?) {
-    private var phaseValue by mutableStateOf<Phase>(Phase.Connecting)
-    var phase: Phase
-        get() = phaseValue
-        private set(value) {
-            if (value != phaseValue) DebugLog.add("Pairing $name: $value")
-            phaseValue = value
-        }
-
-    /** O código que a TV mostra: 6 caracteres hexadecimais (Android TV) ou um PIN de 4 algarismos (Apple TV). */
-    val codeLength: Int get() = if (kind == TvKind.APPLE) 4 else Pairing.CODE_LENGTH
-
-    /** A emparelhar pelo AirPlay (depois de "Não aparece o PIN?"). */
-    var usingAirPlay by mutableStateOf(false)
-        private set
-
-    private var code: CompletableDeferred<String>? = null
-    private var job: Job? = null
-    private var socket: TvSocket? = null
-    private var airPlay: RawHttp? = null
-
-    fun start() {
-        DebugLog.add("Pairing $name ($kind) started")
-        job = vm.viewModelScope.launch { if (kind == TvKind.APPLE) runApple() else runAndroid() }
-    }
-
-    private suspend fun runAndroid() {
-        try {
-            val host = host ?: throw UnreachableException(L("Couldn't find the TV on the network", "Não deu para encontrar a TV na rede"))
-            DebugLog.add("Pairing: TV at $host:${Pairing.PORT}")
-            val identity = withContext(Dispatchers.IO) { vm.identities.get() }
-            val socket = TvSocket.open(host, Pairing.PORT, identity)
-            DebugLog.add("Pairing: TLS open")
-            this.socket = socket
-            val server = socket.serverCertificate?.let(RsaKey::of)
-                ?: throw UnreachableException(L("The TV's certificate is unreadable", "O certificado da TV não se lê"))
-            val client = RsaKey.of(identity.certificate)!!
-            Pairing.run(
-                clientName = vm.deviceName,
-                client = client,
-                server = server,
-                send = { socket.send(it) },
-                receive = { withContext(Dispatchers.IO) { socket.receive() } },
-                askCode = { retry -> askCode(retry) },
-            )
-            socket.close()
-            phase = Phase.Done
-            vm.paired(SavedTv(tvId, name, host))
-            delay(700)
-            if (vm.pairing === this) vm.pairing = null
-        } catch (e: kotlinx.coroutines.CancellationException) {
-            socket?.close()
-        } catch (e: Exception) {
-            DebugLog.add("Pairing failed: $e")
-            socket?.close()
-            if (currentCoroutineContext().isActive) phase = Phase.Failed(explain(e))
-        }
-    }
-
-    /** Apple TV: SRP com o PIN, e as credenciais ficam guardadas. */
-    private suspend fun runApple() {
-        try {
-            val host = host
-            val port = port
-            if (host == null || port == null) {
-                throw UnreachableException(L("Couldn't find the TV on the network", "Não deu para encontrar a TV na rede"))
-            }
-            DebugLog.add("Pairing: Apple TV at $host:$port${if (usingAirPlay) " (via AirPlay)" else ""}")
-            if (usingAirPlay) {
-                val previous = CompanionCredentials.load(vm.appContext, tvId)
-                val http = RawHttp(host, AirPlayPairing.PORT).also { airPlay = it }
-                val creds = AirPlayPairing.pair(http, vm.deviceName) { askCode(false) }
-                CompanionCredentials.save(vm.appContext, tvId, creds)
-                // A experiência: a chave do AirPlay serve no Companion (o comando)? Liga-se já para saber.
-                phase = Phase.Checking
-                val link = AppleTvLink(host, port, { CompanionCredentials.load(vm.appContext, tvId) },
-                    { CompanionCredentials.save(vm.appContext, tvId, it) }, vm.deviceName, vm.stableId())
-                try {
-                    link.connect()
-                    link.close()
-                    DebugLog.add("AirPlay pairing: the Apple TV accepts the AirPlay key for the remote")
-                } catch (e: Exception) {
-                    link.close()
-                    if (e is kotlinx.coroutines.CancellationException) throw e
-                    // Uma tentativa falhada não estraga um emparelhamento que já funcionava.
-                    if (previous != null) CompanionCredentials.save(vm.appContext, tvId, previous)
-                    else CompanionCredentials.delete(vm.appContext, tvId)
-                    DebugLog.add("AirPlay pairing: the Apple TV doesn't accept the AirPlay key for the remote: $e")
-                    throw AirPlayPairing.NotForRemote()
-                }
-            } else {
-                val creds = AppleTvPairing.pair(host, port, vm.deviceName) { askCode(false) }
-                CompanionCredentials.save(vm.appContext, tvId, creds)
-            }
-            phase = Phase.Done
-            vm.paired(SavedTv(tvId, name, host, TvKind.APPLE, port))
-            delay(700)
-            if (vm.pairing === this) vm.pairing = null
-        } catch (e: kotlinx.coroutines.CancellationException) {
-            DebugLog.add("Pairing cancelled")
-            return
-        } catch (e: Exception) {
-            DebugLog.add("Pairing failed: $e")
-            // Um "tentar outra vez" (ou o AirPlay) já começou outro: este não mexe no ecrã.
-            if (currentCoroutineContext().isActive) phase = Phase.Failed(explain(e))
-        }
-    }
-
-    private suspend fun askCode(retry: Boolean): String {
-        val deferred = CompletableDeferred<String>()
-        code = deferred
-        phase = Phase.WaitingCode(retry)
-        return deferred.await()
-    }
-
-    /** O código que a pessoa escreveu. */
-    fun submit(value: String) {
-        val deferred = code ?: return
-        code = null
-        phase = Phase.Checking
-        deferred.complete(value)
-    }
-
-    /** "Não aparece o PIN?": emparelhar pelo AirPlay (ver [AirPlayPairing]). */
-    fun useAirPlay() {
-        DebugLog.add("Pairing: switching to AirPlay")
-        cancel()
-        usingAirPlay = true
-        phase = Phase.Connecting
-        start()
-    }
-
-    /** Recomeça (a TV volta a mostrar um código novo). */
-    fun retry() {
-        cancel()
-        phase = Phase.Connecting
-        start()
-    }
-
-    fun cancel() {
-        code?.cancel()
-        code = null
-        job?.cancel()
-        socket?.close()
-        airPlay?.close()
-    }
-
-    private fun explain(e: Exception): String = when (e) {
-        is Pairing.Rejected -> L("The TV refused (${e.status}). Try again.", "A TV recusou (${e.status}). Tenta outra vez.")
-        is NotPairedException, is java.io.EOFException ->
-            L("The TV closed the connection. Try again.", "A TV fechou a ligação. Tenta outra vez.")
-        is AppleTvPairing.WrongPin -> L("Wrong PIN. Try again: the TV will show a new one.", "PIN errado. Tenta outra vez: a TV mostra um novo.")
-        is AppleTvPairing.Refused -> appleRefusal(e.code, e.retryAfter)
-        is AirPlayPairing.NotForRemote ->
-            L("The PIN worked over AirPlay, but this Apple TV doesn't accept it for the remote. Send a report so we can look into it.",
-                "O PIN funcionou pelo AirPlay, mas esta Apple TV não o aceita para o comando. Envia um relatório para vermos.")
-        is CompanionConnection.TvError -> L("The TV refused: ${e.message}", "A TV recusou: ${e.message}")
-        else -> vm.describe(e)
-    }
-}
-
-/** O que quer dizer cada recusa da Apple TV (códigos de erro do emparelhamento HomeKit). */
-private fun appleRefusal(code: Int, retryAfter: Int?): String = when (code) {
-    3 -> {
-        val wait = retryAfter?.let { if (it >= 90) L("${(it + 59) / 60} minutes", "${(it + 59) / 60} minutos") else L("$it seconds", "$it segundos") }
-            ?: L("a few minutes", "uns minutos")
-        L("After several tries, the Apple TV is blocking pairing for a while. Wait $wait (or restart the Apple TV) and try again with the Apple TV awake and on screen.",
-            "Depois de várias tentativas, a Apple TV bloqueou o emparelhamento por um bocado. Espera $wait (ou reinicia a Apple TV) e tenta outra vez com a Apple TV ligada e no ecrã.")
-    }
-    4 -> L("The Apple TV has too many paired devices. Remove one in Settings → Remotes and Devices → Remote App and Devices.",
-        "A Apple TV tem demasiados aparelhos emparelhados. Remove um em Definições → Comandos e dispositivos → App Remote e dispositivos.")
-    5 -> L("Too many wrong PINs. Restart the Apple TV and try again.", "Demasiados PINs errados. Reinicia a Apple TV e tenta outra vez.")
-    6 -> L("The Apple TV isn't accepting new devices. On the Apple TV, set Settings → AirPlay and HomeKit → Allow Access to “Everyone on the Same Network” and try again.",
-        "A Apple TV não está a aceitar aparelhos novos. Na Apple TV, põe Definições → AirPlay e HomeKit → Permitir acesso em “Todos na mesma rede” e tenta outra vez.")
-    7 -> L("The Apple TV is busy pairing with another device. Try again in a moment.", "A Apple TV está a emparelhar com outro aparelho. Tenta outra vez daqui a pouco.")
-    else -> L("The Apple TV refused (code $code). Try again.", "A Apple TV recusou (código $code). Tenta outra vez.")
-}
+/** Um erro em texto curto (a mensagem, ou o nome da classe). */
+internal fun describe(e: Throwable): String = e.message?.takeIf { it.isNotBlank() } ?: e.javaClass.simpleName

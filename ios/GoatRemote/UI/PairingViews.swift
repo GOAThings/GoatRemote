@@ -161,12 +161,6 @@ struct PairingSheet: View {
                 code = ""
                 focused = true
             }
-            if phase == .done {
-                Task {
-                    try? await Task.sleep(nanoseconds: 700_000_000)
-                    model.pairing = nil
-                }
-            }
         }
     }
 
