@@ -1,10 +1,12 @@
 import Foundation
 import OSLog
+import RemoteCore
 import UIKit
 
 /// Registo de diagnóstico: os passos da procura, da ligação e do emparelhamento (nunca PINs, códigos, chaves ou
 /// certificados). Fica em memória (as últimas [limit] linhas) e no registo do sistema; em Mais → Diagnóstico
-/// pode copiar-se ou partilhar-se, para perceber o que falhou na TV de outra pessoa.
+/// pode copiar-se ou partilhar-se, para perceber o que falhou na TV de outra pessoa. O que sai do iPhone passa pelo
+/// LogRedaction (RemoteCore).
 enum DebugLog {
     private static let lock = NSLock()
     nonisolated(unsafe) private static var lines: [String] = []
@@ -20,15 +22,17 @@ enum DebugLog {
         logger.info("\(message, privacy: .public)")
     }
 
-    /// O registo com uma linha de cabeçalho (versão da app e do sistema), pronto a partilhar.
+    /// O registo com uma linha de cabeçalho (versão da app e do sistema), pronto a partilhar: o que se vê, copia,
+    /// partilha e envia, já sem credenciais nem endereços (os IPs e os MACs com nomes, ver LogRedaction no RemoteCore).
     @MainActor
     static var text: String {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
         let device = UIDevice.current
         let header = "GoatRemote \(version) · \(device.systemName) \(device.systemVersion) · \(device.model)"
         lock.lock()
-        defer { lock.unlock() }
-        return ([header] + lines).joined(separator: "\n")
+        let all = ([header] + lines).joined(separator: "\n")
+        lock.unlock()
+        return LogRedaction.redact(all)
     }
 
     enum SendFailure: Error {

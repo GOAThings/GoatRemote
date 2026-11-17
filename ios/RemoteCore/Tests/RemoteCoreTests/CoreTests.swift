@@ -48,7 +48,7 @@ enum CoreTests {
         ("goatTVNow", goatTVNow),
         ("gestures", gestures),
         ("strings", strings),
-    ] + contracts + policies
+    ] + contracts + policies + redaction
 
     static func proto() throws {
         let p = Proto().varint(1, 2).varint(2, 200).message(10, Proto().string(1, "atvremote").string(2, "Olá")).bool(3, true)

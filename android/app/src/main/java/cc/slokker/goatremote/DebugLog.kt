@@ -2,6 +2,7 @@ package cc.slokker.goatremote
 
 import android.os.Build
 import android.util.Log
+import cc.slokker.goatremote.data.LogRedaction
 import java.net.HttpURLConnection
 import java.net.URL
 import java.text.SimpleDateFormat
@@ -14,7 +15,7 @@ import org.json.JSONObject
 /**
  * Registo de diagnóstico: os passos da procura, da ligação e do emparelhamento (nunca PINs, códigos, chaves ou
  * certificados). Fica em memória (as últimas [LIMIT] linhas) e no logcat; em Mais → Diagnóstico pode copiar-se ou
- * partilhar-se, para perceber o que falhou na TV de outra pessoa.
+ * partilhar-se, para perceber o que falhou na TV de outra pessoa. O que sai do telemóvel passa pelo [LogRedaction].
  */
 object DebugLog {
     private const val LIMIT = 500
@@ -29,11 +30,14 @@ object DebugLog {
         }
     }
 
-    /** O registo com uma linha de cabeçalho (versão da app e do sistema), pronto a partilhar. */
+    /**
+     * O registo com uma linha de cabeçalho (versão da app e do sistema), pronto a partilhar: o que se vê, copia,
+     * partilha e envia, já sem credenciais nem endereços (os IPs e os MACs com nomes, ver [LogRedaction]).
+     */
     val text: String
         get() {
             val header = "GoatRemote ${BuildConfig.VERSION_NAME} · Android ${Build.VERSION.RELEASE} · ${Build.MANUFACTURER} ${Build.MODEL}"
-            return synchronized(this) { (listOf(header) + lines).joinToString("\n") }
+            return LogRedaction.redact(synchronized(this) { (listOf(header) + lines).joinToString("\n") })
         }
 
     fun clear() = synchronized(this) { lines.clear() }

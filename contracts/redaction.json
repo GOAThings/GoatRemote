@@ -1,0 +1,129 @@
+{
+  "_about": "LogRedaction.redact of the diagnostics log before it leaves the phone (send, copy, share): android data/LogRedaction.kt and ios RemoteCore LogRedaction.swift must turn every input into exactly its output. Same rules as GoatTV (itv-shared BugReportRules) plus emails and IPv6; IPs and MACs get a label per report (ip1, ip2, mac1...) in order of appearance, the same address always the same label, ports kept.",
+  "rows": [
+    {
+      "input": "Open http://iptv.example:8080/live/joao/s3cr3t/123.ts now",
+      "output": "Open http://*** now"
+    },
+    {
+      "input": "GET player_api.php?username=joao&password=s3cr3t&action=get_live_streams",
+      "output": "GET player_api.php?username=***&password=***&action=get_live_streams"
+    },
+    {
+      "input": "/live/joao/s3cr3t/1.ts",
+      "output": "/live/***/***/1.ts"
+    },
+    {
+      "input": "Portal /stalker/abc/gwsecret9/play/s1.ts",
+      "output": "Portal /stalker/***/***/play/s1.ts"
+    },
+    {
+      "input": "Failed URL=http://10457072.host.example:80/MAGABC/DEF/1474191 (403)",
+      "output": "Failed URL=http://*** (403)"
+    },
+    {
+      "input": "Authorization: Bearer tok_live_999 sent",
+      "output": "Authorization: *** sent"
+    },
+    {
+      "input": "Unable to resolve host \"iptv.provider.com\": No address",
+      "output": "Unable to resolve host \"***\": No address"
+    },
+    {
+      "input": "pretending to be subscriber-id.host.example",
+      "output": "pretending to be ***"
+    },
+    {
+      "input": "account joao.silva+tv@gmail.com signed in",
+      "output": "account *** signed in"
+    },
+    {
+      "input": "Report failed: java.net.UnknownHostException: thegoat.systems",
+      "output": "Report failed: java.net.UnknownHostException: ***"
+    },
+    {
+      "input": "at cc.slokker.goatremote.data.LauncherApi.apps(LauncherApi.kt:42)",
+      "output": "at cc.slokker.goatremote.data.LauncherApi.apps(LauncherApi.kt:42)"
+    },
+    {
+      "input": "Open app via launcher: com.netflix.ninja",
+      "output": "Open app via launcher: com.netflix.ninja"
+    },
+    {
+      "input": "Discovery _androidtvremote2._tcp.local. failed: 0",
+      "output": "Discovery _androidtvremote2._tcp.local. failed: 0"
+    },
+    {
+      "input": "Found SHIELD (ANDROID, SHIELD Android TV) at 192.168.1.20:6466",
+      "output": "Found SHIELD (ANDROID, SHIELD Android TV) at ip1:6466"
+    },
+    {
+      "input": "Connecting to Sala (ANDROID, 192.168.1.20:6466) from 192.168.1.30, then 192.168.1.20 again",
+      "output": "Connecting to Sala (ANDROID, ip1:6466) from ip2, then ip1 again"
+    },
+    {
+      "input": "failed to connect to /10.0.2.2 (port 6470) from /10.0.2.16 (port 41234)",
+      "output": "failed to connect to /ip1 (port 6470) from /ip2 (port 41234)"
+    },
+    {
+      "input": "GET http://192.168.1.20:6470/apps?token=abc failed; seen 192.168.1.20",
+      "output": "GET http://ip1:6470/*** failed; seen ip1"
+    },
+    {
+      "input": "NSErrorFailingURLStringKey=http://192.168.1.20:6471/now, code -1004",
+      "output": "NSErrorFailingURLStringKey=http://ip1:6471/*** code -1004"
+    },
+    {
+      "input": "http://192.168.1.20:6470",
+      "output": "http://ip1:6470"
+    },
+    {
+      "input": "via http://[fe80::1%25wlan0]:6470/apps and fe80::1%wlan0",
+      "output": "via http://[ip1]:6470/*** and ip1"
+    },
+    {
+      "input": "Pairing: Apple TV at fe80::a00:27ff:fe4e:66a1%en0:7000",
+      "output": "Pairing: Apple TV at ip1:7000"
+    },
+    {
+      "input": "global 2001:db8:85a3:0:0:8a2e:370:7334, short 2001:db8::7334.",
+      "output": "global ip1, short ip2."
+    },
+    {
+      "input": "loopback ::1, mapped ::ffff:192.0.2.1 and 192.0.2.1",
+      "output": "loopback ip1, mapped ip2 and ip3"
+    },
+    {
+      "input": "Apple TV 00:1A:79:00:00:01 then 00:1a:79:00:00:01 and AA:BB:CC:DD:EE:FF",
+      "output": "Apple TV mac1 then mac1 and mac2"
+    },
+    {
+      "input": "mac=00%3A1A%3A79%3A00%3A00%3A01",
+      "output": "mac=***"
+    },
+    {
+      "input": "12:01:33  Status: connected (Sala, ANDROID)",
+      "output": "12:01:33  Status: connected (Sala, ANDROID)"
+    },
+    {
+      "input": "11-17 01:12:03.456 took 00:00:01, at 23:59:59",
+      "output": "11-17 01:12:03.456 took 00:00:01, at 23:59:59"
+    },
+    {
+      "input": "2026-11-17T01:12:03Z ratio 16:9 score 3:2:1",
+      "output": "2026-11-17T01:12:03Z ratio 16:9 score 3:2:1"
+    },
+    {
+      "input": "String::class and a :: b",
+      "output": "String::class and a :: b"
+    },
+    {
+      "input": "GoatRemote 0.1.11 · Android 14 · Google Pixel 6",
+      "output": "GoatRemote 0.1.11 · Android 14 · Google Pixel 6"
+    },
+    {
+      "input": "GoatRemote 0.1.11 · iOS 18.1 · iPhone",
+      "output": "GoatRemote 0.1.11 · iOS 18.1 · iPhone"
+    }
+  ]
+}
