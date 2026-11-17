@@ -1,6 +1,7 @@
 package cc.slokker.goatremote.ui
 
 import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
@@ -535,11 +536,29 @@ fun MoreSheet(vm: RemoteViewModel, onDismiss: () -> Unit) {
                         }
                         Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Theme.dim)
                     }
+                    HorizontalDivider(color = Theme.line)
+                    // A política de privacidade abre no browser do telemóvel (a app não tem conta).
+                    val context = LocalContext.current
+                    Row(Modifier.fillMaxWidth().clickable {
+                            runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(PRIVACY_URL))) }
+                                .onFailure { DebugLog.add("Privacy policy: no browser ($it)") }
+                        }.padding(vertical = 12.dp).testTag("opt:privacy"),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(Strings.privacyPolicy, fontSize = 16.sp)
+                            Text(Strings.whatTheAppKeepsAndSends,
+                                color = Theme.dim, fontSize = 13.sp)
+                        }
+                        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Theme.dim)
+                    }
                 }
             }
         }
     }
 }
+
+/** A política de privacidade do GoatRemote (pública, no site). Igual no iPhone (Sheets.swift). */
+private const val PRIVACY_URL = "https://thegoat.systems/privacy"
 
 /** O registo de diagnóstico (DebugLog): enviar para o site, ver, copiar, partilhar ou limpar. */
 @Composable

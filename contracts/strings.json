@@ -683,6 +683,14 @@
         "ios"
       ]
     },
+    "privacyPolicy": {
+      "en": "Privacy policy",
+      "pt": "Política de privacidade",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
     "recentlyOpened": {
       "en": "Recently opened",
       "pt": "Abertas há pouco",
@@ -1066,6 +1074,14 @@
     "whatTheAppDidToSend": {
       "en": "What the app did, to send when something fails",
       "pt": "O que a app fez, para mandar quando algo falha",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    "whatTheAppKeepsAndSends": {
+      "en": "What the app keeps and sends, and why",
+      "pt": "O que a app guarda e envia, e porquê",
       "platforms": [
         "android",
         "ios"

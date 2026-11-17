@@ -355,6 +355,8 @@ struct ChannelsSheet: View {
 struct MoreSheet: View {
     @Environment(RemoteModel.self) private var model
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 10), count: 4)
+    /// A política de privacidade do GoatRemote (pública, no site).
+    private static let privacyURL = URL(string: "https://thegoat.systems/privacy")!
 
     var body: some View {
         @Bindable var model = model
@@ -425,6 +427,23 @@ struct MoreSheet: View {
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("opt:diagnostics")
+                        Divider()
+                        // A política de privacidade abre no Safari (a app não tem conta). Igual no Android (Sheets.kt).
+                        Link(destination: Self.privacyURL) {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(Strings.privacyPolicy).foregroundStyle(.white)
+                                    Text(Strings.whatTheAppKeepsAndSends)
+                                        .font(.footnote).foregroundStyle(Theme.dim)
+                                }
+                                Spacer()
+                                Image(systemName: "arrow.up.right").font(.footnote.weight(.semibold)).foregroundStyle(Theme.dim)
+                            }
+                            .padding(.vertical, 12)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("opt:privacy")
                     }
                     .padding(.horizontal, 16)
                     .liquidGlass(RoundedRectangle(cornerRadius: 16, style: .continuous), interactive: false)

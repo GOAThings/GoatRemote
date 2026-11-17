@@ -94,6 +94,7 @@ public enum Strings {
     public static var power: String { pick("Power", "Ligar") }
     public static var previous: String { pick("Previous", "Anterior") }
     public static var previousChannel: String { pick("Previous channel", "Canal anterior") }
+    public static var privacyPolicy: String { pick("Privacy policy", "Política de privacidade") }
     public static var recentlyOpened: String { pick("Recently opened", "Abertas há pouco") }
     public static var rewind: String { pick("Rewind", "Recuar") }
     public static var search: String { pick("Search", "Pesquisa") }
@@ -140,6 +141,7 @@ public enum Strings {
     public static var whatHappened: String { pick("What happened?", "O que aconteceu?") }
     public static var whatTheAppDidSoFar: String { pick("What the app did so far will be gone, and can't be sent in a report.", "O que a app fez até agora desaparece, e já não pode ir num relatório.") }
     public static var whatTheAppDidToSend: String { pick("What the app did, to send when something fails", "O que a app fez, para mandar quando algo falha") }
+    public static var whatTheAppKeepsAndSends: String { pick("What the app keeps and sends, and why", "O que a app guarda e envia, e porquê") }
     public static var withGoatlauncherOnTheTvAll: String { pick("With GoatLauncher on the TV, all its apps show up here, with their banners.", "Com o GoatLauncher na TV, aparecem aqui todas as apps dela, com os banners.") }
     public static var wrongPinTryAgainTheTv: String { pick("Wrong PIN. Try again: the TV will show a new one.", "PIN errado. Tenta outra vez: a TV mostra um novo.") }
     public static var youHaveTheLatestVersion: String { pick("You have the latest version", "Tens a versão mais recente") }
@@ -230,6 +232,7 @@ public enum Strings {
         ("power", { power }),
         ("previous", { previous }),
         ("previousChannel", { previousChannel }),
+        ("privacyPolicy", { privacyPolicy }),
         ("recentlyOpened", { recentlyOpened }),
         ("rewind", { rewind }),
         ("search", { search }),
@@ -276,6 +279,7 @@ public enum Strings {
         ("whatHappened", { whatHappened }),
         ("whatTheAppDidSoFar", { whatTheAppDidSoFar }),
         ("whatTheAppDidToSend", { whatTheAppDidToSend }),
+        ("whatTheAppKeepsAndSends", { whatTheAppKeepsAndSends }),
         ("withGoatlauncherOnTheTvAll", { withGoatlauncherOnTheTvAll }),
         ("wrongPinTryAgainTheTv", { wrongPinTryAgainTheTv }),
         ("youHaveTheLatestVersion", { youHaveTheLatestVersion }),

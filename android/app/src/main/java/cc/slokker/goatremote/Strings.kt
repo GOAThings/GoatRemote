@@ -90,6 +90,7 @@ object Strings {
     val power: String get() = L("Power", "Ligar")
     val previous: String get() = L("Previous", "Anterior")
     val previousChannel: String get() = L("Previous channel", "Canal anterior")
+    val privacyPolicy: String get() = L("Privacy policy", "Política de privacidade")
     val recentlyOpened: String get() = L("Recently opened", "Abertas há pouco")
     val rewind: String get() = L("Rewind", "Recuar")
     val search: String get() = L("Search", "Pesquisa")
@@ -136,6 +137,7 @@ object Strings {
     val whatHappened: String get() = L("What happened?", "O que aconteceu?")
     val whatTheAppDidSoFar: String get() = L("What the app did so far will be gone, and can't be sent in a report.", "O que a app fez até agora desaparece, e já não pode ir num relatório.")
     val whatTheAppDidToSend: String get() = L("What the app did, to send when something fails", "O que a app fez, para mandar quando algo falha")
+    val whatTheAppKeepsAndSends: String get() = L("What the app keeps and sends, and why", "O que a app guarda e envia, e porquê")
     val withGoatlauncherOnTheTvAll: String get() = L("With GoatLauncher on the TV, all its apps show up here, with their banners.", "Com o GoatLauncher na TV, aparecem aqui todas as apps dela, com os banners.")
     val wrongPinTryAgainTheTv: String get() = L("Wrong PIN. Try again: the TV will show a new one.", "PIN errado. Tenta outra vez: a TV mostra um novo.")
     val youHaveTheLatestVersion: String get() = L("You have the latest version", "Tens a versão mais recente")
@@ -222,6 +224,7 @@ object Strings {
         "power" to { power },
         "previous" to { previous },
         "previousChannel" to { previousChannel },
+        "privacyPolicy" to { privacyPolicy },
         "recentlyOpened" to { recentlyOpened },
         "rewind" to { rewind },
         "search" to { search },
@@ -268,6 +271,7 @@ object Strings {
         "whatHappened" to { whatHappened },
         "whatTheAppDidSoFar" to { whatTheAppDidSoFar },
         "whatTheAppDidToSend" to { whatTheAppDidToSend },
+        "whatTheAppKeepsAndSends" to { whatTheAppKeepsAndSends },
         "withGoatlauncherOnTheTvAll" to { withGoatlauncherOnTheTvAll },
         "wrongPinTryAgainTheTv" to { wrongPinTryAgainTheTv },
         "youHaveTheLatestVersion" to { youHaveTheLatestVersion },
