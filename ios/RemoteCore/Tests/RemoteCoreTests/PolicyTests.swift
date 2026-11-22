@@ -8,6 +8,7 @@ extension CoreTests {
         ("channelsOutcome", channelsOutcome),
         ("nowOutcome", nowOutcome),
         ("playStep", playStep),
+        ("zap", zap),
         ("volumeRoute", volumeRoute),
         ("recentApps", recentApps),
         ("onScreen", onScreen),
@@ -63,6 +64,31 @@ extension CoreTests {
             let got = PlayStep.of(outcome, waiting: row["waiting"] as? Bool ?? false, timedOut: row["timedOut"] as? Bool ?? false,
                                   inFront: row["inFront"] as? Bool ?? false, canOpen: row["canOpen"] as? Bool ?? false)
             try expect("\(row): \(got)", "\(row): \(row["step"] as? String ?? "")")
+        }
+    }
+
+    /// Toques seguidos avançam um canal cada (antes pediam todos o mesmo).
+    static func zap() throws {
+        let table = try Contracts.object("policies/zap.json")
+        let channels = Contracts.list(table["channels"]).map {
+            TVChannel(key: $0["key"] as? String ?? "", num: nil, name: $0["key"] as? String ?? "", group: $0["group"] as? String,
+                      logo: false, favorite: false)
+        }
+        let rows = Contracts.list(table["rows"])
+        try expect(rows.count, 10)
+        for row in rows {
+            let got = Zap.next(channels, from: row["from"] as? String ?? "", delta: row["delta"] as? Int ?? 0)?.key
+            try expect("\(row): \(got ?? "nil")", "\(row): \(row["expected"] as? String ?? "nil")")
+        }
+        for row in Contracts.list(table["taps"]) {
+            var from = row["from"] as? String ?? ""
+            var sent: [String] = []
+            for delta in row["deltas"] as? [Int] ?? [] {
+                guard let next = Zap.next(channels, from: from, delta: delta) else { throw Failed(description: "\(row)") }
+                sent.append(next.key)
+                from = next.key
+            }
+            try expect("\(row): \(sent)", "\(row): \(row["sent"] as? [String] ?? [])")
         }
     }
 

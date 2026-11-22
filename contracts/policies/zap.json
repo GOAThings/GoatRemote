@@ -1,0 +1,29 @@
+{
+  "_about": "Zap.next for the next/previous channel buttons: the channel delta steps from `from`, inside from's group, wrapping around (like zapping on the TV); a channel with no group zaps among the other channels with no group. `from` is the channel the last tap is heading to while its POST /play is still in flight, not the one GoatTV reports: before this, rapid taps all asked for the same channel (seen on the emulator against the fake TV, 2026-11-22). `taps` chains Zap.next from each tap's result, the order the app sends /play in. Android data/Policies.kt and RemoteCore Policies.swift must both pass every row.",
+  "channels": [
+    { "key": "rtp1", "group": "news" },
+    { "key": "news24", "group": "news" },
+    { "key": "sport", "group": "sport" },
+    { "key": "arena", "group": "sport" },
+    { "key": "eleven", "group": "sport" },
+    { "key": "loose1", "group": null },
+    { "key": "loose2", "group": null }
+  ],
+  "rows": [
+    { "from": "rtp1", "delta": 1, "expected": "news24" },
+    { "from": "news24", "delta": 1, "expected": "rtp1" },
+    { "from": "rtp1", "delta": -1, "expected": "news24" },
+    { "from": "sport", "delta": 1, "expected": "arena" },
+    { "from": "eleven", "delta": 1, "expected": "sport" },
+    { "from": "sport", "delta": -1, "expected": "eleven" },
+    { "from": "arena", "delta": -1, "expected": "sport" },
+    { "from": "loose1", "delta": 1, "expected": "loose2" },
+    { "from": "loose2", "delta": 1, "expected": "loose1" },
+    { "from": "gone", "delta": 1, "expected": null }
+  ],
+  "taps": [
+    { "from": "rtp1", "deltas": [1, 1, 1], "sent": ["news24", "rtp1", "news24"] },
+    { "from": "sport", "deltas": [1, 1, 1, 1], "sent": ["arena", "eleven", "sport", "arena"] },
+    { "from": "sport", "deltas": [1, -1, -1], "sent": ["arena", "sport", "eleven"] }
+  ]
+}

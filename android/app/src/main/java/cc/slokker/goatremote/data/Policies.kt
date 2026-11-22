@@ -139,6 +139,20 @@ enum class PlayStep {
 }
 
 /**
+ * Zapping: o canal [delta] passos à frente (ou atrás) de [fromKey], no grupo dele, a dar a volta (como na TV).
+ * [fromKey] é o canal para onde vai o último toque, se o POST /play dele ainda não acabou, e não o que o GoatTV diz que
+ * está a dar: antes, toques seguidos pediam todos o mesmo canal. null: [fromKey] não está na lista.
+ */
+object Zap {
+    fun next(channels: List<TvChannel>, fromKey: String, delta: Int): TvChannel? {
+        val from = channels.firstOrNull { it.key == fromKey } ?: return null
+        val group = channels.filter { it.group == from.group }
+        val i = group.indexOfFirst { it.key == fromKey }
+        return group[(i + delta).mod(group.size)]
+    }
+}
+
+/**
  * Por onde vai uma tecla de volume. A regra que impede a SHIELD de reiniciar: com o GoatLauncher, ou sem se saber se ele
  * lá está, o volume nunca vai como tecla (vai pelo launcher, POST /volume/…); a tecla só quando se tem a certeza de que
  * não há launcher (ver [cc.slokker.goatremote.tv.LauncherVolume.outcome]). Vem dos incidentes c06672a, bcc9ca4 e b272212.

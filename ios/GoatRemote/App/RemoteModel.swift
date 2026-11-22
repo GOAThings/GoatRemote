@@ -455,12 +455,10 @@ final class RemoteModel {
 
     /// Canal seguinte ou anterior, no grupo do que está a dar (como o zapping na TV).
     func zap(_ delta: Int) {
-        guard let list = channels, let now = nowPlaying else { return }
-        let inGroup = list.channels.filter { $0.group == now.group }
-        let group = inGroup.isEmpty ? list.channels : inGroup
-        guard let i = group.firstIndex(where: { $0.key == now.key }) else { return }
-        let n = group.count
-        play(group[((i + delta) % n + n) % n])
+        guard let list = channels else { return }
+        // Um toque que ainda não chegou à TV conta como o canal que está a dar (ver Zap).
+        guard let from = session.zapTarget ?? nowPlaying?.key else { return }
+        if let next = Zap.next(list.channels, from: from, delta: delta) { play(next) }
     }
 
     var goatTVClosedLine: String { Strings.goattvHasToBeOpenOn }
@@ -494,8 +492,13 @@ final class RemoteModel {
         playProblem = nil
         let number = channel.num.map { String($0) } ?? "-"
         DebugLog.add("Play channel \(number) via GoatTV")
-        session.playTask?.cancel()
-        session.playTask = Task {
+        let s = session
+        s.playTask?.cancel()
+        s.playSeq += 1
+        let seq = s.playSeq
+        s.zapTarget = channel.key
+        s.playTask = Task {
+            defer { if s.playSeq == seq { s.zapTarget = nil } }
             var deadline: Date?
             while !Task.isCancelled {
                 let (status, refused) = await Self.postPlay(tv, channel.key)

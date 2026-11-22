@@ -37,6 +37,10 @@ final class TVSession {
     /// O pedido da lista em curso: trocar de TV cancela-o em vez de esperar por ele.
     @ObservationIgnored var channelsTask: (id: UUID, task: Task<Void, Never>)?
     @ObservationIgnored var playTask: Task<Void, Never>?
+    /// O canal para onde vai o último toque, enquanto o POST /play dele não acaba: o zapping avança a partir dele.
+    @ObservationIgnored var zapTarget: String?
+    /// Conta os pedidos de canal: só o último limpa o `zapTarget` (um anterior, cancelado, acaba depois dele).
+    @ObservationIgnored var playSeq = 0
     /// As teclas mantidas desta TV (ver KeyHold).
     let keyHold = KeyHold()
 

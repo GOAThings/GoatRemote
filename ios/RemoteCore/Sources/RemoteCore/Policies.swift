@@ -126,6 +126,19 @@ public enum PlayStep: Sendable {
     }
 }
 
+/// Zapping: o canal `delta` passos à frente (ou atrás) de `key`, no grupo dele, a dar a volta (como na TV). `key` é o
+/// canal para onde vai o último toque, se o POST /play dele ainda não acabou, e não o que o GoatTV diz que está a dar:
+/// antes, toques seguidos pediam todos o mesmo canal. nil: `key` não está na lista.
+public enum Zap {
+    public static func next(_ channels: [TVChannel], from key: String, delta: Int) -> TVChannel? {
+        guard let from = channels.first(where: { $0.key == key }) else { return nil }
+        let group = channels.filter { $0.group == from.group }
+        guard let i = group.firstIndex(where: { $0.key == key }) else { return nil }
+        let n = group.count
+        return group[((i + delta) % n + n) % n]
+    }
+}
+
 /// Por onde vai uma tecla de volume. A regra que impede a SHIELD de reiniciar: com o GoatLauncher, ou sem se saber se
 /// ele lá está, o volume nunca vai como tecla (vai pelo launcher, POST /volume/…); a tecla só quando se tem a certeza
 /// de que não há launcher (ver LauncherVolume.outcome). Vem dos incidentes c06672a, bcc9ca4 e b272212.

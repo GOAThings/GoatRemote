@@ -11,8 +11,10 @@ import cc.slokker.goatremote.data.GoatTvChannels
 import cc.slokker.goatremote.data.NowOutcome
 import cc.slokker.goatremote.data.PlayStep
 import cc.slokker.goatremote.data.RecentApps
+import cc.slokker.goatremote.data.TvChannel
 import cc.slokker.goatremote.data.TvKind
 import cc.slokker.goatremote.data.VolumeRoute
+import cc.slokker.goatremote.data.Zap
 import cc.slokker.goatremote.tv.Key
 import org.json.JSONArray
 import org.junit.Assert.assertEquals
@@ -65,6 +67,28 @@ class PoliciesTest {
             val got = PlayStep.of(named(GoatTvChannels.Play.entries, row.getString("outcome")), row.getBoolean("waiting"),
                 row.getBoolean("timedOut"), row.getBoolean("inFront"), row.getBoolean("canOpen"))
             assertTrue("$row → $got", same(got, row.getString("step")))
+        }
+    }
+
+    /** Toques seguidos avançam um canal cada (antes pediam todos o mesmo). */
+    @Test
+    fun zap() {
+        val table = Contracts.obj("policies/zap.json")
+        val channels = table.getJSONArray("channels").objects().map {
+            TvChannel(it.getString("key"), null, it.getString("key"), it.stringOrNull("group"), logo = false, favorite = false)
+        }
+        val rows = table.getJSONArray("rows").objects()
+        assertEquals(10, rows.size)
+        for (row in rows) {
+            val got = Zap.next(channels, row.getString("from"), row.getInt("delta"))?.key
+            assertEquals(row.toString(), row.stringOrNull("expected"), got)
+        }
+        for (row in table.getJSONArray("taps").objects()) {
+            var from = row.getString("from")
+            val sent = (0 until row.getJSONArray("deltas").length()).map { i ->
+                Zap.next(channels, from, row.getJSONArray("deltas").getInt(i))!!.key.also { from = it }
+            }
+            assertEquals(row.toString(), row.getJSONArray("sent").strings(), sent)
         }
     }
 

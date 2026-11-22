@@ -36,6 +36,7 @@ import cc.slokker.goatremote.data.RecentApps
 import cc.slokker.goatremote.data.VolumeRoute
 import cc.slokker.goatremote.data.VolumeRouter
 import cc.slokker.goatremote.data.VolumeProblem
+import cc.slokker.goatremote.data.Zap
 import cc.slokker.goatremote.data.NowInfo
 import cc.slokker.goatremote.data.PrefKeys
 import cc.slokker.goatremote.data.SavedTv
@@ -553,11 +554,9 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
     /** Canal seguinte ou anterior, no grupo do que está a dar (como o zapping na TV). */
     fun zap(delta: Int) {
         val list = channels ?: return
-        val now = nowPlaying ?: return
-        val group = list.channels.filter { it.group == now.group }.ifEmpty { list.channels }
-        val i = group.indexOfFirst { it.key == now.key }
-        if (i < 0) return
-        play(group[(i + delta).mod(group.size)])
+        // Um toque que ainda não chegou à TV conta como o canal que está a dar (ver Zap).
+        val from = session.zapTarget ?: nowPlaying?.key ?: return
+        Zap.next(list.channels, from, delta)?.let(::play)
     }
 
     fun goatTvClosedLine() = Strings.goattvHasToBeOpenOn
@@ -576,55 +575,67 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
         if (haptics) vibrate(false)
         playProblem = null
         DebugLog.add("Play channel ${channel.num ?: "-"} via GoatTV")
-        session.playJob?.cancel()
-        session.playJob = scope.launch {
-            var deadline = 0L
-            while (true) {
-                val (status, refused) = postPlay(tv, channel.key)
-                if (current?.id != tv.id) return@launch
-                val app = goatTvApp ?: if (tv.kind == TvKind.ANDROID) TvApp(GoatTvChannels.ANDROID_PACKAGE, "GoatTV") else null
-                val inFront = tv.kind == TvKind.ANDROID && state.currentApp == GoatTvChannels.ANDROID_PACKAGE
-                when (PlayStep.of(GoatTvChannels.playOutcome(status, refused), deadline != 0L,
-                    System.currentTimeMillis() >= deadline, inFront, app != null)) {
-                    PlayStep.DONE -> {
-                        channels = channels?.copy(current = channel.key)
-                        delay(PlayStep.NOW_AFTER_MS)
-                        pollNow(tv)
-                        return@launch
-                    }
-                    PlayStep.NOT_FOUND -> {
-                        playProblem = Strings.thisChannelIsntAvailableOnThe
-                        refreshChannels()
-                        return@launch
-                    }
-                    PlayStep.FAILED -> {
-                        DebugLog.add("Play: GoatTV answered HTTP $status")
-                        playProblem = Strings.goattvDidntAnswerTryAgain
-                        return@launch
-                    }
-                    PlayStep.START_WAITING -> {
-                        // Já está à frente, só ainda não pode (a meio de mudar de canal): abri-lo outra vez não
-                        // ajuda, e o link pelo comando faz a SHIELD fechar a ligação.
-                        DebugLog.add("Play: GoatTV is in front but answered ${if (refused) "refused" else "HTTP $status"}, waiting")
-                        deadline = System.currentTimeMillis() + PlayStep.WAIT_MS
-                    }
-                    PlayStep.OPEN_AND_WAIT -> {
-                        DebugLog.add("Play: GoatTV isn't in front (${if (refused) "refused" else "HTTP $status"}), opening it")
-                        launch(app!!, haptic = false)
-                        deadline = System.currentTimeMillis() + PlayStep.WAIT_MS
-                    }
-                    PlayStep.CANNOT_OPEN -> {
-                        playProblem = goatTvClosedLine()
-                        return@launch
-                    }
-                    PlayStep.TIMED_OUT -> {
-                        playProblem = Strings.goattvDidntSwitchChannelsCheckThe
-                        return@launch
-                    }
-                    PlayStep.KEEP_WAITING -> Unit
-                }
-                delay(PlayStep.RETRY_EVERY_MS)
+        val s = session
+        s.playJob?.cancel()
+        val seq = ++s.playSeq
+        s.zapTarget = channel.key
+        s.playJob = scope.launch {
+            try {
+                playUntilDone(tv, channel)
+            } finally {
+                if (s.playSeq == seq) s.zapTarget = null
             }
+        }
+    }
+
+    /** O ciclo de [play]: POST /play, abrir o GoatTV se não estiver à frente, e tentar outra vez até 10 s. */
+    private suspend fun playUntilDone(tv: SavedTv, channel: TvChannel) {
+        var deadline = 0L
+        while (true) {
+            val (status, refused) = postPlay(tv, channel.key)
+            if (current?.id != tv.id) return
+            val app = goatTvApp ?: if (tv.kind == TvKind.ANDROID) TvApp(GoatTvChannels.ANDROID_PACKAGE, "GoatTV") else null
+            val inFront = tv.kind == TvKind.ANDROID && state.currentApp == GoatTvChannels.ANDROID_PACKAGE
+            when (PlayStep.of(GoatTvChannels.playOutcome(status, refused), deadline != 0L,
+                System.currentTimeMillis() >= deadline, inFront, app != null)) {
+                PlayStep.DONE -> {
+                    channels = channels?.copy(current = channel.key)
+                    delay(PlayStep.NOW_AFTER_MS)
+                    pollNow(tv)
+                    return
+                }
+                PlayStep.NOT_FOUND -> {
+                    playProblem = Strings.thisChannelIsntAvailableOnThe
+                    refreshChannels()
+                    return
+                }
+                PlayStep.FAILED -> {
+                    DebugLog.add("Play: GoatTV answered HTTP $status")
+                    playProblem = Strings.goattvDidntAnswerTryAgain
+                    return
+                }
+                PlayStep.START_WAITING -> {
+                    // Já está à frente, só ainda não pode (a meio de mudar de canal): abri-lo outra vez não
+                    // ajuda, e o link pelo comando faz a SHIELD fechar a ligação.
+                    DebugLog.add("Play: GoatTV is in front but answered ${if (refused) "refused" else "HTTP $status"}, waiting")
+                    deadline = System.currentTimeMillis() + PlayStep.WAIT_MS
+                }
+                PlayStep.OPEN_AND_WAIT -> {
+                    DebugLog.add("Play: GoatTV isn't in front (${if (refused) "refused" else "HTTP $status"}), opening it")
+                    launch(app!!, haptic = false)
+                    deadline = System.currentTimeMillis() + PlayStep.WAIT_MS
+                }
+                PlayStep.CANNOT_OPEN -> {
+                    playProblem = goatTvClosedLine()
+                    return
+                }
+                PlayStep.TIMED_OUT -> {
+                    playProblem = Strings.goattvDidntSwitchChannelsCheckThe
+                    return
+                }
+                PlayStep.KEEP_WAITING -> Unit
+            }
+            delay(PlayStep.RETRY_EVERY_MS)
         }
     }
 

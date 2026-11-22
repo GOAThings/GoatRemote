@@ -51,6 +51,10 @@ class TvSession(
     var autoReconnect: Job? = null
     var channelsJob: Job? = null
     var playJob: Job? = null
+    /** O canal para onde vai o último toque, enquanto o POST /play dele não acaba: o zapping avança a partir dele. */
+    var zapTarget: String? = null
+    /** Conta os pedidos de canal: só o último limpa o [zapTarget] (um anterior, cancelado, acaba depois dele). */
+    var playSeq = 0
     var lastAutoReconnect = 0L
     /** Recusas seguidas desta TV que ainda não se mostraram. */
     var notPairedRetries = 0
